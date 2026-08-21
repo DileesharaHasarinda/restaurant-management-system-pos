@@ -1,0 +1,19 @@
+{
+  "name": "restaurant-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Restaurant POS, QR ordering, operations dashboard and public website.",
+  "scripts": {
+    "dev": "concurrently -k -n API,OPERATIONS,WEBSITE,POS \"npm run dev:api\" \"npm run dev:operations\" \"npm run dev:website\" \"npm run dev:desktop\"",
+    "dev:api": "cd apps/api && php artisan serve --host=127.0.0.1 --port=8000",
+    "dev:operations": "npm --prefix apps/operations run dev -- --host 127.0.0.1 --port 5174",
+    "dev:website": "npm --prefix apps/website run dev -- -p 3000",
+    "dev:desktop": "npm --prefix apps/desktop start",
+    "build:operations": "npm --prefix apps/operations run build",
+    "build:website": "npm --prefix apps/website run build",
+    "make:desktop": "npm --prefix apps/desktop run make"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

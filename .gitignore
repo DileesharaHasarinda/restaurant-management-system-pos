@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment / secrets
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Node
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite
+**/dist/
+**/.vite/
+
+# Next.js
+**/.next/
+**/out/
+
+# Electron
+**/out/
+**/.webpack/
+
+# Laravel
+apps/api/vendor/
+apps/api/storage/logs/*.log
+apps/api/bootstrap/cache/*.php
+apps/api/public/storage
+
+# Coverage
+coverage/
+**/coverage/
+
+# Temporary files
+*.tmp
+*.temp
