@@ -3,66 +3,94 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Auth\ChangePasswordRequest;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\UserSessionResource;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\TokenSessionService;
 use App\Support\ApiResponse;
 use App\Support\DatabaseTransaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
     public function __construct(
-        private readonly AuditLogger $auditLogger
+        private readonly AuditLogger $auditLogger,
+        private readonly TokenSessionService $tokenSessionService
     ) {}
 
     public function login(
         LoginRequest $request
     ): JsonResponse {
-        $login = $request->string('login')
-            ->toString();
+        $login = Str::lower(
+            trim(
+                $request
+                    ->string('login')
+                    ->toString()
+            )
+        );
 
-        $deviceName = $request
-            ->string('device_name')
-            ->toString();
+        $deviceName = trim(
+            $request
+                ->string('device_name')
+                ->toString()
+        );
 
+        /*
+         * Prefer username first.
+         */
         $user = User::query()
             ->with('role.permissions')
-            ->where(function ($query) use ($login) {
-                $query
-                    ->where(
-                        'username',
-                        $login
-                    )
-                    ->orWhere(
-                        'email',
-                        $login
-                    );
-            })
+            ->where(
+                'username',
+                $login
+            )
             ->first();
+
+        /*
+         * Fall back to email.
+         */
+        if (! $user) {
+            $user = User::query()
+                ->with('role.permissions')
+                ->where(
+                    'email',
+                    $login
+                )
+                ->first();
+        }
 
         if (
             ! $user
             || ! Hash::check(
-                $request->string('password')
+                $request
+                    ->string('password')
                     ->toString(),
                 $user->password
             )
         ) {
             $this->auditLogger->record(
                 action: 'AUTH_LOGIN_FAILED',
+
                 entityType: 'user',
+
                 entityId: $user?->id,
+
                 metadata: [
-                    'login' => $login,
+                    'login' =>
+                    $login,
+
                     'device_name' =>
                     $deviceName,
                 ],
+
                 userId: $user?->id
             );
 
@@ -76,12 +104,16 @@ class AuthController extends Controller
         if (! $user->isActive()) {
             $this->auditLogger->record(
                 action: 'AUTH_LOGIN_BLOCKED_INACTIVE',
+
                 entityType: 'user',
+
                 entityId: $user->id,
+
                 metadata: [
                     'device_name' =>
                     $deviceName,
                 ],
+
                 userId: $user->id
             );
 
@@ -98,8 +130,8 @@ class AuthController extends Controller
                 $deviceName
             ): array {
                 /*
-                 * Keep one active token per
-                 * named device.
+                 * Only one active token with
+                 * the same device name.
                  */
                 $user->tokens()
                     ->where(
@@ -109,22 +141,27 @@ class AuthController extends Controller
                     ->delete();
 
                 $user->forceFill([
-                    'last_login_at' => now(),
+                    'last_login_at' =>
+                    now(),
                 ])->save();
 
                 $expiresAt =
                     now()->addDays(30);
 
-                $token = $user->createToken(
-                    $deviceName,
-                    ['*'],
-                    $expiresAt
-                );
+                $token =
+                    $user->createToken(
+                        $deviceName,
+                        ['*'],
+                        $expiresAt
+                    );
 
                 $this->auditLogger->record(
                     action: 'AUTH_LOGIN_SUCCESS',
+
                     entityType: 'user',
+
                     entityId: $user->id,
+
                     metadata: [
                         'device_name' =>
                         $deviceName,
@@ -133,12 +170,14 @@ class AuthController extends Controller
                         $expiresAt
                             ->toISOString(),
                     ],
+
                     userId: $user->id
                 );
 
                 return [
-                    'plain_text_token' =>
-                    $token->plainTextToken,
+                    'token' =>
+                    $token
+                        ->plainTextToken,
 
                     'expires_at' =>
                     $expiresAt,
@@ -147,7 +186,9 @@ class AuthController extends Controller
         );
 
         $user->refresh();
-        $user->load('role.permissions');
+        $user->load(
+            'role.permissions'
+        );
 
         return ApiResponse::success(
             data: [
@@ -155,13 +196,18 @@ class AuthController extends Controller
                 'Bearer',
 
                 'access_token' =>
-                $result['plain_text_token'],
+                $result['token'],
 
                 'expires_at' =>
                 $result['expires_at'],
 
-                'user' =>
-                new UserResource($user),
+                'user' => (
+                    new UserResource(
+                        $user
+                    )
+                )->resolve(
+                    $request
+                ),
             ],
             message: 'Login successful.'
         );
@@ -170,22 +216,283 @@ class AuthController extends Controller
     public function me(
         Request $request
     ): JsonResponse {
-        $user = $request->user();
+        $user =
+            $request->user();
 
         $user->loadMissing(
             'role.permissions'
         );
 
         return ApiResponse::success(
-            data: new UserResource($user),
+            data: (
+                new UserResource(
+                    $user
+                )
+            )->resolve(
+                $request
+            ),
+
             message: 'Authenticated user retrieved.'
+        );
+    }
+
+    public function changePassword(
+        ChangePasswordRequest $request
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $data =
+            $request->validated();
+
+        if (
+            ! Hash::check(
+                $data['current_password'],
+                $user->password
+            )
+        ) {
+            return ApiResponse::error(
+                message: 'The current password is incorrect.',
+
+                code: 'CURRENT_PASSWORD_INCORRECT',
+
+                errors: [
+                    'current_password' => [
+                        'The current password is incorrect.',
+                    ],
+                ],
+
+                status: 422
+            );
+        }
+
+        if (
+            Hash::check(
+                $data['password'],
+                $user->password
+            )
+        ) {
+            return ApiResponse::error(
+                message: 'The new password must be different from the current password.',
+
+                code: 'PASSWORD_NOT_CHANGED',
+
+                errors: [
+                    'password' => [
+                        'Use a different password.',
+                    ],
+                ],
+
+                status: 422
+            );
+        }
+
+        $currentToken =
+            $user->currentAccessToken();
+
+        $currentTokenId =
+            $currentToken
+            instanceof PersonalAccessToken
+            ? $currentToken->id
+            : null;
+
+        $currentSessionId =
+            $request->hasSession()
+            ? $request
+            ->session()
+            ->getId()
+            : null;
+
+        DatabaseTransaction::run(
+            function () use (
+                $user,
+                $data,
+                $currentTokenId,
+                $currentSessionId
+            ): void {
+                $user->password =
+                    Hash::make(
+                        $data['password']
+                    );
+
+                $user->save();
+
+                $revocation =
+                    $this
+                    ->tokenSessionService
+                    ->revokeAll(
+                        $user,
+                        $currentTokenId,
+                        $currentSessionId
+                    );
+
+                $this->auditLogger->record(
+                    action: 'AUTH_PASSWORD_CHANGED',
+
+                    entityType: 'user',
+
+                    entityId: $user->id,
+
+                    metadata: [
+                        'other_sessions_revoked' =>
+                        $revocation,
+                    ],
+
+                    userId: $user->id
+                );
+            }
+        );
+
+        return ApiResponse::success(
+            data: null,
+            message: 'Password changed successfully. Other sessions were revoked.'
+        );
+    }
+
+    public function sessions(
+        Request $request
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $currentAccessToken =
+            $user->currentAccessToken();
+
+        $currentTokenId =
+            $currentAccessToken
+            instanceof PersonalAccessToken
+            ? $currentAccessToken->id
+            : null;
+
+        $tokens = $user
+            ->tokens()
+            ->latest('created_at')
+            ->get();
+
+        $data = $tokens
+            ->map(
+                fn($token) => (
+                    new UserSessionResource(
+                        $token,
+                        $token->id
+                            === $currentTokenId
+                    )
+                )->resolve($request)
+            )
+            ->values()
+            ->all();
+
+        return ApiResponse::success(
+            data: $data,
+            message: 'Active sessions retrieved.'
+        );
+    }
+
+    public function revokeSession(
+        Request $request,
+        int $tokenId
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $token =
+            $user->tokens()
+            ->where(
+                'id',
+                $tokenId
+            )
+            ->first();
+
+        if (! $token) {
+            return ApiResponse::error(
+                message: 'The requested session was not found.',
+                code: 'SESSION_NOT_FOUND',
+                status: 404
+            );
+        }
+
+        $this->auditLogger->record(
+            action: 'AUTH_SESSION_REVOKED',
+
+            entityType: 'personal_access_token',
+
+            entityId: $token->id,
+
+            metadata: [
+                'device_name' =>
+                $token->name,
+            ],
+
+            userId: $user->id
+        );
+
+        $token->delete();
+
+        return ApiResponse::success(
+            data: null,
+            message: 'Session revoked successfully.'
+        );
+    }
+
+    public function revokeOtherSessions(
+        Request $request
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $currentAccessToken =
+            $user->currentAccessToken();
+
+        $currentTokenId =
+            $currentAccessToken
+            instanceof PersonalAccessToken
+            ? $currentAccessToken->id
+            : null;
+
+        $currentSessionId =
+            $request->hasSession()
+            ? $request
+            ->session()
+            ->getId()
+            : null;
+
+        $result =
+            $this
+            ->tokenSessionService
+            ->revokeAll(
+                $user,
+                $currentTokenId,
+                $currentSessionId
+            );
+
+        $this->auditLogger->record(
+            action: 'AUTH_OTHER_SESSIONS_REVOKED',
+
+            entityType: 'user',
+
+            entityId: $user->id,
+
+            metadata: $result,
+
+            userId: $user->id
+        );
+
+        return ApiResponse::success(
+            data: $result,
+            message: 'Other sessions revoked successfully.'
         );
     }
 
     public function logout(
         Request $request
     ): JsonResponse {
-        $user = $request->user();
+        /** @var User $user */
+        $user =
+            $request->user();
 
         DatabaseTransaction::run(
             function () use (
@@ -194,22 +501,28 @@ class AuthController extends Controller
             ): void {
                 $this->auditLogger->record(
                     action: 'AUTH_LOGOUT',
+
                     entityType: 'user',
+
                     entityId: $user->id,
+
                     userId: $user->id
                 );
 
-                $currentToken =
-                    $user->currentAccessToken();
+                $token =
+                    $user
+                    ->currentAccessToken();
 
                 if (
-                    $currentToken
+                    $token
                     instanceof PersonalAccessToken
                 ) {
-                    $currentToken->delete();
+                    $token->delete();
                 }
 
-                if ($request->hasSession()) {
+                if (
+                    $request->hasSession()
+                ) {
                     Auth::guard('web')
                         ->logout();
 
@@ -233,24 +546,57 @@ class AuthController extends Controller
     public function logoutAll(
         Request $request
     ): JsonResponse {
-        $user = $request->user();
+        /** @var User $user */
+        $user =
+            $request->user();
 
-        DatabaseTransaction::run(
-            function () use ($user): void {
-                $user->tokens()->delete();
+        $result =
+            DatabaseTransaction::run(
+                function () use (
+                    $request,
+                    $user
+                ): array {
+                    $result =
+                        $this
+                        ->tokenSessionService
+                        ->revokeAll(
+                            $user
+                        );
 
-                $this->auditLogger->record(
-                    action: 'AUTH_LOGOUT_ALL_DEVICES',
-                    entityType: 'user',
-                    entityId: $user->id,
-                    userId: $user->id
-                );
-            }
-        );
+                    $this->auditLogger->record(
+                        action: 'AUTH_LOGOUT_ALL_DEVICES',
+
+                        entityType: 'user',
+
+                        entityId: $user->id,
+
+                        metadata: $result,
+
+                        userId: $user->id
+                    );
+
+                    if (
+                        $request->hasSession()
+                    ) {
+                        Auth::guard('web')
+                            ->logout();
+
+                        $request
+                            ->session()
+                            ->invalidate();
+
+                        $request
+                            ->session()
+                            ->regenerateToken();
+                    }
+
+                    return $result;
+                }
+            );
 
         return ApiResponse::success(
-            data: null,
-            message: 'All device sessions were revoked.'
+            data: $result,
+            message: 'All sessions were revoked.'
         );
     }
 }

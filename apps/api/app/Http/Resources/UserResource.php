@@ -11,7 +11,9 @@ class UserResource extends JsonResource
         Request $request
     ): array {
         $this->resource
-            ->loadMissing('role.permissions');
+            ->loadMissing(
+                'role.permissions'
+            );
 
         return [
             'id' =>
@@ -33,7 +35,8 @@ class UserResource extends JsonResource
             $this->status,
 
             'last_login_at' =>
-            $this->last_login_at,
+            $this->last_login_at
+                ?->toISOString(),
 
             'role' =>
             $this->role
@@ -56,7 +59,16 @@ class UserResource extends JsonResource
                 ->pluck('code')
                 ->sort()
                 ->values()
+                ->all()
                 : [],
+
+            'created_at' =>
+            $this->created_at
+                ?->toISOString(),
+
+            'updated_at' =>
+            $this->updated_at
+                ?->toISOString(),
         ];
     }
 }

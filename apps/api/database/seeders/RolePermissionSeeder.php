@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class RolePermissionSeeder extends Seeder
@@ -15,51 +16,103 @@ class RolePermissionSeeder extends Seeder
             [
                 'name' => 'Owner',
                 'code' => 'OWNER',
-                'description' => 'Restaurant owner with full access.',
+                'description' =>
+                'Restaurant owner with full system access.',
             ],
             [
                 'name' => 'Administrator',
                 'code' => 'ADMIN',
-                'description' => 'System administrator.',
+                'description' =>
+                'System administrator.',
             ],
             [
                 'name' => 'Manager',
                 'code' => 'MANAGER',
-                'description' => 'Restaurant manager.',
+                'description' =>
+                'Restaurant operational manager.',
             ],
             [
                 'name' => 'Cashier',
                 'code' => 'CASHIER',
-                'description' => 'Cashier and POS operator.',
+                'description' =>
+                'Cashier and POS operator.',
             ],
             [
                 'name' => 'Waiter',
                 'code' => 'WAITER',
-                'description' => 'Restaurant waiter.',
+                'description' =>
+                'Restaurant waiter.',
             ],
         ];
 
         foreach ($roles as $role) {
-            DB::table('roles')->updateOrInsert(
-                [
-                    'code' => $role['code'],
-                ],
-                [
-                    'name' => $role['name'],
-                    'description' =>
-                    $role['description'],
-                    'is_active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
-            );
+            DB::table('roles')
+                ->updateOrInsert(
+                    [
+                        'code' =>
+                        $role['code'],
+                    ],
+                    [
+                        'name' =>
+                        $role['name'],
+
+                        'description' =>
+                        $role['description'],
+
+                        'is_active' =>
+                        true,
+
+                        'created_at' =>
+                        $now,
+
+                        'updated_at' =>
+                        $now,
+                    ]
+                );
+        }
+
+        /*
+         * Remove the old broad permission
+         * from Phase 3 if it exists.
+         */
+        $legacyPermissionId =
+            DB::table('permissions')
+            ->where(
+                'code',
+                'users.manage'
+            )
+            ->value('id');
+
+        if ($legacyPermissionId) {
+            DB::table(
+                'role_permission'
+            )
+                ->where(
+                    'permission_id',
+                    $legacyPermissionId
+                )
+                ->delete();
+
+            DB::table('permissions')
+                ->where(
+                    'id',
+                    $legacyPermissionId
+                )
+                ->delete();
         }
 
         $permissions = [
             ['Dashboard View', 'dashboard.view', 'Dashboard'],
 
             ['Users View', 'users.view', 'Users'],
-            ['Users Manage', 'users.manage', 'Users'],
+            ['Users Create', 'users.create', 'Users'],
+            ['Users Update', 'users.update', 'Users'],
+            ['Users Status', 'users.status', 'Users'],
+            ['Users Role Assignment', 'users.role', 'Users'],
+            ['Users Session Revocation', 'users.sessions.revoke', 'Users'],
+
+            ['Roles View', 'roles.view', 'Users'],
+            ['Permissions View', 'permissions.view', 'Users'],
 
             ['Restaurant Manage', 'restaurant.manage', 'Restaurant'],
 
@@ -84,14 +137,12 @@ class RolePermissionSeeder extends Seeder
             ['Invoices View', 'invoices.view', 'Billing'],
             ['Invoices Create', 'invoices.create', 'Billing'],
             ['Invoices Void', 'invoices.void', 'Billing'],
-
             ['Payments Create', 'payments.create', 'Billing'],
             ['Refunds Create', 'refunds.create', 'Billing'],
 
             ['Cash Shift View', 'cash_shift.view', 'Cash'],
             ['Cash Shift Open', 'cash_shift.open', 'Cash'],
             ['Cash Shift Close', 'cash_shift.close', 'Cash'],
-
             ['Cash Drawer Open', 'cash_drawer.open', 'Cash'],
             ['Cash Drawer Movement', 'cash_drawer.movement', 'Cash'],
 
@@ -129,65 +180,96 @@ class RolePermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            DB::table('permissions')->updateOrInsert(
-                [
-                    'code' => $permission[1],
-                ],
-                [
-                    'name' => $permission[0],
-                    'group' => $permission[2],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
-            );
+            DB::table('permissions')
+                ->updateOrInsert(
+                    [
+                        'code' =>
+                        $permission[1],
+                    ],
+                    [
+                        'name' =>
+                        $permission[0],
+
+                        'group' =>
+                        $permission[2],
+
+                        'description' =>
+                        null,
+
+                        'created_at' =>
+                        $now,
+
+                        'updated_at' =>
+                        $now,
+                    ]
+                );
         }
 
-        $allPermissions = DB::table('permissions')
-            ->pluck('id', 'code');
+        $permissionMap =
+            DB::table('permissions')
+            ->pluck(
+                'id',
+                'code'
+            );
 
-        $rolesByCode = DB::table('roles')
-            ->pluck('id', 'code');
+        $roleMap =
+            DB::table('roles')
+            ->pluck(
+                'id',
+                'code'
+            );
 
-        $this->assignPermissions(
-            $rolesByCode['OWNER'],
-            $allPermissions->keys()->all(),
-            $allPermissions
+        /*
+         * OWNER
+         */
+        $this->syncPermissions(
+            $roleMap['OWNER'],
+            $permissionMap
+                ->keys()
+                ->all(),
+            $permissionMap
         );
 
-        $this->assignPermissions(
-            $rolesByCode['ADMIN'],
-            $allPermissions->keys()->all(),
-            $allPermissions
+        /*
+         * ADMIN
+         *
+         * Database permissions are broad,
+         * but RoleHierarchyService prevents
+         * ADMIN from modifying OWNER.
+         */
+        $this->syncPermissions(
+            $roleMap['ADMIN'],
+            $permissionMap
+                ->keys()
+                ->all(),
+            $permissionMap
         );
 
-        $managerPermissions = $allPermissions
-            ->keys()
-            ->reject(
-                fn(string $code) =>
-                in_array(
-                    $code,
-                    [
-                        'users.manage',
-                    ],
-                    true
-                )
-            )
-            ->all();
-
-        $this->assignPermissions(
-            $rolesByCode['MANAGER'],
-            $managerPermissions,
-            $allPermissions
-        );
-
-        $this->assignPermissions(
-            $rolesByCode['CASHIER'],
+        /*
+         * MANAGER
+         */
+        $this->syncPermissions(
+            $roleMap['MANAGER'],
             [
                 'dashboard.view',
+
+                'users.view',
+                'users.create',
+                'users.update',
+                'users.status',
+                'users.role',
+                'users.sessions.revoke',
+                'roles.view',
+                'permissions.view',
+
                 'tables.view',
+                'tables.manage',
                 'tables.transfer',
                 'tables.merge',
+
                 'menu.view',
+                'menu.manage',
+
                 'orders.view',
                 'orders.create',
                 'orders.confirm',
@@ -195,23 +277,102 @@ class RolePermissionSeeder extends Seeder
                 'orders.serve',
                 'orders.complete',
                 'orders.cancel',
+
                 'kitchen.reprint',
+
                 'invoices.view',
                 'invoices.create',
+                'invoices.void',
+
                 'payments.create',
                 'refunds.create',
+
                 'cash_shift.view',
                 'cash_shift.open',
                 'cash_shift.close',
                 'cash_drawer.open',
                 'cash_drawer.movement',
+
+                'inventory.view',
+                'inventory.adjust',
+
+                'recipes.view',
+                'recipes.manage',
+
+                'suppliers.view',
+                'suppliers.manage',
+
+                'purchases.view',
+                'purchases.create',
+                'purchases.manage',
+                'purchases.pay',
+
+                'wastage.view',
+                'wastage.create',
+                'wastage.manage',
+
+                'expenses.view',
+                'expenses.create',
+                'expenses.manage',
+
+                'reports.view',
+
                 'business_day.view',
+                'business_day.close',
+
+                'website.manage',
+                'reviews.moderate',
             ],
-            $allPermissions
+            $permissionMap
         );
 
-        $this->assignPermissions(
-            $rolesByCode['WAITER'],
+        /*
+         * CASHIER
+         */
+        $this->syncPermissions(
+            $roleMap['CASHIER'],
+            [
+                'dashboard.view',
+
+                'tables.view',
+                'tables.transfer',
+                'tables.merge',
+
+                'menu.view',
+
+                'orders.view',
+                'orders.create',
+                'orders.confirm',
+                'orders.send_kitchen',
+                'orders.serve',
+                'orders.complete',
+                'orders.cancel',
+
+                'kitchen.reprint',
+
+                'invoices.view',
+                'invoices.create',
+
+                'payments.create',
+                'refunds.create',
+
+                'cash_shift.view',
+                'cash_shift.open',
+                'cash_shift.close',
+
+                'cash_drawer.open',
+                'cash_drawer.movement',
+
+                'business_day.view',
+            ],
+            $permissionMap
+        );
+
+        /*
+         * WAITER
+         */
+        $this->syncPermissions(
+            $roleMap['WAITER'],
             [
                 'dashboard.view',
                 'tables.view',
@@ -221,32 +382,49 @@ class RolePermissionSeeder extends Seeder
                 'orders.create',
                 'orders.serve',
             ],
-            $allPermissions
+            $permissionMap
         );
     }
 
-    private function assignPermissions(
+    private function syncPermissions(
         int $roleId,
-        array $codes,
-        $permissions
+        array $permissionCodes,
+        Collection $permissionMap
     ): void {
         DB::table('role_permission')
-            ->where('role_id', $roleId)
+            ->where(
+                'role_id',
+                $roleId
+            )
             ->delete();
 
         $now = now();
 
-        foreach ($codes as $code) {
-            if (!isset($permissions[$code])) {
+        foreach (
+            $permissionCodes
+            as $permissionCode
+        ) {
+            $permissionId =
+                $permissionMap[$permissionCode] ?? null;
+
+            if (! $permissionId) {
                 continue;
             }
 
-            DB::table('role_permission')->insert([
-                'role_id' => $roleId,
+            DB::table(
+                'role_permission'
+            )->insert([
+                'role_id' =>
+                $roleId,
+
                 'permission_id' =>
-                $permissions[$code],
-                'created_at' => $now,
-                'updated_at' => $now,
+                $permissionId,
+
+                'created_at' =>
+                $now,
+
+                'updated_at' =>
+                $now,
             ]);
         }
     }
