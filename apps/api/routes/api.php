@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserSessionController;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 | API V1
 |--------------------------------------------------------------------------
 |
-| bootstrap/app.php adds:
+| bootstrap/app.php automatically adds:
 |
 | /api/v1
 |
@@ -24,10 +25,10 @@ Route::middleware(
 )->group(function (): void {
 
     /*
-     * ------------------------------------------------
-     * Public
-     * ------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | Public API
+    |--------------------------------------------------------------------------
+    */
 
     Route::get(
         '/health',
@@ -35,18 +36,42 @@ Route::middleware(
             HealthController::class,
             'show',
         ]
-    )->name('v1.health');
+    )->name(
+        'v1.health'
+    );
 
     /*
-     * ------------------------------------------------
-     * Authentication
-     * ------------------------------------------------
+     * Public restaurant information.
+     *
+     * Used by:
+     * - Public website
+     * - QR ordering website
+     *
+     * No authentication required.
      */
+    Route::get(
+        '/public/restaurant-settings',
+        [
+            RestaurantSettingsController::class,
+            'publicShow',
+        ]
+    )->name(
+        'v1.public.restaurant-settings'
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication
+    |--------------------------------------------------------------------------
+    */
 
     Route::prefix('auth')
         ->name('v1.auth.')
         ->group(function (): void {
 
+            /*
+             * Login
+             */
             Route::post(
                 '/login',
                 [
@@ -57,22 +82,35 @@ Route::middleware(
                 ->middleware(
                     'throttle:login'
                 )
-                ->name('login');
+                ->name(
+                    'login'
+                );
 
+            /*
+             * Authenticated user endpoints.
+             */
             Route::middleware([
                 'auth:sanctum',
                 'active',
             ])->group(
                 function (): void {
 
+                    /*
+                     * Current user.
+                     */
                     Route::get(
                         '/me',
                         [
                             AuthController::class,
                             'me',
                         ]
-                    )->name('me');
+                    )->name(
+                        'me'
+                    );
 
+                    /*
+                     * Change own password.
+                     */
                     Route::put(
                         '/password',
                         [
@@ -83,6 +121,9 @@ Route::middleware(
                         'password.change'
                     );
 
+                    /*
+                     * Own active sessions.
+                     */
                     Route::get(
                         '/sessions',
                         [
@@ -93,6 +134,9 @@ Route::middleware(
                         'sessions.index'
                     );
 
+                    /*
+                     * Revoke one own session/token.
+                     */
                     Route::delete(
                         '/sessions/{tokenId}',
                         [
@@ -107,6 +151,9 @@ Route::middleware(
                             'sessions.destroy'
                         );
 
+                    /*
+                     * Revoke all other sessions.
+                     */
                     Route::post(
                         '/revoke-other-sessions',
                         [
@@ -117,14 +164,22 @@ Route::middleware(
                         'sessions.revoke-others'
                     );
 
+                    /*
+                     * Logout current session.
+                     */
                     Route::post(
                         '/logout',
                         [
                             AuthController::class,
                             'logout',
                         ]
-                    )->name('logout');
+                    )->name(
+                        'logout'
+                    );
 
+                    /*
+                     * Logout all devices.
+                     */
                     Route::post(
                         '/logout-all',
                         [
@@ -139,10 +194,10 @@ Route::middleware(
         });
 
     /*
-     * ------------------------------------------------
-     * Authenticated APIs
-     * ------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | Authenticated API
+    |--------------------------------------------------------------------------
+    */
 
     Route::middleware([
         'auth:sanctum',
@@ -150,10 +205,10 @@ Route::middleware(
     ])->group(function (): void {
 
         /*
-         * --------------------------------------------
-         * Roles & Permissions
-         * --------------------------------------------
-         */
+        |--------------------------------------------------------------------------
+        | Roles
+        |--------------------------------------------------------------------------
+        */
 
         Route::get(
             '/roles',
@@ -165,7 +220,15 @@ Route::middleware(
             ->middleware(
                 'permission:roles.view'
             )
-            ->name('v1.roles.index');
+            ->name(
+                'v1.roles.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Permissions
+        |--------------------------------------------------------------------------
+        */
 
         Route::get(
             '/permissions',
@@ -182,11 +245,14 @@ Route::middleware(
             );
 
         /*
-         * --------------------------------------------
-         * Users
-         * --------------------------------------------
-         */
+        |--------------------------------------------------------------------------
+        | Users
+        |--------------------------------------------------------------------------
+        */
 
+        /*
+         * List users.
+         */
         Route::get(
             '/users',
             [
@@ -197,8 +263,13 @@ Route::middleware(
             ->middleware(
                 'permission:users.view'
             )
-            ->name('v1.users.index');
+            ->name(
+                'v1.users.index'
+            );
 
+        /*
+         * Create user.
+         */
         Route::post(
             '/users',
             [
@@ -209,8 +280,13 @@ Route::middleware(
             ->middleware(
                 'permission:users.create'
             )
-            ->name('v1.users.store');
+            ->name(
+                'v1.users.store'
+            );
 
+        /*
+         * View user.
+         */
         Route::get(
             '/users/{user}',
             [
@@ -221,8 +297,13 @@ Route::middleware(
             ->middleware(
                 'permission:users.view'
             )
-            ->name('v1.users.show');
+            ->name(
+                'v1.users.show'
+            );
 
+        /*
+         * Update user.
+         */
         Route::put(
             '/users/{user}',
             [
@@ -233,8 +314,13 @@ Route::middleware(
             ->middleware(
                 'permission:users.update'
             )
-            ->name('v1.users.update');
+            ->name(
+                'v1.users.update'
+            );
 
+        /*
+         * Activate / deactivate user.
+         */
         Route::patch(
             '/users/{user}/status',
             [
@@ -249,6 +335,9 @@ Route::middleware(
                 'v1.users.status'
             );
 
+        /*
+         * Assign role.
+         */
         Route::patch(
             '/users/{user}/role',
             [
@@ -264,11 +353,14 @@ Route::middleware(
             );
 
         /*
-         * --------------------------------------------
-         * Administrative session management
-         * --------------------------------------------
-         */
+        |--------------------------------------------------------------------------
+        | User Session Administration
+        |--------------------------------------------------------------------------
+        */
 
+        /*
+         * List another user's sessions.
+         */
         Route::get(
             '/users/{user}/sessions',
             [
@@ -283,6 +375,9 @@ Route::middleware(
                 'v1.users.sessions.index'
             );
 
+        /*
+         * Revoke one user session.
+         */
         Route::delete(
             '/users/{user}/sessions/{tokenId}',
             [
@@ -290,7 +385,9 @@ Route::middleware(
                 'destroy',
             ]
         )
-            ->whereNumber('tokenId')
+            ->whereNumber(
+                'tokenId'
+            )
             ->middleware(
                 'permission:users.sessions.revoke'
             )
@@ -298,6 +395,9 @@ Route::middleware(
                 'v1.users.sessions.destroy'
             );
 
+        /*
+         * Revoke all user sessions.
+         */
         Route::delete(
             '/users/{user}/sessions',
             [
@@ -313,10 +413,84 @@ Route::middleware(
             );
 
         /*
-         * --------------------------------------------
-         * Foundation
-         * --------------------------------------------
+        |--------------------------------------------------------------------------
+        | Restaurant Settings
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Get complete restaurant settings.
          */
+        Route::get(
+            '/restaurant/settings',
+            [
+                RestaurantSettingsController::class,
+                'show',
+            ]
+        )
+            ->middleware(
+                'permission:restaurant.manage'
+            )
+            ->name(
+                'v1.restaurant.settings.show'
+            );
+
+        /*
+         * Update restaurant settings.
+         */
+        Route::put(
+            '/restaurant/settings',
+            [
+                RestaurantSettingsController::class,
+                'update',
+            ]
+        )
+            ->middleware(
+                'permission:restaurant.manage'
+            )
+            ->name(
+                'v1.restaurant.settings.update'
+            );
+
+        /*
+         * Upload restaurant logo.
+         */
+        Route::post(
+            '/restaurant/settings/logo',
+            [
+                RestaurantSettingsController::class,
+                'uploadLogo',
+            ]
+        )
+            ->middleware(
+                'permission:restaurant.manage'
+            )
+            ->name(
+                'v1.restaurant.settings.logo.upload'
+            );
+
+        /*
+         * Remove restaurant logo.
+         */
+        Route::delete(
+            '/restaurant/settings/logo',
+            [
+                RestaurantSettingsController::class,
+                'removeLogo',
+            ]
+        )
+            ->middleware(
+                'permission:restaurant.manage'
+            )
+            ->name(
+                'v1.restaurant.settings.logo.remove'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | System Foundation
+        |--------------------------------------------------------------------------
+        */
 
         Route::get(
             '/system/foundation',

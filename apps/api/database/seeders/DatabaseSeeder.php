@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             UnitSeeder::class,
             RestaurantSettingsSeeder::class,
+            DocumentSequenceSeeder::class,
             ExpenseCategorySeeder::class,
         ]);
     }
