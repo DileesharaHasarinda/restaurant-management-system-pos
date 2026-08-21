@@ -4,8 +4,10 @@
   "private": true,
   "description": "Restaurant POS, QR ordering, operations dashboard and public website.",
   "scripts": {
-    "dev": "concurrently -k -n API,OPERATIONS,WEBSITE,POS \"npm run dev:api\" \"npm run dev:operations\" \"npm run dev:website\" \"npm run dev:desktop\"",
+    "dev": "concurrently -k -n API,QUEUE,REVERB,OPERATIONS,WEBSITE,POS \"npm run dev:api\" \"npm run dev:queue\" \"npm run dev:reverb\" \"npm run dev:operations\" \"npm run dev:website\" \"npm run dev:desktop\"",
     "dev:api": "cd apps/api && php artisan serve --host=127.0.0.1 --port=8000",
+    "dev:queue": "cd apps/api && php artisan queue:work redis --queue=default --sleep=1 --tries=3 --timeout=60",
+    "dev:reverb": "cd apps/api && php artisan reverb:start --host=127.0.0.1 --port=8080",
     "dev:operations": "npm --prefix apps/operations run dev -- --host 127.0.0.1 --port 5174",
     "dev:website": "npm --prefix apps/website run dev -- -p 3000",
     "dev:desktop": "npm --prefix apps/desktop start",
@@ -14,6 +16,6 @@
     "make:desktop": "npm --prefix apps/desktop run make"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "concurrently": "^9.0.0"
   }
 }
