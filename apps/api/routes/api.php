@@ -3,8 +3,12 @@
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\PublicTableQrController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
+use App\Http\Controllers\Api\V1\TableController;
+use App\Http\Controllers\Api\V1\TableQrController;
+use App\Http\Controllers\Api\V1\TableSessionController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserSessionController;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +34,9 @@ Route::middleware(
     |--------------------------------------------------------------------------
     */
 
+    /*
+     * Health check.
+     */
     Route::get(
         '/health',
         [
@@ -46,8 +53,6 @@ Route::middleware(
      * Used by:
      * - Public website
      * - QR ordering website
-     *
-     * No authentication required.
      */
     Route::get(
         '/public/restaurant-settings',
@@ -61,6 +66,55 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
+    | Public Table QR
+    |--------------------------------------------------------------------------
+    */
+
+    /*
+     * Validate / resolve table QR.
+     */
+    Route::get(
+        '/public/table-qr/{token}',
+        [
+            PublicTableQrController::class,
+            'resolve',
+        ]
+    )
+        ->middleware(
+            'throttle:table-qr'
+        )
+        ->where(
+            'token',
+            '[A-Fa-f0-9]{32}'
+        )
+        ->name(
+            'v1.public.table-qr.resolve'
+        );
+
+    /*
+     * Open or retrieve table session
+     * from public QR ordering.
+     */
+    Route::post(
+        '/public/table-qr/{token}/session',
+        [
+            PublicTableQrController::class,
+            'openSession',
+        ]
+    )
+        ->middleware(
+            'throttle:public-table-session'
+        )
+        ->where(
+            'token',
+            '[A-Fa-f0-9]{32}'
+        )
+        ->name(
+            'v1.public.table-qr.session'
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication
     |--------------------------------------------------------------------------
     */
@@ -70,7 +124,7 @@ Route::middleware(
         ->group(function (): void {
 
             /*
-             * Login
+             * Login.
              */
             Route::post(
                 '/login',
@@ -87,7 +141,8 @@ Route::middleware(
                 );
 
             /*
-             * Authenticated user endpoints.
+             * Authenticated user's own
+             * authentication endpoints.
              */
             Route::middleware([
                 'auth:sanctum',
@@ -96,7 +151,7 @@ Route::middleware(
                 function (): void {
 
                     /*
-                     * Current user.
+                     * Current authenticated user.
                      */
                     Route::get(
                         '/me',
@@ -109,7 +164,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Change own password.
+                     * Change current user's password.
                      */
                     Route::put(
                         '/password',
@@ -122,7 +177,8 @@ Route::middleware(
                     );
 
                     /*
-                     * Own active sessions.
+                     * Current user's active
+                     * Sanctum sessions.
                      */
                     Route::get(
                         '/sessions',
@@ -135,7 +191,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Revoke one own session/token.
+                     * Revoke one own session.
                      */
                     Route::delete(
                         '/sessions/{tokenId}',
@@ -152,7 +208,8 @@ Route::middleware(
                         );
 
                     /*
-                     * Revoke all other sessions.
+                     * Revoke all sessions except
+                     * the current one.
                      */
                     Route::post(
                         '/revoke-other-sessions',
@@ -178,7 +235,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Logout all devices.
+                     * Logout all sessions/devices.
                      */
                     Route::post(
                         '/logout-all',
@@ -250,9 +307,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * List users.
-         */
         Route::get(
             '/users',
             [
@@ -267,9 +321,6 @@ Route::middleware(
                 'v1.users.index'
             );
 
-        /*
-         * Create user.
-         */
         Route::post(
             '/users',
             [
@@ -284,9 +335,6 @@ Route::middleware(
                 'v1.users.store'
             );
 
-        /*
-         * View user.
-         */
         Route::get(
             '/users/{user}',
             [
@@ -294,6 +342,9 @@ Route::middleware(
                 'show',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.view'
             )
@@ -301,9 +352,6 @@ Route::middleware(
                 'v1.users.show'
             );
 
-        /*
-         * Update user.
-         */
         Route::put(
             '/users/{user}',
             [
@@ -311,6 +359,9 @@ Route::middleware(
                 'update',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.update'
             )
@@ -318,9 +369,6 @@ Route::middleware(
                 'v1.users.update'
             );
 
-        /*
-         * Activate / deactivate user.
-         */
         Route::patch(
             '/users/{user}/status',
             [
@@ -328,6 +376,9 @@ Route::middleware(
                 'updateStatus',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.status'
             )
@@ -335,9 +386,6 @@ Route::middleware(
                 'v1.users.status'
             );
 
-        /*
-         * Assign role.
-         */
         Route::patch(
             '/users/{user}/role',
             [
@@ -345,6 +393,9 @@ Route::middleware(
                 'assignRole',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.role'
             )
@@ -358,9 +409,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * List another user's sessions.
-         */
         Route::get(
             '/users/{user}/sessions',
             [
@@ -368,6 +416,9 @@ Route::middleware(
                 'index',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.sessions.revoke'
             )
@@ -375,9 +426,6 @@ Route::middleware(
                 'v1.users.sessions.index'
             );
 
-        /*
-         * Revoke one user session.
-         */
         Route::delete(
             '/users/{user}/sessions/{tokenId}',
             [
@@ -385,6 +433,9 @@ Route::middleware(
                 'destroy',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->whereNumber(
                 'tokenId'
             )
@@ -395,9 +446,6 @@ Route::middleware(
                 'v1.users.sessions.destroy'
             );
 
-        /*
-         * Revoke all user sessions.
-         */
         Route::delete(
             '/users/{user}/sessions',
             [
@@ -405,6 +453,9 @@ Route::middleware(
                 'destroyAll',
             ]
         )
+            ->whereNumber(
+                'user'
+            )
             ->middleware(
                 'permission:users.sessions.revoke'
             )
@@ -418,9 +469,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * Get complete restaurant settings.
-         */
         Route::get(
             '/restaurant/settings',
             [
@@ -435,9 +483,6 @@ Route::middleware(
                 'v1.restaurant.settings.show'
             );
 
-        /*
-         * Update restaurant settings.
-         */
         Route::put(
             '/restaurant/settings',
             [
@@ -452,9 +497,6 @@ Route::middleware(
                 'v1.restaurant.settings.update'
             );
 
-        /*
-         * Upload restaurant logo.
-         */
         Route::post(
             '/restaurant/settings/logo',
             [
@@ -469,9 +511,6 @@ Route::middleware(
                 'v1.restaurant.settings.logo.upload'
             );
 
-        /*
-         * Remove restaurant logo.
-         */
         Route::delete(
             '/restaurant/settings/logo',
             [
@@ -484,6 +523,298 @@ Route::middleware(
             )
             ->name(
                 'v1.restaurant.settings.logo.remove'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Table Management
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * List tables.
+         */
+        Route::get(
+            '/tables',
+            [
+                TableController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.index'
+            );
+
+        /*
+         * Create table.
+         */
+        Route::post(
+            '/tables',
+            [
+                TableController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.store'
+            );
+
+        /*
+         * View table.
+         */
+        Route::get(
+            '/tables/{table}',
+            [
+                TableController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.show'
+            );
+
+        /*
+         * Update table.
+         */
+        Route::put(
+            '/tables/{table}',
+            [
+                TableController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.update'
+            );
+
+        /*
+         * Manually update non-session status.
+         */
+        Route::patch(
+            '/tables/{table}/status',
+            [
+                TableController::class,
+                'updateStatus',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.status'
+            );
+
+        /*
+         * Enable / disable QR ordering.
+         */
+        Route::patch(
+            '/tables/{table}/qr-ordering',
+            [
+                TableController::class,
+                'updateQrOrdering',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.qr-ordering'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Table QR Management
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Get QR token information.
+         */
+        Route::get(
+            '/tables/{table}/qr',
+            [
+                TableQrController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.qr.show'
+            );
+
+        /*
+         * Regenerate QR token.
+         */
+        Route::post(
+            '/tables/{table}/qr/regenerate',
+            [
+                TableQrController::class,
+                'regenerate',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.qr.regenerate'
+            );
+
+        /*
+         * SVG QR preview.
+         */
+        Route::get(
+            '/tables/{table}/qr/svg',
+            [
+                TableQrController::class,
+                'svg',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.qr.svg'
+            );
+
+        /*
+         * SVG QR download.
+         */
+        Route::get(
+            '/tables/{table}/qr/download',
+            [
+                TableQrController::class,
+                'download',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.qr.download'
+            );
+
+        /*
+         * Printable QR page.
+         */
+        Route::get(
+            '/tables/{table}/qr/print',
+            [
+                TableQrController::class,
+                'print',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.qr.print'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Table Sessions
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Current open session.
+         */
+        Route::get(
+            '/tables/{table}/session',
+            [
+                TableSessionController::class,
+                'current',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.session.current'
+            );
+
+        /*
+         * Staff opens / retrieves session.
+         */
+        Route::post(
+            '/tables/{table}/session',
+            [
+                TableSessionController::class,
+                'open',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.tables.session.open'
+            );
+
+        /*
+         * Close table session.
+         */
+        Route::post(
+            '/table-sessions/{session}/close',
+            [
+                TableSessionController::class,
+                'close',
+            ]
+        )
+            ->whereNumber(
+                'session'
+            )
+            ->middleware(
+                'permission:tables.manage'
+            )
+            ->name(
+                'v1.table-sessions.close'
             );
 
         /*
