@@ -9,8 +9,10 @@ use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
+use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
+use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\TableController;
 use App\Http\Controllers\Api\V1\TableQrController;
 use App\Http\Controllers\Api\V1\TableSessionController;
@@ -24,14 +26,17 @@ use Illuminate\Support\Facades\Route;
 | API V1
 |--------------------------------------------------------------------------
 |
-| bootstrap/app.php automatically adds the prefix:
+| bootstrap/app.php automatically adds:
 |
 | /api/v1
 |
 | Therefore:
 |
-| Route: /health
-| URL:   /api/v1/health
+| Route::get('/health', ...)
+|
+| becomes:
+|
+| GET /api/v1/health
 |
 */
 
@@ -46,7 +51,7 @@ Route::middleware(
     */
 
     /*
-     * API health check.
+     * Health Check
      */
     Route::get(
         '/health',
@@ -64,8 +69,9 @@ Route::middleware(
     |--------------------------------------------------------------------------
     |
     | Used by:
+    |
     | - Public website
-    | - Customer QR ordering website
+    | - QR ordering website
     |
     */
 
@@ -83,12 +89,11 @@ Route::middleware(
     |--------------------------------------------------------------------------
     | Public Menu
     |--------------------------------------------------------------------------
-    |
-    | Website menu and QR menu are separated because
-    | menu items/categories can have different visibility.
-    |
     */
 
+    /*
+     * Website menu.
+     */
     Route::get(
         '/public/menu/website',
         [
@@ -99,6 +104,9 @@ Route::middleware(
         'v1.public.menu.website'
     );
 
+    /*
+     * QR ordering menu.
+     */
     Route::get(
         '/public/menu/qr',
         [
@@ -116,9 +124,7 @@ Route::middleware(
     */
 
     /*
-     * Validate / resolve a table QR token.
-     *
-     * Phase 7 QR tokens contain 32 hexadecimal characters.
+     * Validate / resolve a table QR.
      */
     Route::get(
         '/public/table-qr/{token}',
@@ -127,20 +133,20 @@ Route::middleware(
             'resolve',
         ]
     )
+        ->middleware(
+            'throttle:table-qr'
+        )
         ->where(
             'token',
             '[A-Fa-f0-9]{32}'
-        )
-        ->middleware(
-            'throttle:table-qr'
         )
         ->name(
             'v1.public.table-qr.resolve'
         );
 
     /*
-     * Open or retrieve the current table session
-     * when a customer scans a QR code.
+     * Open or retrieve an active table
+     * session using a customer QR.
      */
     Route::post(
         '/public/table-qr/{token}/session',
@@ -149,12 +155,12 @@ Route::middleware(
             'openSession',
         ]
     )
+        ->middleware(
+            'throttle:public-table-session'
+        )
         ->where(
             'token',
             '[A-Fa-f0-9]{32}'
-        )
-        ->middleware(
-            'throttle:public-table-session'
         )
         ->name(
             'v1.public.table-qr.session'
@@ -171,7 +177,7 @@ Route::middleware(
         ->group(function (): void {
 
             /*
-             * Login.
+             * Login
              */
             Route::post(
                 '/login',
@@ -188,7 +194,8 @@ Route::middleware(
                 );
 
             /*
-             * Routes requiring authentication.
+             * Authenticated user's own
+             * authentication endpoints.
              */
             Route::middleware([
                 'auth:sanctum',
@@ -210,7 +217,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Change current user's password.
+                     * Change own password.
                      */
                     Route::put(
                         '/password',
@@ -223,8 +230,7 @@ Route::middleware(
                     );
 
                     /*
-                     * List current user's active
-                     * Sanctum access-token sessions.
+                     * List own active sessions.
                      */
                     Route::get(
                         '/sessions',
@@ -237,7 +243,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Revoke one current-user session.
+                     * Revoke one own session.
                      */
                     Route::delete(
                         '/sessions/{tokenId}',
@@ -254,8 +260,7 @@ Route::middleware(
                         );
 
                     /*
-                     * Revoke every other session while
-                     * keeping the current session.
+                     * Revoke all other sessions.
                      */
                     Route::post(
                         '/revoke-other-sessions',
@@ -268,7 +273,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Logout current device/session.
+                     * Logout current session.
                      */
                     Route::post(
                         '/logout',
@@ -281,7 +286,7 @@ Route::middleware(
                     );
 
                     /*
-                     * Logout all devices.
+                     * Logout every device/session.
                      */
                     Route::post(
                         '/logout-all',
@@ -639,16 +644,6 @@ Route::middleware(
                 'v1.tables.update'
             );
 
-        /*
-         * Manually update statuses such as:
-         *
-         * AVAILABLE
-         * RESERVED
-         * CLEANING
-         * OUT_OF_SERVICE
-         *
-         * OCCUPIED remains controlled by Table Session.
-         */
         Route::patch(
             '/tables/{table}/status',
             [
@@ -666,9 +661,6 @@ Route::middleware(
                 'v1.tables.status'
             );
 
-        /*
-         * Enable / disable customer QR ordering.
-         */
         Route::patch(
             '/tables/{table}/qr-ordering',
             [
@@ -800,9 +792,6 @@ Route::middleware(
                 'v1.tables.session.current'
             );
 
-        /*
-         * Staff opens or retrieves a session.
-         */
         Route::post(
             '/tables/{table}/session',
             [
@@ -990,14 +979,6 @@ Route::middleware(
                 'v1.menu.items.update'
             );
 
-        /*
-         * Used for:
-         * - Activate/deactivate
-         * - Available/sold out
-         * - Website visibility
-         * - QR visibility
-         * - Sort order
-         */
         Route::patch(
             '/menu/items/{menuItem}/state',
             [
@@ -1016,7 +997,7 @@ Route::middleware(
             );
 
         /*
-         * Upload menu item photograph.
+         * Menu item photo upload.
          */
         Route::post(
             '/menu/items/{menuItem}/photo',
@@ -1036,7 +1017,7 @@ Route::middleware(
             );
 
         /*
-         * Remove menu item photograph.
+         * Remove menu item photo.
          */
         Route::delete(
             '/menu/items/{menuItem}/photo',
@@ -1057,7 +1038,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Add-on Groups
+        | Menu Add-on Groups
         |--------------------------------------------------------------------------
         */
 
@@ -1091,7 +1072,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Add-ons
+        | Menu Add-ons
         |--------------------------------------------------------------------------
         */
 
@@ -1125,19 +1106,8 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Inventory — Units
+        | Inventory Units
         |--------------------------------------------------------------------------
-        |
-        | Phase 9
-        |
-        | Examples:
-        |
-        | KG -> G
-        | L  -> ML
-        | PCS
-        | BOTTLE
-        | PACK
-        |
         */
 
         /*
@@ -1158,11 +1128,12 @@ Route::middleware(
             );
 
         /*
-         * Unit conversion.
+         * Convert units.
          *
-         * Important:
-         * Keep this explicit route before any future
-         * generic POST /inventory/units/{unit} routes.
+         * Example:
+         *
+         * 1 KG -> 1000 G
+         * 1 L  -> 1000 ML
          */
         Route::post(
             '/inventory/units/convert',
@@ -1216,7 +1187,7 @@ Route::middleware(
             );
 
         /*
-         * Activate/deactivate unit.
+         * Activate / deactivate unit.
          */
         Route::patch(
             '/inventory/units/{unit}/status',
@@ -1237,7 +1208,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Inventory — Ingredients
+        | Ingredients
         |--------------------------------------------------------------------------
         */
 
@@ -1260,14 +1231,6 @@ Route::middleware(
 
         /*
          * Create ingredient.
-         *
-         * Does NOT directly set:
-         *
-         * current_stock
-         * average_cost
-         *
-         * Those values will be controlled through
-         * stock transactions.
          */
         Route::post(
             '/inventory/ingredients',
@@ -1304,10 +1267,7 @@ Route::middleware(
             );
 
         /*
-         * Update ingredient master information.
-         *
-         * Does NOT directly edit current stock
-         * or average cost.
+         * Update ingredient master data.
          */
         Route::put(
             '/inventory/ingredients/{ingredient}',
@@ -1327,7 +1287,7 @@ Route::middleware(
             );
 
         /*
-         * Activate/deactivate ingredient.
+         * Activate / deactivate ingredient.
          */
         Route::patch(
             '/inventory/ingredients/{ingredient}/status',
@@ -1344,6 +1304,243 @@ Route::middleware(
             )
             ->name(
                 'v1.inventory.ingredients.status'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Suppliers
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * List/search suppliers.
+         */
+        Route::get(
+            '/suppliers',
+            [
+                SupplierController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:suppliers.view'
+            )
+            ->name(
+                'v1.suppliers.index'
+            );
+
+        /*
+         * Create supplier.
+         */
+        Route::post(
+            '/suppliers',
+            [
+                SupplierController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:suppliers.manage'
+            )
+            ->name(
+                'v1.suppliers.store'
+            );
+
+        /*
+         * View supplier.
+         */
+        Route::get(
+            '/suppliers/{supplier}',
+            [
+                SupplierController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'supplier'
+            )
+            ->middleware(
+                'permission:suppliers.view'
+            )
+            ->name(
+                'v1.suppliers.show'
+            );
+
+        /*
+         * Update supplier.
+         */
+        Route::put(
+            '/suppliers/{supplier}',
+            [
+                SupplierController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'supplier'
+            )
+            ->middleware(
+                'permission:suppliers.manage'
+            )
+            ->name(
+                'v1.suppliers.update'
+            );
+
+        /*
+         * Activate / deactivate supplier.
+         */
+        Route::patch(
+            '/suppliers/{supplier}/status',
+            [
+                SupplierController::class,
+                'updateStatus',
+            ]
+        )
+            ->whereNumber(
+                'supplier'
+            )
+            ->middleware(
+                'permission:suppliers.manage'
+            )
+            ->name(
+                'v1.suppliers.status'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Purchases
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * List/search/filter purchases.
+         */
+        Route::get(
+            '/purchases',
+            [
+                PurchaseController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:purchases.view'
+            )
+            ->name(
+                'v1.purchases.index'
+            );
+
+        /*
+         * Create purchase as DRAFT.
+         *
+         * Does NOT update inventory.
+         */
+        Route::post(
+            '/purchases',
+            [
+                PurchaseController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:purchases.create'
+            )
+            ->name(
+                'v1.purchases.store'
+            );
+
+        /*
+         * View purchase.
+         */
+        Route::get(
+            '/purchases/{purchase}',
+            [
+                PurchaseController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'purchase'
+            )
+            ->middleware(
+                'permission:purchases.view'
+            )
+            ->name(
+                'v1.purchases.show'
+            );
+
+        /*
+         * Update DRAFT purchase.
+         */
+        Route::put(
+            '/purchases/{purchase}',
+            [
+                PurchaseController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'purchase'
+            )
+            ->middleware(
+                'permission:purchases.manage'
+            )
+            ->name(
+                'v1.purchases.update'
+            );
+
+        /*
+         * Complete purchase.
+         *
+         * This:
+         *
+         * Purchase
+         *     ↓
+         * Unit Conversion
+         *     ↓
+         * Stock Movement
+         *     ↓
+         * Inventory +
+         *     ↓
+         * Weighted Average Cost
+         */
+        Route::post(
+            '/purchases/{purchase}/complete',
+            [
+                PurchaseController::class,
+                'complete',
+            ]
+        )
+            ->whereNumber(
+                'purchase'
+            )
+            ->middleware(
+                'permission:purchases.manage'
+            )
+            ->name(
+                'v1.purchases.complete'
+            );
+
+        /*
+         * Cancel DRAFT purchase.
+         *
+         * Completed purchases cannot
+         * simply be cancelled/deleted.
+         */
+        Route::post(
+            '/purchases/{purchase}/cancel',
+            [
+                PurchaseController::class,
+                'cancel',
+            ]
+        )
+            ->whereNumber(
+                'purchase'
+            )
+            ->middleware(
+                'permission:purchases.manage'
+            )
+            ->name(
+                'v1.purchases.cancel'
             );
 
         /*
