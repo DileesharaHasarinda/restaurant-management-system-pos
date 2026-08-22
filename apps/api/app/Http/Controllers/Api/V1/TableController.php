@@ -6,20 +6,25 @@ use App\Exceptions\TableOperationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Tables\ListTablesRequest;
 use App\Http\Requests\Api\V1\Tables\StoreTableRequest;
+use App\Http\Requests\Api\V1\Tables\TransferTableRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateQrOrderingRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateTableRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateTableStatusRequest;
 use App\Http\Resources\TableResource;
+use App\Http\Resources\TableSessionResource;
+use App\Http\Resources\TableTransferResource;
 use App\Models\RestaurantTable;
 use App\Models\User;
 use App\Services\TableManagementService;
+use App\Services\TableTransferService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
 class TableController extends Controller
 {
     public function __construct(
-        private readonly TableManagementService $tableService
+        private readonly TableManagementService $tableService,
+        private readonly TableTransferService $transferService
     ) {}
 
     public function index(
@@ -229,7 +234,8 @@ class TableController extends Controller
 
         try {
             $table =
-                $this->tableService
+                $this
+                ->tableService
                 ->update(
                     $user,
                     $table,
@@ -240,14 +246,11 @@ class TableController extends Controller
             TableOperationException $exception
         ) {
             return ApiResponse::error(
-                message: $exception
-                    ->getMessage(),
+                message: $exception->getMessage(),
 
-                code: $exception
-                    ->errorCode,
+                code: $exception->errorCode,
 
-                status: $exception
-                    ->status
+                status: $exception->status
             );
         }
 
@@ -274,7 +277,8 @@ class TableController extends Controller
 
         try {
             $table =
-                $this->tableService
+                $this
+                ->tableService
                 ->updateStatus(
                     $user,
                     $table,
@@ -285,14 +289,11 @@ class TableController extends Controller
             TableOperationException $exception
         ) {
             return ApiResponse::error(
-                message: $exception
-                    ->getMessage(),
+                message: $exception->getMessage(),
 
-                code: $exception
-                    ->errorCode,
+                code: $exception->errorCode,
 
-                status: $exception
-                    ->status
+                status: $exception->status
             );
         }
 
@@ -319,7 +320,8 @@ class TableController extends Controller
 
         try {
             $table =
-                $this->tableService
+                $this
+                ->tableService
                 ->setQrOrdering(
                     $user,
                     $table,
@@ -331,14 +333,11 @@ class TableController extends Controller
             TableOperationException $exception
         ) {
             return ApiResponse::error(
-                message: $exception
-                    ->getMessage(),
+                message: $exception->getMessage(),
 
-                code: $exception
-                    ->errorCode,
+                code: $exception->errorCode,
 
-                status: $exception
-                    ->status
+                status: $exception->status
             );
         }
 
@@ -352,6 +351,79 @@ class TableController extends Controller
             ),
 
             message: 'QR ordering status updated successfully.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 19 - Transfer Active Table Session
+    |--------------------------------------------------------------------------
+    */
+
+    public function transfer(
+        TransferTableRequest $request,
+        RestaurantTable $table
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $data =
+            $request->validated();
+
+        try {
+            $result =
+                $this
+                ->transferService
+                ->transfer(
+                    actor: $user,
+
+                    sourceTable: $table,
+
+                    toTableId: (int)
+                    $data['to_table_id'],
+
+                    reason: $data['reason']
+                        ?? null
+                );
+        } catch (
+            TableOperationException $exception
+        ) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+
+                code: $exception->errorCode,
+
+                status: $exception->status
+            );
+        }
+
+        return ApiResponse::success(
+            data: [
+                'transfer' => (
+                    new TableTransferResource(
+                        $result['transfer']
+                    )
+                )->resolve(
+                    $request
+                ),
+
+                'session' => (
+                    new TableSessionResource(
+                        $result['session']
+                    )
+                )->resolve(
+                    $request
+                ),
+
+                'orders_moved' =>
+                $result['orders_moved'],
+
+                'bills_updated' =>
+                $result['bills_updated'],
+            ],
+
+            message: 'Table transferred successfully.'
         );
     }
 }

@@ -737,6 +737,38 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 19 - Table Transfer
+        |--------------------------------------------------------------------------
+        |
+        | Moves the existing active table session to another available table.
+        |
+        | The same session, orders, bill relationships and customer data are
+        | preserved.
+        |
+        | Existing kitchen tickets are NOT reprinted.
+        | Existing orders are NOT duplicated.
+        |
+        */
+
+        Route::post(
+            '/tables/{table}/transfer',
+            [
+                TableController::class,
+                'transfer',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.transfer'
+            )
+            ->name(
+                'v1.tables.transfer'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Table QR Management
         |--------------------------------------------------------------------------
         */
@@ -1071,9 +1103,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * Order list.
-         */
         Route::get(
             '/orders',
             [
@@ -1088,14 +1117,6 @@ Route::middleware(
                 'v1.orders.index'
             );
 
-        /*
-         * Order details including:
-         *
-         * items
-         * add-ons
-         * status history
-         * available actions
-         */
         Route::get(
             '/orders/{order}',
             [
@@ -1112,17 +1133,6 @@ Route::middleware(
             ->name(
                 'v1.orders.show'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Confirm Order
-        |--------------------------------------------------------------------------
-        |
-        | PENDING -> CONFIRMED
-        |
-        | Mainly used for QR customer orders.
-        |
-        */
 
         Route::post(
             '/orders/{order}/confirm',
@@ -1141,17 +1151,6 @@ Route::middleware(
                 'v1.orders.confirm'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Reject Order
-        |--------------------------------------------------------------------------
-        |
-        | PENDING -> REJECTED
-        |
-        | Reject permission intentionally follows orders.confirm.
-        |
-        */
-
         Route::post(
             '/orders/{order}/reject',
             [
@@ -1168,19 +1167,6 @@ Route::middleware(
             ->name(
                 'v1.orders.reject'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Send To Kitchen
-        |--------------------------------------------------------------------------
-        |
-        | CONFIRMED -> SENT_TO_KITCHEN
-        |
-        | Phase 17 marks the relevant order items as sent.
-        |
-        | KOT printing and inventory deduction are connected later.
-        |
-        */
 
         Route::post(
             '/orders/{order}/send-to-kitchen',
@@ -1199,15 +1185,6 @@ Route::middleware(
                 'v1.orders.send-to-kitchen'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Serve Order
-        |--------------------------------------------------------------------------
-        |
-        | SENT_TO_KITCHEN -> SERVED
-        |
-        */
-
         Route::post(
             '/orders/{order}/serve',
             [
@@ -1224,15 +1201,6 @@ Route::middleware(
             ->name(
                 'v1.orders.serve'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Complete Order
-        |--------------------------------------------------------------------------
-        |
-        | SERVED -> COMPLETED
-        |
-        */
 
         Route::post(
             '/orders/{order}/complete',
@@ -1251,20 +1219,6 @@ Route::middleware(
                 'v1.orders.complete'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Cancel Order
-        |--------------------------------------------------------------------------
-        |
-        | Allowed from:
-        |
-        | PENDING
-        | CONFIRMED
-        | SENT_TO_KITCHEN
-        | SERVED
-        |
-        */
-
         Route::post(
             '/orders/{order}/cancel',
             [
@@ -1282,35 +1236,9 @@ Route::middleware(
                 'v1.orders.cancel'
             );
 
-
         /*
         |--------------------------------------------------------------------------
         | Phase 18 - Takeaway Orders
-        |--------------------------------------------------------------------------
-        |
-        | Takeaway orders:
-        |
-        | type   = TAKEAWAY
-        | source = CASHIER
-        | status = CONFIRMED
-        |
-        | Takeaway orders do NOT require:
-        |
-        | table_id
-        | table_session_id
-        | session_sequence
-        | table_name_snapshot
-        |
-        | Optional customer details:
-        |
-        | customer_name
-        | customer_phone
-        | pickup_notes
-        |
-        | A unique takeaway token is generated from the TOKEN document sequence.
-        |
-        | Kitchen printing, billing and payment are connected in later phases.
-        |
         |--------------------------------------------------------------------------
         */
 
@@ -1322,11 +1250,6 @@ Route::middleware(
             )
             ->group(
                 function (): void {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Takeaway Order List
-                    |--------------------------------------------------------------------------
-                    */
 
                     Route::get(
                         '/orders',
@@ -1342,12 +1265,6 @@ Route::middleware(
                             'orders.index'
                         );
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Create Takeaway Order
-                    |--------------------------------------------------------------------------
-                    */
-
                     Route::post(
                         '/orders',
                         [
@@ -1362,12 +1279,6 @@ Route::middleware(
                         ->name(
                             'orders.store'
                         );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Takeaway Order Details
-                    |--------------------------------------------------------------------------
-                    */
 
                     Route::get(
                         '/orders/{order}',
@@ -1664,9 +1575,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 13 - Recipe Management
         |--------------------------------------------------------------------------
-        |
-        | Recipe changes never directly change inventory.
-        |
         */
 
         Route::get(
@@ -1686,9 +1594,6 @@ Route::middleware(
                 'v1.recipes.menu-items.overview'
             );
 
-        /*
-         * Base menu-item recipe.
-         */
         Route::get(
             '/recipes/menu-items/{menuItem}',
             [
@@ -1740,9 +1645,6 @@ Route::middleware(
                 'v1.recipes.menu-items.destroy'
             );
 
-        /*
-         * Variant-specific recipe.
-         */
         Route::get(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
             [
@@ -1864,11 +1766,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 14 - Recipe Consumption Preview
         |--------------------------------------------------------------------------
-        |
-        | Calculates menu recipe + add-on recipe requirements.
-        |
-        | This DOES NOT deduct inventory.
-        |
         */
 
         Route::post(
@@ -1908,9 +1805,6 @@ Route::middleware(
                 'v1.inventory.units.index'
             );
 
-        /*
-         * Keep /convert before dynamic unit routes.
-         */
         Route::post(
             '/inventory/units/convert',
             [
@@ -2064,9 +1958,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * Current stock.
-         */
         Route::get(
             '/inventory/stock',
             [
@@ -2081,9 +1972,6 @@ Route::middleware(
                 'v1.inventory.stock.current'
             );
 
-        /*
-         * Low stock.
-         */
         Route::get(
             '/inventory/stock/low',
             [
@@ -2098,9 +1986,6 @@ Route::middleware(
                 'v1.inventory.stock.low'
             );
 
-        /*
-         * Out-of-stock ingredients.
-         */
         Route::get(
             '/inventory/stock/out-of-stock',
             [
@@ -2115,9 +2000,6 @@ Route::middleware(
                 'v1.inventory.stock.out-of-stock'
             );
 
-        /*
-         * Inventory valuation.
-         */
         Route::get(
             '/inventory/stock/valuation',
             [
@@ -2132,9 +2014,6 @@ Route::middleware(
                 'v1.inventory.stock.valuation'
             );
 
-        /*
-         * Full immutable stock movement ledger.
-         */
         Route::get(
             '/inventory/stock/movements',
             [
@@ -2149,9 +2028,6 @@ Route::middleware(
                 'v1.inventory.stock.movements'
             );
 
-        /*
-         * Ingredient stock history.
-         */
         Route::get(
             '/inventory/ingredients/{ingredient}/stock-history',
             [
@@ -2169,9 +2045,6 @@ Route::middleware(
                 'v1.inventory.ingredients.stock-history'
             );
 
-        /*
-         * Initial opening inventory.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/opening-balance',
             [
@@ -2189,9 +2062,6 @@ Route::middleware(
                 'v1.inventory.ingredients.opening-balance'
             );
 
-        /*
-         * Controlled manual stock increase.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/in',
             [
@@ -2209,9 +2079,6 @@ Route::middleware(
                 'v1.inventory.ingredients.adjustment-in'
             );
 
-        /*
-         * Controlled manual stock decrease.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/out',
             [
@@ -2405,10 +2272,6 @@ Route::middleware(
                 'v1.purchases.update'
             );
 
-        /*
-         * Completing a purchase updates inventory
-         * through the controlled inventory engine.
-         */
         Route::post(
             '/purchases/{purchase}/complete',
             [
@@ -2503,9 +2366,6 @@ Route::middleware(
                 'v1.supplier-payments.index'
             );
 
-        /*
-         * View one mixed supplier-payment batch.
-         */
         Route::get(
             '/supplier-payment-batches/{paymentBatch}',
             [
