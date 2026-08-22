@@ -20,6 +20,10 @@ class AddonResource extends JsonResource
             'id' =>
             $this->id,
 
+            'consumes_inventory' =>
+            (bool)
+            $this->consumes_inventory,
+
             'addon_group_id' =>
             $this->addon_group_id,
 

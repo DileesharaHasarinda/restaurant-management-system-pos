@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Addon extends Model
 {
@@ -14,6 +15,7 @@ class Addon extends Model
         'sku',
         'price',
         'is_available',
+        'consumes_inventory',
         'is_active',
         'sort_order',
     ];
@@ -22,9 +24,18 @@ class Addon extends Model
     {
         return [
             'price' => 'decimal:2',
-            'is_available' => 'boolean',
-            'is_active' => 'boolean',
-            'sort_order' => 'integer',
+
+            'is_available' =>
+            'boolean',
+
+            'consumes_inventory' =>
+            'boolean',
+
+            'is_active' =>
+            'boolean',
+
+            'sort_order' =>
+            'integer',
         ];
     }
 
@@ -51,5 +62,13 @@ class Addon extends Model
                 'sort_order',
             ])
             ->withTimestamps();
+    }
+
+    public function recipeComponents(): HasMany
+    {
+        return $this->hasMany(
+            AddonRecipeComponent::class,
+            'addon_id'
+        );
     }
 }

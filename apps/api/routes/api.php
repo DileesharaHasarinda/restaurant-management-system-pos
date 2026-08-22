@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AddonController;
+use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
 use App\Http\Controllers\Api\V1\PurchaseController;
+use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
@@ -74,12 +76,6 @@ Route::middleware(
     |--------------------------------------------------------------------------
     | Public Restaurant Settings
     |--------------------------------------------------------------------------
-    |
-    | Used by:
-    |
-    | - Public restaurant website
-    | - QR ordering website
-    |
     */
 
     Route::get(
@@ -195,9 +191,6 @@ Route::middleware(
                 'active',
             ])->group(function (): void {
 
-                /*
-                 * Current authenticated user.
-                 */
                 Route::get(
                     '/me',
                     [
@@ -208,9 +201,6 @@ Route::middleware(
                     'me'
                 );
 
-                /*
-                 * Change password.
-                 */
                 Route::put(
                     '/password',
                     [
@@ -221,9 +211,6 @@ Route::middleware(
                     'password.change'
                 );
 
-                /*
-                 * Current user's sessions.
-                 */
                 Route::get(
                     '/sessions',
                     [
@@ -234,9 +221,6 @@ Route::middleware(
                     'sessions.index'
                 );
 
-                /*
-                 * Revoke one of the user's own sessions.
-                 */
                 Route::delete(
                     '/sessions/{tokenId}',
                     [
@@ -251,9 +235,6 @@ Route::middleware(
                         'sessions.destroy'
                     );
 
-                /*
-                 * Revoke all other sessions.
-                 */
                 Route::post(
                     '/revoke-other-sessions',
                     [
@@ -264,9 +245,6 @@ Route::middleware(
                     'sessions.revoke-others'
                 );
 
-                /*
-                 * Logout current session.
-                 */
                 Route::post(
                     '/logout',
                     [
@@ -277,9 +255,6 @@ Route::middleware(
                     'logout'
                 );
 
-                /*
-                 * Logout every session/device.
-                 */
                 Route::post(
                     '/logout-all',
                     [
@@ -1094,32 +1069,16 @@ Route::middleware(
         | Phase 13 - Recipe Management
         |--------------------------------------------------------------------------
         |
-        | Recipes connect menu items / variants to inventory ingredients.
+        | Recipes define which ingredients are required by menu items and
+        | menu-item variants.
         |
-        | IMPORTANT:
-        |
-        | Saving or editing a recipe does NOT modify inventory.
-        |
-        | Recipes are definitions only.
-        |
-        | Actual stock deduction will later call InventoryStockService and
-        | create SALE_CONSUMPTION movements when an order is sent to kitchen.
+        | Recipe changes NEVER directly change inventory.
         |
         |--------------------------------------------------------------------------
         */
 
         /*
          * Full menu-item recipe overview.
-         *
-         * Returns:
-         *
-         * - Base recipe
-         * - Variant recipes
-         * - Current recipe cost
-         * - Selling price
-         * - Gross margin
-         * - Gross margin percentage
-         * - Uncosted ingredient warnings
          */
         Route::get(
             '/recipes/menu-items/{menuItem}/overview',
@@ -1139,7 +1098,7 @@ Route::middleware(
             );
 
         /*
-         * Get base menu-item recipe.
+         * Base menu-item recipe.
          */
         Route::get(
             '/recipes/menu-items/{menuItem}',
@@ -1180,9 +1139,6 @@ Route::middleware(
 
         /*
          * Clear base menu-item recipe.
-         *
-         * This removes only the current recipe definition.
-         * It does not affect historical stock movements.
          */
         Route::delete(
             '/recipes/menu-items/{menuItem}',
@@ -1202,7 +1158,7 @@ Route::middleware(
             );
 
         /*
-         * Get one variant-specific recipe.
+         * Variant-specific recipe.
          */
         Route::get(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
@@ -1225,15 +1181,7 @@ Route::middleware(
             );
 
         /*
-         * Create or replace one variant-specific recipe.
-         *
-         * Example:
-         *
-         * Regular:
-         * Carrot 50 G
-         *
-         * Large:
-         * Carrot 80 G
+         * Create or replace variant recipe.
          */
         Route::put(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
@@ -1256,7 +1204,7 @@ Route::middleware(
             );
 
         /*
-         * Clear one variant-specific recipe.
+         * Clear variant recipe.
          */
         Route::delete(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
@@ -1280,6 +1228,148 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 14 - Add-on Inventory Recipes
+        |--------------------------------------------------------------------------
+        |
+        | Some add-ons consume inventory.
+        |
+        | Example:
+        |
+        | Extra Chicken
+        | Price: Rs. 300
+        |
+        | Recipe:
+        | Chicken 100 G
+        |
+        | The add-on recipe is added to the normal menu-item / variant
+        | recipe before any SALE_CONSUMPTION stock movement is created.
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Get add-on inventory recipe and cost.
+         */
+        Route::get(
+            '/recipes/addons/{addon}',
+            [
+                AddonRecipeController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'addon'
+            )
+            ->middleware(
+                'permission:recipes.view'
+            )
+            ->name(
+                'v1.recipes.addons.show'
+            );
+
+        /*
+         * Create or replace an add-on inventory recipe.
+         *
+         * Saving a recipe automatically marks:
+         *
+         * consumes_inventory = true
+         */
+        Route::put(
+            '/recipes/addons/{addon}',
+            [
+                AddonRecipeController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'addon'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.addons.update'
+            );
+
+        /*
+         * Clear add-on inventory recipe.
+         *
+         * This also sets:
+         *
+         * consumes_inventory = false
+         *
+         * Historical stock movements remain untouched.
+         */
+        Route::delete(
+            '/recipes/addons/{addon}',
+            [
+                AddonRecipeController::class,
+                'destroy',
+            ]
+        )
+            ->whereNumber(
+                'addon'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.addons.destroy'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 14 - Recipe Consumption Preview
+        |--------------------------------------------------------------------------
+        |
+        | Calculates:
+        |
+        | base/variant recipe
+        |        +
+        | selected add-on recipes
+        |        =
+        | final ingredient requirement
+        |
+        | Example:
+        |
+        | Chicken Fried Rice Regular
+        | Chicken 120 G
+        |
+        | Extra Chicken
+        | Chicken 100 G
+        |
+        | Final requirement:
+        | Chicken 220 G
+        |
+        | IMPORTANT:
+        |
+        | This endpoint DOES NOT deduct inventory.
+        |
+        | Actual SALE_CONSUMPTION must later be triggered by the order/KOT
+        | workflow through MenuInventoryConsumptionService.
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        Route::post(
+            '/recipes/menu-items/{menuItem}/consumption-preview',
+            [
+                RecipeConsumptionController::class,
+                'preview',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->middleware(
+                'permission:recipes.view'
+            )
+            ->name(
+                'v1.recipes.consumption-preview'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Units
         |--------------------------------------------------------------------------
         */
@@ -1299,11 +1389,7 @@ Route::middleware(
             );
 
         /*
-         * IMPORTANT:
-         *
-         * Keep /convert before /{unit} style
-         * routes to avoid accidental future
-         * route-model-binding collisions.
+         * Keep /convert before dynamic unit routes.
          */
         Route::post(
             '/inventory/units/convert',
@@ -1800,10 +1886,9 @@ Route::middleware(
             );
 
         /*
-         * Complete a purchase.
+         * Complete purchase.
          *
-         * Inventory changes must go through
-         * InventoryStockService.
+         * Inventory changes go through InventoryStockService.
          */
         Route::post(
             '/purchases/{purchase}/complete',

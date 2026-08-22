@@ -341,37 +341,371 @@ final class InventoryStockService
     |
     */
 
-    public function consumeSale(
+    public function consumeSaleBatch(
         User $actor,
-        Ingredient $ingredient,
-        float $quantity,
-        string $movementKey,
+        array $requirements,
+        string $movementKeyPrefix,
         string $sourceType,
         int $sourceId,
         ?string $reference = null,
         ?string $notes = null,
         ?int $businessDayId = null
-    ): StockMovement {
-        return $this->recordOutbound(
-            actor: $actor,
+    ): array {
+        if ($requirements === []) {
+            throw new InventoryOperationException(
+                message: 'At least one ingredient is required for sale consumption.',
 
-            ingredient: $ingredient,
+                errorCode: 'EMPTY_SALE_CONSUMPTION',
 
-            movementType: StockMovement::TYPE_SALE_CONSUMPTION,
+                status: 422
+            );
+        }
 
-            quantity: $quantity,
+        /*
+         * Aggregate duplicates as a safety layer.
+         */
+        $normalized =
+            [];
 
-            movementKey: $movementKey,
+        foreach (
+            $requirements as $requirement
+        ) {
+            $ingredientId =
+                (int)
+                $requirement['ingredient_id'];
 
-            sourceType: $sourceType,
+            $quantity =
+                round(
+                    (float)
+                    $requirement['quantity'],
+                    4
+                );
 
-            sourceId: $sourceId,
+            if ($quantity <= 0) {
+                throw new InventoryOperationException(
+                    message: 'Sale consumption quantity must be greater than zero.',
 
-            reference: $reference,
+                    errorCode: 'INVALID_STOCK_QUANTITY',
 
-            notes: $notes,
+                    status: 422
+                );
+            }
 
-            businessDayId: $businessDayId
+            if (
+                ! isset(
+                    $normalized[$ingredientId]
+                )
+            ) {
+                $normalized[$ingredientId] = 0.0;
+            }
+
+            $normalized[$ingredientId] +=
+                $quantity;
+        }
+
+        ksort(
+            $normalized
+        );
+
+        /*
+         * One deterministic movement per ingredient
+         * for this sale/order event.
+         */
+        $movementKeys =
+            [];
+
+        foreach (
+            $normalized
+            as $ingredientId => $quantity
+        ) {
+            $movementKeys[$ingredientId] =
+                'sale:' .
+                hash(
+                    'sha256',
+                    implode(
+                        '|',
+                        [
+                            $movementKeyPrefix,
+                            $sourceType,
+                            (string)
+                            $sourceId,
+                            (string)
+                            $ingredientId,
+                        ]
+                    )
+                );
+        }
+
+        return DatabaseTransaction::run(
+            function () use (
+                $actor,
+                $normalized,
+                $movementKeys,
+                $sourceType,
+                $sourceId,
+                $reference,
+                $notes,
+                $businessDayId
+            ): array {
+                $ingredientIds =
+                    array_keys(
+                        $normalized
+                    );
+
+                /*
+                 * Always lock ingredients in ID order
+                 * to reduce deadlock risk.
+                 */
+                $ingredients =
+                    Ingredient::query()
+                    ->whereIn(
+                        'id',
+                        $ingredientIds
+                    )
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if (
+                    $ingredients->count()
+                    !== count(
+                        $ingredientIds
+                    )
+                ) {
+                    throw new InventoryOperationException(
+                        message: 'One or more recipe ingredients could not be found.',
+
+                        errorCode: 'SALE_INGREDIENT_NOT_FOUND',
+
+                        status: 422
+                    );
+                }
+
+                /*
+                 * Re-check idempotency AFTER acquiring
+                 * ingredient locks.
+                 */
+                $existing =
+                    StockMovement::query()
+                    ->whereIn(
+                        'movement_key',
+                        array_values(
+                            $movementKeys
+                        )
+                    )
+                    ->get()
+                    ->keyBy(
+                        'movement_key'
+                    );
+
+                if (
+                    $existing->count()
+                    === count(
+                        $normalized
+                    )
+                ) {
+                    $movements =
+                        [];
+
+                    foreach (
+                        $normalized
+                        as $ingredientId => $quantity
+                    ) {
+                        $key =
+                            $movementKeys[$ingredientId];
+
+                        /** @var StockMovement $movement */
+                        $movement =
+                            $existing[$key];
+
+                        $expectedDelta =
+                            -round(
+                                $quantity,
+                                4
+                            );
+
+                        $valid =
+                            $movement
+                            ->ingredient_id
+                            === $ingredientId
+                            &&
+                            $movement
+                            ->movement_type
+                            === StockMovement::TYPE_SALE_CONSUMPTION
+                            &&
+                            abs(
+                                (float)
+                                $movement
+                                    ->quantity_delta
+                                    -
+                                    $expectedDelta
+                            ) < 0.000001;
+
+                        if (! $valid) {
+                            throw new InventoryOperationException(
+                                message: 'Sale-consumption idempotency key was reused for different stock data.',
+
+                                errorCode: 'STOCK_IDEMPOTENCY_KEY_REUSED'
+                            );
+                        }
+
+                        $movements[] =
+                            $movement;
+                    }
+
+                    return $movements;
+                }
+
+                /*
+                 * Because the operation is atomic,
+                 * either every ingredient movement
+                 * exists or none should exist.
+                 */
+                if (
+                    $existing->isNotEmpty()
+                ) {
+                    throw new InventoryOperationException(
+                        message: 'A partially recorded sale-consumption state was detected.',
+
+                        errorCode: 'PARTIAL_SALE_CONSUMPTION_STATE',
+
+                        status: 500
+                    );
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Preflight ALL ingredients
+                |--------------------------------------------------------------------------
+                |
+                | Nothing is deducted until every ingredient
+                | has enough stock.
+                |
+                */
+
+                foreach (
+                    $normalized
+                    as $ingredientId => $quantity
+                ) {
+                    /** @var Ingredient $ingredient */
+                    $ingredient =
+                        $ingredients[$ingredientId];
+
+                    $this->ensureStockTracked(
+                        $ingredient
+                    );
+
+                    $currentStock =
+                        (float)
+                        $ingredient
+                            ->current_stock;
+
+                    if (
+                        $quantity
+                        > $currentStock
+                        + 0.000001
+                    ) {
+                        throw new InventoryOperationException(
+                            message: sprintf(
+                                'Insufficient stock for %s. Available: %.4f, required: %.4f.',
+                                $ingredient->name,
+                                $currentStock,
+                                $quantity
+                            ),
+
+                            errorCode: 'INSUFFICIENT_STOCK',
+
+                            status: 409
+                        );
+                    }
+                }
+
+                $resolvedBusinessDayId =
+                    $businessDayId
+                    ?? $this
+                    ->currentBusinessDayId();
+
+                $movements =
+                    [];
+
+                /*
+                |--------------------------------------------------------------------------
+                | Apply ALL deductions
+                |--------------------------------------------------------------------------
+                */
+
+                foreach (
+                    $normalized
+                    as $ingredientId => $quantity
+                ) {
+                    /** @var Ingredient $ingredient */
+                    $ingredient =
+                        $ingredients[$ingredientId];
+
+                    $currentStock =
+                        (float)
+                        $ingredient
+                            ->current_stock;
+
+                    $unitCost =
+                        (float)
+                        $ingredient
+                            ->average_cost;
+
+                    $newStock =
+                        round(
+                            max(
+                                0,
+                                $currentStock
+                                    - $quantity
+                            ),
+                            4
+                        );
+
+                    $ingredient->current_stock =
+                        $newStock;
+
+                    $ingredient->save();
+
+                    $movement =
+                        $this->createMovement(
+                            movementKey: $movementKeys[$ingredientId],
+
+                            ingredient: $ingredient,
+
+                            actor: $actor,
+
+                            movementType: StockMovement::TYPE_SALE_CONSUMPTION,
+
+                            quantityDelta: -$quantity,
+
+                            balanceAfter: $newStock,
+
+                            unitCost: $unitCost,
+
+                            sourceType: $sourceType,
+
+                            sourceId: $sourceId,
+
+                            reference: $reference,
+
+                            notes: $notes,
+
+                            businessDayId: $resolvedBusinessDayId
+                        );
+
+                    $this->auditMovement(
+                        $actor,
+                        $movement
+                    );
+
+                    $movements[] =
+                        $movement;
+                }
+
+                return $movements;
+            }
         );
     }
 
