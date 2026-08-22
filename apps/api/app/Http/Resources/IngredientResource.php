@@ -24,50 +24,28 @@ class IngredientResource extends JsonResource
             $this->baseUnit
                 ? [
                     'id' =>
-                    $this
-                        ->baseUnit
-                        ->id,
+                    $this->baseUnit->id,
 
                     'name' =>
-                    $this
-                        ->baseUnit
-                        ->name,
+                    $this->baseUnit->name,
 
                     'symbol' =>
-                    $this
-                        ->baseUnit
-                        ->symbol,
+                    $this->baseUnit->symbol,
 
                     'measurement_type' =>
-                    $this
-                        ->baseUnit
+                    $this->baseUnit
                         ->measurement_type,
                 ]
                 : null,
 
-            /*
-             * Physical stock stored in
-             * ingredient base unit.
-             */
             'current_stock' =>
             (float)
             $this->current_stock,
 
-            /*
-             * DB field is reorder_level,
-             * API/UI name is minimum_stock.
-             */
             'minimum_stock' =>
             (float)
             $this->reorder_level,
 
-            /*
-             * Average cost per one base unit.
-             *
-             * Example:
-             * Rice base unit = G
-             * average_cost = cost per gram.
-             */
             'average_cost' =>
             (float)
             $this->average_cost,
@@ -77,6 +55,18 @@ class IngredientResource extends JsonResource
 
             'is_low_stock' =>
             $this->isLowStock(),
+
+            'is_out_of_stock' =>
+            $this->isOutOfStock(),
+
+            'stock_status' =>
+            $this->isOutOfStock()
+                ? 'OUT_OF_STOCK'
+                : (
+                    $this->isLowStock()
+                    ? 'LOW_STOCK'
+                    : 'IN_STOCK'
+                ),
 
             'track_stock' =>
             (bool)

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IngredientController;
+use App\Http\Controllers\Api\V1\InventoryStockController;
 use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
@@ -31,10 +32,21 @@ use Illuminate\Support\Facades\Route;
 |
 | bootstrap/app.php already applies the API prefix:
 |
-| /api/v1
+|     /api/v1
 |
-| Therefore routes in this file should NOT manually include /api/v1.
+| Therefore routes in this file should NOT start with:
 |
+|     /api/v1
+|
+| Example:
+|
+|     Route::get('/health', ...)
+|
+| becomes:
+|
+|     GET /api/v1/health
+|
+|--------------------------------------------------------------------------
 */
 
 Route::middleware(
@@ -43,13 +55,10 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | Public API
+    | Public Health Check
     |--------------------------------------------------------------------------
     */
 
-    /*
-     * Health Check
-     */
     Route::get(
         '/health',
         [
@@ -67,7 +76,7 @@ Route::middleware(
     |
     | Used by:
     |
-    | - Public website
+    | - Public restaurant website
     | - QR ordering website
     |
     */
@@ -84,13 +93,36 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
+    | Public Menu
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/public/menu/website',
+        [
+            PublicMenuController::class,
+            'website',
+        ]
+    )->name(
+        'v1.public.menu.website'
+    );
+
+    Route::get(
+        '/public/menu/qr',
+        [
+            PublicMenuController::class,
+            'qr',
+        ]
+    )->name(
+        'v1.public.menu.qr'
+    );
+
+    /*
+    |--------------------------------------------------------------------------
     | Public Table QR
     |--------------------------------------------------------------------------
     */
 
-    /*
-     * Validate and resolve a table QR token.
-     */
     Route::get(
         '/public/table-qr/{token}',
         [
@@ -109,10 +141,6 @@ Route::middleware(
             'v1.public.table-qr.resolve'
         );
 
-    /*
-     * Open or retrieve a table session
-     * from customer QR ordering.
-     */
     Route::post(
         '/public/table-qr/{token}/session',
         [
@@ -130,38 +158,6 @@ Route::middleware(
         ->name(
             'v1.public.table-qr.session'
         );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Public Menu
-    |--------------------------------------------------------------------------
-    */
-
-    /*
-     * Public website menu.
-     */
-    Route::get(
-        '/public/menu/website',
-        [
-            PublicMenuController::class,
-            'website',
-        ]
-    )->name(
-        'v1.public.menu.website'
-    );
-
-    /*
-     * QR customer-ordering menu.
-     */
-    Route::get(
-        '/public/menu/qr',
-        [
-            PublicMenuController::class,
-            'qr',
-        ]
-    )->name(
-        'v1.public.menu.qr'
-    );
 
     /*
     |--------------------------------------------------------------------------
@@ -191,114 +187,108 @@ Route::middleware(
                 );
 
             /*
-             * Authenticated user's own
-             * authentication endpoints.
+             * Authenticated user routes.
              */
             Route::middleware([
                 'auth:sanctum',
                 'active',
-            ])->group(
-                function (): void {
+            ])->group(function (): void {
 
-                    /*
-                     * Current authenticated user.
-                     */
-                    Route::get(
-                        '/me',
-                        [
-                            AuthController::class,
-                            'me',
-                        ]
-                    )->name(
-                        'me'
-                    );
+                /*
+                 * Current authenticated user.
+                 */
+                Route::get(
+                    '/me',
+                    [
+                        AuthController::class,
+                        'me',
+                    ]
+                )->name(
+                    'me'
+                );
 
-                    /*
-                     * Change password.
-                     */
-                    Route::put(
-                        '/password',
-                        [
-                            AuthController::class,
-                            'changePassword',
-                        ]
-                    )->name(
-                        'password.change'
-                    );
+                /*
+                 * Change password.
+                 */
+                Route::put(
+                    '/password',
+                    [
+                        AuthController::class,
+                        'changePassword',
+                    ]
+                )->name(
+                    'password.change'
+                );
 
-                    /*
-                     * Current user's active
-                     * Sanctum sessions.
-                     */
-                    Route::get(
-                        '/sessions',
-                        [
-                            AuthController::class,
-                            'sessions',
-                        ]
-                    )->name(
-                        'sessions.index'
-                    );
+                /*
+                 * Current user's sessions.
+                 */
+                Route::get(
+                    '/sessions',
+                    [
+                        AuthController::class,
+                        'sessions',
+                    ]
+                )->name(
+                    'sessions.index'
+                );
 
-                    /*
-                     * Revoke one own session.
-                     */
-                    Route::delete(
-                        '/sessions/{tokenId}',
-                        [
-                            AuthController::class,
-                            'revokeSession',
-                        ]
+                /*
+                 * Revoke one of the user's own sessions.
+                 */
+                Route::delete(
+                    '/sessions/{tokenId}',
+                    [
+                        AuthController::class,
+                        'revokeSession',
+                    ]
+                )
+                    ->whereNumber(
+                        'tokenId'
                     )
-                        ->whereNumber(
-                            'tokenId'
-                        )
-                        ->name(
-                            'sessions.destroy'
-                        );
-
-                    /*
-                     * Revoke all sessions except
-                     * the currently authenticated
-                     * session.
-                     */
-                    Route::post(
-                        '/revoke-other-sessions',
-                        [
-                            AuthController::class,
-                            'revokeOtherSessions',
-                        ]
-                    )->name(
-                        'sessions.revoke-others'
+                    ->name(
+                        'sessions.destroy'
                     );
 
-                    /*
-                     * Logout current session.
-                     */
-                    Route::post(
-                        '/logout',
-                        [
-                            AuthController::class,
-                            'logout',
-                        ]
-                    )->name(
-                        'logout'
-                    );
+                /*
+                 * Revoke all other sessions.
+                 */
+                Route::post(
+                    '/revoke-other-sessions',
+                    [
+                        AuthController::class,
+                        'revokeOtherSessions',
+                    ]
+                )->name(
+                    'sessions.revoke-others'
+                );
 
-                    /*
-                     * Logout all sessions/devices.
-                     */
-                    Route::post(
-                        '/logout-all',
-                        [
-                            AuthController::class,
-                            'logoutAll',
-                        ]
-                    )->name(
-                        'logout-all'
-                    );
-                }
-            );
+                /*
+                 * Logout current session.
+                 */
+                Route::post(
+                    '/logout',
+                    [
+                        AuthController::class,
+                        'logout',
+                    ]
+                )->name(
+                    'logout'
+                );
+
+                /*
+                 * Logout every session/device.
+                 */
+                Route::post(
+                    '/logout-all',
+                    [
+                        AuthController::class,
+                        'logoutAll',
+                    ]
+                )->name(
+                    'logout-all'
+                );
+            });
         });
 
     /*
@@ -578,7 +568,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Tables
+        | Table Management
         |--------------------------------------------------------------------------
         */
 
@@ -996,9 +986,6 @@ Route::middleware(
                 'v1.menu.items.state'
             );
 
-        /*
-         * Menu item photo upload.
-         */
         Route::post(
             '/menu/items/{menuItem}/photo',
             [
@@ -1016,9 +1003,6 @@ Route::middleware(
                 'v1.menu.items.photo.upload'
             );
 
-        /*
-         * Menu item photo removal.
-         */
         Route::delete(
             '/menu/items/{menuItem}/photo',
             [
@@ -1038,7 +1022,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Menu Add-ons
+        | Menu Add-on Groups
         |--------------------------------------------------------------------------
         */
 
@@ -1069,6 +1053,12 @@ Route::middleware(
             ->name(
                 'v1.menu.addon-groups.store'
             );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Menu Add-ons
+        |--------------------------------------------------------------------------
+        */
 
         Route::get(
             '/menu/addons',
@@ -1119,10 +1109,11 @@ Route::middleware(
             );
 
         /*
-         * Unit conversion endpoint.
+         * IMPORTANT:
          *
-         * Declared before the dynamic unit routes
-         * for clarity.
+         * Keep /convert before /{unit} style
+         * routes to avoid accidental future
+         * route-model-binding collisions.
          */
         Route::post(
             '/inventory/units/convert',
@@ -1273,6 +1264,186 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 12 - Inventory Stock Engine
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        |
+        | These static /inventory/stock/... routes are
+        | intentionally defined explicitly.
+        |
+        */
+
+        /*
+         * Current stock.
+         */
+        Route::get(
+            '/inventory/stock',
+            [
+                InventoryStockController::class,
+                'current',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock.current'
+            );
+
+        /*
+         * Low stock.
+         */
+        Route::get(
+            '/inventory/stock/low',
+            [
+                InventoryStockController::class,
+                'lowStock',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock.low'
+            );
+
+        /*
+         * Out-of-stock ingredients.
+         */
+        Route::get(
+            '/inventory/stock/out-of-stock',
+            [
+                InventoryStockController::class,
+                'outOfStock',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock.out-of-stock'
+            );
+
+        /*
+         * Inventory valuation.
+         */
+        Route::get(
+            '/inventory/stock/valuation',
+            [
+                InventoryStockController::class,
+                'valuation',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock.valuation'
+            );
+
+        /*
+         * Full immutable stock movement ledger.
+         */
+        Route::get(
+            '/inventory/stock/movements',
+            [
+                InventoryStockController::class,
+                'movements',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock.movements'
+            );
+
+        /*
+         * One ingredient's complete stock history.
+         */
+        Route::get(
+            '/inventory/ingredients/{ingredient}/stock-history',
+            [
+                InventoryStockController::class,
+                'ingredientHistory',
+            ]
+        )
+            ->whereNumber(
+                'ingredient'
+            )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.ingredients.stock-history'
+            );
+
+        /*
+         * Initial opening inventory.
+         *
+         * Can only be recorded before the
+         * ingredient has stock history.
+         */
+        Route::post(
+            '/inventory/ingredients/{ingredient}/opening-balance',
+            [
+                InventoryStockController::class,
+                'openingBalance',
+            ]
+        )
+            ->whereNumber(
+                'ingredient'
+            )
+            ->middleware(
+                'permission:inventory.adjust'
+            )
+            ->name(
+                'v1.inventory.ingredients.opening-balance'
+            );
+
+        /*
+         * Controlled manual stock increase.
+         */
+        Route::post(
+            '/inventory/ingredients/{ingredient}/adjustments/in',
+            [
+                InventoryStockController::class,
+                'adjustmentIn',
+            ]
+        )
+            ->whereNumber(
+                'ingredient'
+            )
+            ->middleware(
+                'permission:inventory.adjust'
+            )
+            ->name(
+                'v1.inventory.ingredients.adjustment-in'
+            );
+
+        /*
+         * Controlled manual stock decrease.
+         */
+        Route::post(
+            '/inventory/ingredients/{ingredient}/adjustments/out',
+            [
+                InventoryStockController::class,
+                'adjustmentOut',
+            ]
+        )
+            ->whereNumber(
+                'ingredient'
+            )
+            ->middleware(
+                'permission:inventory.adjust'
+            )
+            ->name(
+                'v1.inventory.ingredients.adjustment-out'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Suppliers
         |--------------------------------------------------------------------------
         */
@@ -1358,6 +1529,29 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Supplier-Specific Payment History
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/suppliers/{supplier}/payments',
+            [
+                SupplierPaymentController::class,
+                'supplierHistory',
+            ]
+        )
+            ->whereNumber(
+                'supplier'
+            )
+            ->middleware(
+                'permission:suppliers.view'
+            )
+            ->name(
+                'v1.suppliers.payments'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Purchases
         |--------------------------------------------------------------------------
         */
@@ -1425,13 +1619,13 @@ Route::middleware(
             );
 
         /*
-         * Complete purchase:
+         * Complete a purchase.
          *
-         * Purchase
-         *   ↓
-         * Stock Movement
-         *   ↓
-         * Inventory +
+         * Phase 12:
+         *
+         * Purchase completion must use
+         * InventoryStockService and create
+         * PURCHASE stock movements.
          */
         Route::post(
             '/purchases/{purchase}/complete',
@@ -1450,9 +1644,6 @@ Route::middleware(
                 'v1.purchases.complete'
             );
 
-        /*
-         * Cancel a DRAFT purchase.
-         */
         Route::post(
             '/purchases/{purchase}/cancel',
             [
@@ -1472,67 +1663,10 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Supplier Payments
+        | Purchase Supplier Payments
         |--------------------------------------------------------------------------
-        |
-        | Supports:
-        |
-        | CASH
-        | CARD
-        | BANK_TRANSFER
-        | CHEQUE
-        | OTHER
-        |
-        | Also supports:
-        |
-        | - Partial payments
-        | - Multiple payment methods
-        | - Outstanding balances
-        | - Payment references
-        | - Payment history
-        |
         */
 
-        /*
-         * Global supplier-payment history.
-         */
-        Route::get(
-            '/supplier-payments',
-            [
-                SupplierPaymentController::class,
-                'index',
-            ]
-        )
-            ->middleware(
-                'permission:purchases.view'
-            )
-            ->name(
-                'v1.supplier-payments.index'
-            );
-
-        /*
-         * Payment history for one supplier.
-         */
-        Route::get(
-            '/suppliers/{supplier}/payments',
-            [
-                SupplierPaymentController::class,
-                'supplierHistory',
-            ]
-        )
-            ->whereNumber(
-                'supplier'
-            )
-            ->middleware(
-                'permission:suppliers.view'
-            )
-            ->name(
-                'v1.suppliers.payments'
-            );
-
-        /*
-         * Payment history for one purchase.
-         */
         Route::get(
             '/purchases/{purchase}/payments',
             [
@@ -1550,10 +1684,6 @@ Route::middleware(
                 'v1.purchases.payments.index'
             );
 
-        /*
-         * Record one or multiple payment
-         * methods against a completed purchase.
-         */
         Route::post(
             '/purchases/{purchase}/payments',
             [
@@ -1572,14 +1702,27 @@ Route::middleware(
             );
 
         /*
-         * View a complete supplier-payment batch.
-         *
-         * Example:
-         *
-         * Cash          30,000
-         * Bank Transfer 50,000
-         * --------------------
-         * Total         80,000
+        |--------------------------------------------------------------------------
+        | Global Supplier Payment History
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/supplier-payments',
+            [
+                SupplierPaymentController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:purchases.view'
+            )
+            ->name(
+                'v1.supplier-payments.index'
+            );
+
+        /*
+         * View one mixed-payment batch.
          */
         Route::get(
             '/supplier-payment-batches/{paymentBatch}',
