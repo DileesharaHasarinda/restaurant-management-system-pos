@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\V1\SupplierPaymentController;
 use App\Http\Controllers\Api\V1\TableController;
 use App\Http\Controllers\Api\V1\TableQrController;
 use App\Http\Controllers\Api\V1\TableSessionController;
+use App\Http\Controllers\Api\V1\TakeawayOrderController;
 use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserSessionController;
@@ -962,15 +963,12 @@ Route::middleware(
                     */
 
                     Route::post(
-                        '/tables/{table}/orders',
+                        '/orders',
                         [
                             WaiterOrderController::class,
                             'store',
                         ]
                     )
-                        ->whereNumber(
-                            'table'
-                        )
                         ->middleware(
                             'permission:orders.create'
                         )
@@ -1282,6 +1280,112 @@ Route::middleware(
             )
             ->name(
                 'v1.orders.cancel'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 18 - Takeaway Orders
+        |--------------------------------------------------------------------------
+        |
+        | Takeaway orders:
+        |
+        | type   = TAKEAWAY
+        | source = CASHIER
+        | status = CONFIRMED
+        |
+        | Takeaway orders do NOT require:
+        |
+        | table_id
+        | table_session_id
+        | session_sequence
+        | table_name_snapshot
+        |
+        | Optional customer details:
+        |
+        | customer_name
+        | customer_phone
+        | pickup_notes
+        |
+        | A unique takeaway token is generated from the TOKEN document sequence.
+        |
+        | Kitchen printing, billing and payment are connected in later phases.
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix(
+            'takeaway'
+        )
+            ->name(
+                'v1.takeaway.'
+            )
+            ->group(
+                function (): void {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Takeaway Order List
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::get(
+                        '/orders',
+                        [
+                            TakeawayOrderController::class,
+                            'index',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:orders.view'
+                        )
+                        ->name(
+                            'orders.index'
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Create Takeaway Order
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::post(
+                        '/orders',
+                        [
+                            TakeawayOrderController::class,
+                            'store',
+                        ]
+                    )
+                        ->middleware([
+                            'permission:orders.create',
+                            'permission:orders.confirm',
+                        ])
+                        ->name(
+                            'orders.store'
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Takeaway Order Details
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::get(
+                        '/orders/{order}',
+                        [
+                            TakeawayOrderController::class,
+                            'show',
+                        ]
+                    )
+                        ->whereNumber(
+                            'order'
+                        )
+                        ->middleware(
+                            'permission:orders.view'
+                        )
+                        ->name(
+                            'orders.show'
+                        );
+                }
             );
 
         /*

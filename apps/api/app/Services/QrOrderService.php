@@ -820,10 +820,19 @@ final class QrOrderService
 |
 */
 
-    public function prepareDineInCartForStaff(
+    public function prepareCartForStaff(
         array $items
     ): array {
         return $this->prepareCart(
+            items: $items,
+            requireQrVisibility: false
+        );
+    }
+
+    public function prepareDineInCartForStaff(
+        array $items
+    ): array {
+        return $this->prepareCartForStaff(
             $items
         );
     }
@@ -884,7 +893,8 @@ final class QrOrderService
     */
 
     private function prepareCart(
-        array $items
+        array $items,
+        bool $requireQrVisibility = true
     ): array {
         $lines =
             [];
@@ -930,7 +940,8 @@ final class QrOrderService
             }
 
             $this->validateMenuItem(
-                $menuItem
+                menuItem: $menuItem,
+                requireQrVisibility: $requireQrVisibility
             );
 
             $quantity =
@@ -1362,6 +1373,7 @@ final class QrOrderService
 
                 'special_notes' =>
                 $itemData['special_notes']
+                    ?? $itemData['notes']
                     ?? null,
 
                 'addons' =>
@@ -1509,15 +1521,26 @@ final class QrOrderService
     */
 
     private function validateMenuItem(
-        MenuItem $menuItem
+        MenuItem $menuItem,
+        bool $requireQrVisibility = true
     ): void {
-        if (
+        $menuItemUnavailable =
             ! $menuItem->is_active
-            || ! $menuItem->is_available
-            || ! $menuItem->is_visible_on_qr
-        ) {
+            ||
+            ! $menuItem->is_available
+            ||
+            (
+                $requireQrVisibility
+                &&
+                ! $menuItem
+                    ->is_visible_on_qr
+            );
+
+        if ($menuItemUnavailable) {
             throw new QrOrderException(
-                message: "{$menuItem->name} is not currently available for QR ordering.",
+                message: $requireQrVisibility
+                    ? "{$menuItem->name} is not currently available for QR ordering."
+                    : "{$menuItem->name} is not currently available for staff ordering.",
 
                 errorCode: 'MENU_ITEM_NOT_AVAILABLE',
 
@@ -1525,17 +1548,26 @@ final class QrOrderService
             );
         }
 
-        if (
+        $categoryUnavailable =
             ! $menuItem->category
-            || ! $menuItem
+            ||
+            ! $menuItem
                 ->category
                 ->is_active
-            || ! $menuItem
-                ->category
-                ->is_visible_on_qr
-        ) {
+            ||
+            (
+                $requireQrVisibility
+                &&
+                ! $menuItem
+                    ->category
+                    ->is_visible_on_qr
+            );
+
+        if ($categoryUnavailable) {
             throw new QrOrderException(
-                message: "{$menuItem->name} is not currently available for QR ordering.",
+                message: $requireQrVisibility
+                    ? "{$menuItem->name} is not currently available for QR ordering."
+                    : "{$menuItem->name} is not currently available for staff ordering.",
 
                 errorCode: 'MENU_CATEGORY_NOT_AVAILABLE',
 
@@ -2096,6 +2128,7 @@ final class QrOrderService
 
                         'special_notes' =>
                         $item['special_notes']
+                            ?? $item['notes']
                             ?? null,
 
                         'addons' =>

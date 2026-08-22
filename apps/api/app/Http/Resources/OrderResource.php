@@ -64,6 +64,15 @@ class OrderResource extends JsonResource
             'table_name' =>
             $this->table_name_snapshot,
 
+            'takeaway_token' =>
+            $this->takeaway_token,
+
+            'pickup_notes' =>
+            $this->order_type
+                === Order::TYPE_TAKEAWAY
+                ? $this->customer_notes
+                : null,
+
             'order_type' =>
             $this->order_type,
 

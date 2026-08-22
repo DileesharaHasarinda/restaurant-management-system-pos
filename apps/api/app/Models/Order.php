@@ -48,7 +48,7 @@ class Order extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Order Statuses
+    | Statuses
     |--------------------------------------------------------------------------
     */
 
@@ -104,6 +104,7 @@ class Order extends Model
         'session_sequence',
 
         'table_name_snapshot',
+        'takeaway_token',
 
         'customer_name',
         'customer_phone',
@@ -277,5 +278,11 @@ class Order extends Model
             self::TERMINAL_STATUSES,
             true
         );
+    }
+
+    public function isTakeaway(): bool
+    {
+        return $this->order_type
+            === self::TYPE_TAKEAWAY;
     }
 }
