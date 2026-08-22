@@ -4,35 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class SupplierPayment extends Model
+class SupplierPaymentBatch extends Model
 {
-    public const METHOD_CASH =
-    'CASH';
-
-    public const METHOD_CARD =
-    'CARD';
-
-    public const METHOD_BANK_TRANSFER =
-    'BANK_TRANSFER';
-
-    public const METHOD_CHEQUE =
-    'CHEQUE';
-
-    public const METHOD_OTHER =
-    'OTHER';
-
     protected $fillable = [
-        'payment_batch_id',
+        'batch_number',
+        'idempotency_key',
+        'request_hash',
         'supplier_id',
         'purchase_id',
-        'payment_number',
         'payment_date',
-        'amount',
-        'payment_method',
-        'reference',
+        'total_amount',
         'notes',
         'created_by',
+    ];
+
+    protected $hidden = [
+        'idempotency_key',
+        'request_hash',
     ];
 
     protected function casts(): array
@@ -41,28 +31,9 @@ class SupplierPayment extends Model
             'payment_date' =>
             'date',
 
-            'amount' =>
+            'total_amount' =>
             'decimal:2',
         ];
-    }
-
-    public static function methods(): array
-    {
-        return [
-            self::METHOD_CASH,
-            self::METHOD_CARD,
-            self::METHOD_BANK_TRANSFER,
-            self::METHOD_CHEQUE,
-            self::METHOD_OTHER,
-        ];
-    }
-
-    public function batch(): BelongsTo
-    {
-        return $this->belongsTo(
-            SupplierPaymentBatch::class,
-            'payment_batch_id'
-        );
     }
 
     public function supplier(): BelongsTo
@@ -78,6 +49,14 @@ class SupplierPayment extends Model
         return $this->belongsTo(
             Purchase::class,
             'purchase_id'
+        );
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(
+            SupplierPayment::class,
+            'payment_batch_id'
         );
     }
 

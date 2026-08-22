@@ -21,8 +21,11 @@ class Supplier extends Model
     protected function casts(): array
     {
         return [
-            'current_balance' => 'decimal:2',
-            'is_active' => 'boolean',
+            'current_balance' =>
+            'decimal:2',
+
+            'is_active' =>
+            'boolean',
         ];
     }
 
@@ -38,6 +41,14 @@ class Supplier extends Model
     {
         return $this->hasMany(
             SupplierPayment::class,
+            'supplier_id'
+        );
+    }
+
+    public function paymentBatches(): HasMany
+    {
+        return $this->hasMany(
+            SupplierPaymentBatch::class,
             'supplier_id'
         );
     }

@@ -8,11 +8,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Purchase extends Model
 {
-    public const STATUS_DRAFT = 'DRAFT';
+    public const STATUS_DRAFT =
+    'DRAFT';
 
-    public const STATUS_COMPLETED = 'COMPLETED';
+    public const STATUS_COMPLETED =
+    'COMPLETED';
 
-    public const STATUS_CANCELLED = 'CANCELLED';
+    public const STATUS_CANCELLED =
+    'CANCELLED';
+
+    public const PAYMENT_STATUS_UNPAID =
+    'UNPAID';
+
+    public const PAYMENT_STATUS_PARTIALLY_PAID =
+    'PARTIALLY_PAID';
+
+    public const PAYMENT_STATUS_PAID =
+    'PAID';
 
     protected $fillable = [
         'purchase_number',
@@ -33,7 +45,6 @@ class Purchase extends Model
         'notes',
 
         'created_by',
-
         'completed_by',
         'completed_at',
     ];
@@ -91,6 +102,14 @@ class Purchase extends Model
         );
     }
 
+    public function paymentBatches(): HasMany
+    {
+        return $this->hasMany(
+            SupplierPaymentBatch::class,
+            'purchase_id'
+        );
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(
@@ -123,5 +142,11 @@ class Purchase extends Model
     {
         return $this->status
             === self::STATUS_CANCELLED;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status
+            === self::PAYMENT_STATUS_PAID;
     }
 }

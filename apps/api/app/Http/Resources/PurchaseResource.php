@@ -23,7 +23,9 @@ class PurchaseResource extends JsonResource
                     new SupplierResource(
                         $this->supplier
                     )
-                )->resolve($request)
+                )->resolve(
+                    $request
+                )
                 : null,
 
             'purchase_date' =>
@@ -34,10 +36,34 @@ class PurchaseResource extends JsonResource
             $this->supplier_invoice_number,
 
             'subtotal' =>
-            (float) $this->subtotal,
+            (float)
+            $this->subtotal,
+
+            'discount_total' =>
+            (float)
+            $this->discount_total,
+
+            'tax_total' =>
+            (float)
+            $this->tax_total,
 
             'grand_total' =>
-            (float) $this->grand_total,
+            (float)
+            $this->grand_total,
+
+            /*
+             * Supplier-payment position.
+             */
+            'paid_amount' =>
+            (float)
+            $this->paid_amount,
+
+            'balance_due' =>
+            (float)
+            $this->balance_due,
+
+            'payment_status' =>
+            $this->payment_status,
 
             'status' =>
             $this->status,
@@ -47,8 +73,21 @@ class PurchaseResource extends JsonResource
 
             'items' =>
             PurchaseItemResource::collection(
-                $this->whenLoaded('items')
-            )->resolve($request),
+                $this->whenLoaded(
+                    'items'
+                )
+            )->resolve(
+                $request
+            ),
+
+            'payment_history' =>
+            SupplierPaymentBatchResource::collection(
+                $this->whenLoaded(
+                    'paymentBatches'
+                )
+            )->resolve(
+                $request
+            ),
 
             'completed_at' =>
             $this->completed_at
