@@ -1,19 +1,16 @@
 import type { PosUser } from "./types";
 
 /*
-  |--------------------------------------------------------------------------
-  | Restaurant API URL
-  |--------------------------------------------------------------------------
-  |
-  | For the current local development environment the Laravel API runs at:
-  |
-  | http://127.0.0.1:8000/api/v1
-  |
-  | We intentionally avoid import.meta.env here because the Electron Forge
-  | TypeScript configuration currently reports import.meta as unsupported.
-  | We can introduce environment-based production configuration later.
-  |
-  */
+|--------------------------------------------------------------------------
+| Restaurant API URL
+|--------------------------------------------------------------------------
+|
+| Current local-development Laravel API.
+|
+| We are intentionally not using import.meta.env here because the current
+| Electron Forge TypeScript configuration reported import.meta as unsupported.
+|
+*/
 
 export const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
@@ -82,7 +79,6 @@ const request = async <T>(
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-
       headers,
     });
   } catch (exception) {
@@ -152,7 +148,6 @@ export const api = {
 
         body: JSON.stringify({
           login,
-
           password,
 
           device_name: deviceName,

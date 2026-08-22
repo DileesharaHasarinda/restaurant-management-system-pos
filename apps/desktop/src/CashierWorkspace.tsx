@@ -60,6 +60,193 @@ interface ProductSelection {
     notes: string;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Laravel OrderResource response types
+|--------------------------------------------------------------------------
+|
+| The Laravel API returns:
+|
+| customer: {
+|   name,
+|   phone
+| }
+|
+| totals: {
+|   subtotal,
+|   discount,
+|   tax,
+|   service_charge,
+|   grand_total
+| }
+|
+| items: [
+|   {
+|     name,
+|     variant
+|   }
+| ]
+|
+| The existing desktop Order Type uses the older flattened property names.
+| We normalize the server response below instead of changing types.ts.
+|
+*/
+
+interface ApiOrderCustomer {
+    name?: string | null;
+    phone?: string | null;
+}
+
+interface ApiOrderTotals {
+    subtotal?: number;
+    discount?: number;
+    tax?: number;
+    service_charge?: number;
+    grand_total?: number;
+}
+
+interface ApiOrderAddon {
+    id?: number;
+    addon_id?: number | null;
+
+    name?: string | null;
+
+    quantity?: number;
+
+    unit_price?: number;
+
+    line_total?: number;
+}
+
+interface ApiOrderItem {
+    id?: number;
+
+    menu_item_id?:
+    number | null;
+
+    variant_id?:
+    number | null;
+
+    name?: string | null;
+
+    variant?: string | null;
+
+    quantity?: number;
+
+    unit_price?: number;
+
+    line_total?: number;
+
+    status?: string;
+
+    special_notes?:
+    string | null;
+
+    sent_to_kitchen_at?:
+    string | null;
+
+    cancelled_at?:
+    string | null;
+
+    addons?:
+    ApiOrderAddon[];
+}
+
+interface ApiOrderResponse {
+    id?: number;
+
+    order_number?: string;
+
+    business_day_id?: number;
+
+    table_session_id?:
+    number | null;
+
+    table_id?:
+    number | null;
+
+    table_name?:
+    string | null;
+
+    takeaway_token?:
+    string | null;
+
+    pickup_notes?:
+    string | null;
+
+    order_type?: string;
+
+    order_source?: string;
+
+    session_sequence?:
+    number | null;
+
+    status?: string;
+
+    customer?:
+    ApiOrderCustomer | null;
+
+    totals?:
+    ApiOrderTotals | null;
+
+    customer_notes?:
+    string | null;
+
+    internal_notes?:
+    string | null;
+
+    created_by?:
+    number | null;
+
+    confirmed_by?:
+    number | null;
+
+    cancelled_by?:
+    number | null;
+
+    rejected_by?:
+    number | null;
+
+    confirmed_at?:
+    string | null;
+
+    sent_to_kitchen_at?:
+    string | null;
+
+    served_at?:
+    string | null;
+
+    completed_at?:
+    string | null;
+
+    cancelled_at?:
+    string | null;
+
+    rejected_at?:
+    string | null;
+
+    cancellation_reason?:
+    string | null;
+
+    rejection_reason?:
+    string | null;
+
+    pending_kitchen_item_count?:
+    number;
+
+    items?:
+    ApiOrderItem[];
+
+    status_history?:
+    unknown[];
+
+    created_at?:
+    string | null;
+
+    updated_at?:
+    string | null;
+}
+
 const money =
     (
         value:
@@ -87,6 +274,274 @@ const makeLocalId =
         `${Date.now()}-${Math.random()
             .toString(36)
             .slice(2)}`;
+
+/*
+|--------------------------------------------------------------------------
+| Order Normalizer
+|--------------------------------------------------------------------------
+|
+| Converts Laravel OrderResource into the structure currently expected by
+| the Electron application and existing types.ts file.
+|
+*/
+
+const normalizeOrder =
+    (
+        raw:
+            ApiOrderResponse,
+    ): Order => {
+        const totals =
+            raw.totals
+            ?? {};
+
+        const customer =
+            raw.customer
+            ?? {};
+
+        const items =
+            (
+                raw.items
+                ?? []
+            ).map(
+                (
+                    item,
+                ) => ({
+                    id:
+                        Number(
+                            item.id
+                            ?? 0,
+                        ),
+
+                    menu_item_id:
+                        item.menu_item_id
+                        ?? null,
+
+                    item_name_snapshot:
+                        item.name
+                        ??
+                        'Item',
+
+                    item_name:
+                        item.name
+                        ??
+                        'Item',
+
+                    variant_name_snapshot:
+                        item.variant
+                        ?? null,
+
+                    variant_name:
+                        item.variant
+                        ?? null,
+
+                    quantity:
+                        Number(
+                            item.quantity
+                            ?? 0,
+                        ),
+
+                    unit_price:
+                        Number(
+                            item.unit_price
+                            ?? 0,
+                        ),
+
+                    line_total:
+                        Number(
+                            item.line_total
+                            ?? 0,
+                        ),
+
+                    status:
+                        item.status
+                        ??
+                        'ACTIVE',
+
+                    special_notes:
+                        item.special_notes
+                        ?? null,
+
+                    sent_to_kitchen_at:
+                        item.sent_to_kitchen_at
+                        ?? null,
+
+                    addons:
+                        (
+                            item.addons
+                            ?? []
+                        ).map(
+                            (
+                                addon,
+                            ) => ({
+                                id:
+                                    addon.id,
+
+                                addon_id:
+                                    addon.addon_id
+                                    ?? undefined,
+
+                                addon_name_snapshot:
+                                    addon.name
+                                    ??
+                                    undefined,
+
+                                name:
+                                    addon.name
+                                    ??
+                                    undefined,
+
+                                quantity:
+                                    Number(
+                                        addon.quantity
+                                        ?? 0,
+                                    ),
+
+                                unit_price:
+                                    Number(
+                                        addon.unit_price
+                                        ?? 0,
+                                    ),
+
+                                line_total:
+                                    Number(
+                                        addon.line_total
+                                        ?? 0,
+                                    ),
+                            }),
+                        ),
+                }),
+            );
+
+        return {
+            id:
+                Number(
+                    raw.id
+                    ?? 0,
+                ),
+
+            order_number:
+                raw.order_number
+                ??
+                '',
+
+            order_type:
+                raw.order_type
+                ??
+                '',
+
+            order_source:
+                raw.order_source
+                ??
+                '',
+
+            status:
+                raw.status
+                ??
+                '',
+
+            table_session_id:
+                raw.table_session_id
+                ?? null,
+
+            table_id:
+                raw.table_id
+                ?? null,
+
+            table_name_snapshot:
+                raw.table_name
+                ?? null,
+
+            table_name:
+                raw.table_name
+                ?? null,
+
+            takeaway_token:
+                raw.takeaway_token
+                ?? null,
+
+            customer_name:
+                customer.name
+                ?? null,
+
+            customer_phone:
+                customer.phone
+                ?? null,
+
+            customer_notes:
+                raw.customer_notes
+                ?? null,
+
+            pickup_notes:
+                raw.pickup_notes
+                ?? null,
+
+            subtotal:
+                Number(
+                    totals.subtotal
+                    ?? 0,
+                ),
+
+            discount_total:
+                Number(
+                    totals.discount
+                    ?? 0,
+                ),
+
+            tax_total:
+                Number(
+                    totals.tax
+                    ?? 0,
+                ),
+
+            service_charge_total:
+                Number(
+                    totals.service_charge
+                    ?? 0,
+                ),
+
+            grand_total:
+                Number(
+                    totals.grand_total
+                    ?? 0,
+                ),
+
+            created_at:
+                raw.created_at
+                ?? null,
+
+            confirmed_at:
+                raw.confirmed_at
+                ?? null,
+
+            sent_to_kitchen_at:
+                raw.sent_to_kitchen_at
+                ?? null,
+
+            served_at:
+                raw.served_at
+                ?? null,
+
+            completed_at:
+                raw.completed_at
+                ?? null,
+
+            items,
+        };
+    };
+
+const normalizeOrders =
+    (
+        values:
+            ApiOrderResponse[],
+    ): Order[] =>
+        values.map(
+            (
+                order,
+            ) =>
+                normalizeOrder(
+                    order,
+                ),
+        );
 
 const moduleItems:
     Array<{
@@ -183,7 +638,8 @@ const cartUnitPrice =
                 );
 
         return base
-            + addonTotal;
+            +
+            addonTotal;
     };
 
 const cartLineTotal =
@@ -410,6 +866,10 @@ export default function CashierWorkspace(
                 } catch (
                 exception
                 ) {
+                    setOnline(
+                        false,
+                    );
+
                     handleError(
                         exception,
                     );
@@ -429,9 +889,16 @@ export default function CashierWorkspace(
                             '/orders',
                         );
 
-                    setOrders(
-                        extractList<Order>(
+                    const rawOrders =
+                        extractList<
+                            ApiOrderResponse
+                        >(
                             response.data,
+                        );
+
+                    setOrders(
+                        normalizeOrders(
+                            rawOrders,
                         ),
                     );
 
@@ -441,6 +908,10 @@ export default function CashierWorkspace(
                 } catch (
                 exception
                 ) {
+                    setOnline(
+                        false,
+                    );
+
                     handleError(
                         exception,
                     );
@@ -508,6 +979,10 @@ export default function CashierWorkspace(
                 } catch (
                 exception
                 ) {
+                    setOnline(
+                        false,
+                    );
+
                     handleError(
                         exception,
                     );
@@ -720,11 +1195,6 @@ export default function CashierWorkspace(
                     item,
                 );
             } catch {
-                /*
-                 * Fall back to the data from
-                 * the menu list. Simple products
-                 * can still be added.
-                 */
                 setProductDialog(
                     item,
                 );
@@ -897,12 +1367,16 @@ export default function CashierWorkspace(
 
             try {
                 const response =
-                    await api.get<Order>(
+                    await api.get<
+                        ApiOrderResponse
+                    >(
                         `/orders/${order.id}`,
                     );
 
                 setSelectedOrder(
-                    response.data,
+                    normalizeOrder(
+                        response.data,
+                    ),
                 );
             } catch (
             exception
@@ -940,7 +1414,9 @@ export default function CashierWorkspace(
 
             try {
                 const response =
-                    await api.post<Order>(
+                    await api.post<
+                        ApiOrderResponse
+                    >(
                         `/orders/${order.id}/${action}`,
                         {},
                     );
@@ -949,7 +1425,9 @@ export default function CashierWorkspace(
                     response.data
                 ) {
                     setSelectedOrder(
-                        response.data,
+                        normalizeOrder(
+                            response.data,
+                        ),
                     );
                 }
 
@@ -987,7 +1465,9 @@ export default function CashierWorkspace(
 
             try {
                 const response =
-                    await api.post<Order>(
+                    await api.post<
+                        ApiOrderResponse
+                    >(
                         '/takeaway/orders',
                         {
                             client_order_id:
@@ -1049,7 +1529,9 @@ export default function CashierWorkspace(
                     );
 
                 setSelectedOrder(
-                    response.data,
+                    normalizeOrder(
+                        response.data,
+                    ),
                 );
 
                 setCart(
@@ -1712,7 +2194,9 @@ function OrdersModule(
     }: {
         title: string;
         subtitle: string;
-        orders: Order[];
+
+        orders:
+        Order[];
 
         onView:
         (
@@ -1735,8 +2219,12 @@ function OrdersModule(
     return (
         <div className="module-page">
             <ModuleHeader
-                title={title}
-                subtitle={subtitle}
+                title={
+                    title
+                }
+                subtitle={
+                    subtitle
+                }
             />
 
             {
@@ -1796,6 +2284,7 @@ function OrdersModule(
                                             <div className="order-card__details">
                                                 <span>
                                                     Source
+
                                                     <strong>
                                                         {
                                                             order
@@ -1806,6 +2295,7 @@ function OrdersModule(
 
                                                 <span>
                                                     Table
+
                                                     <strong>
                                                         {
                                                             order
@@ -1821,6 +2311,7 @@ function OrdersModule(
 
                                                 <span>
                                                     Customer
+
                                                     <strong>
                                                         {
                                                             order
@@ -1833,6 +2324,7 @@ function OrdersModule(
 
                                                 <span>
                                                     Total
+
                                                     <strong className="money-text">
                                                         {
                                                             money(
@@ -2133,7 +2625,9 @@ function PosModuleView(
             </section>
 
             <CartPanel
-                cart={cart}
+                cart={
+                    cart
+                }
                 total={
                     cartTotal
                 }
@@ -2458,7 +2952,8 @@ function CurrentOrderModule(
                                 {
                                     order
                                         .customer_name
-                                    ?? 'Walk-in Customer'
+                                    ??
+                                    'Walk-in Customer'
                                 }
                             </strong>
                         </div>
@@ -2472,7 +2967,8 @@ function CurrentOrderModule(
                                 {
                                     order
                                         .customer_phone
-                                    ?? '—'
+                                    ??
+                                    '—'
                                 }
                             </strong>
                         </div>
@@ -2486,6 +2982,9 @@ function CurrentOrderModule(
                                 {
                                     order
                                         .table_name_snapshot
+                                    ??
+                                    order
+                                        .table_name
                                     ??
                                     'Takeaway'
                                 }
@@ -2531,6 +3030,29 @@ function CurrentOrderModule(
                                                 }
 
                                                 {
+                                                    item.addons
+                                                        ?.length
+                                                        > 0
+                                                        ? (
+                                                            <small>
+                                                                Add-ons: {
+                                                                    item.addons
+                                                                        .map(
+                                                                            (
+                                                                                addon,
+                                                                            ) =>
+                                                                                `${addon.name ?? addon.addon_name_snapshot ?? 'Add-on'} ×${addon.quantity}`,
+                                                                        )
+                                                                        .join(
+                                                                            ', ',
+                                                                        )
+                                                                }
+                                                            </small>
+                                                        )
+                                                        : null
+                                                }
+
+                                                {
                                                     item
                                                         .special_notes
                                                         ? (
@@ -2543,6 +3065,15 @@ function CurrentOrderModule(
                                                         )
                                                         : null
                                                 }
+
+                                                <small>
+                                                    {
+                                                        money(
+                                                            item
+                                                                .unit_price,
+                                                        )
+                                                    } each
+                                                </small>
                                             </div>
 
                                             <b>
@@ -2564,7 +3095,7 @@ function CurrentOrderModule(
                                 )
                                 : (
                                     <p className="muted-text">
-                                        Order item details are not loaded.
+                                        No items are available for this order.
                                     </p>
                                 )
                         }
@@ -2580,7 +3111,56 @@ function CurrentOrderModule(
                         <strong>
                             {
                                 money(
-                                    order.subtotal,
+                                    order
+                                        .subtotal,
+                                )
+                            }
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>
+                            Discount
+                        </span>
+
+                        <strong>
+                            - {
+                                money(
+                                    order
+                                        .discount_total
+                                    ?? 0,
+                                )
+                            }
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>
+                            Tax
+                        </span>
+
+                        <strong>
+                            {
+                                money(
+                                    order
+                                        .tax_total
+                                    ?? 0,
+                                )
+                            }
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>
+                            Service Charge
+                        </span>
+
+                        <strong>
+                            {
+                                money(
+                                    order
+                                        .service_charge_total
+                                    ?? 0,
                                 )
                             }
                         </strong>
@@ -2667,6 +3247,28 @@ function CurrentOrderModule(
                                 )
                                 : null
                         }
+
+                        {
+                            order.status
+                                === 'SERVED'
+                                ? (
+                                    <button
+                                        type="button"
+                                        className="success-button big-action-button"
+                                        onClick={
+                                            () => {
+                                                void onTransition(
+                                                    order,
+                                                    'complete',
+                                                );
+                                            }
+                                        }
+                                    >
+                                        Complete Order
+                                    </button>
+                                )
+                                : null
+                        }
                     </div>
                 </section>
             </div>
@@ -2697,7 +3299,8 @@ function PaymentModule(
                     current,
                 ) =>
                     current
-                    + value,
+                    +
+                    value,
             );
         };
 
@@ -2716,7 +3319,8 @@ function PaymentModule(
 
     const received =
         Number(
-            amount || 0,
+            amount
+            || 0,
         );
 
     const total =
@@ -2962,7 +3566,9 @@ function UnavailableModule(
     return (
         <div className="module-page">
             <ModuleHeader
-                title={title}
+                title={
+                    title
+                }
                 subtitle="Touchscreen module prepared."
             />
 
@@ -2984,7 +3590,9 @@ function UnavailableModule(
                     className="primary-button big-action-button"
                     disabled
                 >
-                    {actionLabel}
+                    {
+                        actionLabel
+                    }
                 </button>
             </section>
         </div>
@@ -3178,7 +3786,9 @@ function ProductDialog(
                         </p>
 
                         <h2>
-                            {item.name}
+                            {
+                                item.name
+                            }
                         </h2>
                     </div>
 
@@ -3391,10 +4001,14 @@ function ProductDialog(
                             () =>
                                 onAdd({
                                     item,
+
                                     variant,
+
                                     addons:
                                         selectedAddons,
+
                                     quantity,
+
                                     notes,
                                 })
                         }
@@ -3615,7 +4229,9 @@ function CartPanel(
                     </strong>
                 </div>
 
-                {footer}
+                {
+                    footer
+                }
             </div>
         </aside>
     );
@@ -3648,7 +4264,9 @@ function QuantityButtons(
             </button>
 
             <strong>
-                {quantity}
+                {
+                    quantity
+                }
             </strong>
 
             <button
@@ -3676,11 +4294,15 @@ function ModuleHeader(
         <div className="module-header">
             <div>
                 <h2>
-                    {title}
+                    {
+                        title
+                    }
                 </h2>
 
                 <p>
-                    {subtitle}
+                    {
+                        subtitle
+                    }
                 </p>
             </div>
         </div>
@@ -3732,11 +4354,15 @@ function EmptyState(
             </div>
 
             <h3>
-                {title}
+                {
+                    title
+                }
             </h3>
 
             <p>
-                {message}
+                {
+                    message
+                }
             </p>
         </div>
     );
@@ -3754,11 +4380,15 @@ function SettingCard(
     return (
         <article className="setting-card">
             <span>
-                {label}
+                {
+                    label
+                }
             </span>
 
             <strong>
-                {value}
+                {
+                    value
+                }
             </strong>
         </article>
     );
