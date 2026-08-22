@@ -12,6 +12,12 @@ class RolePermissionSeeder extends Seeder
     {
         $now = now();
 
+        /*
+        |--------------------------------------------------------------------------
+        | Roles
+        |--------------------------------------------------------------------------
+        */
+
         $roles = [
             [
                 'name' => 'Owner',
@@ -19,24 +25,28 @@ class RolePermissionSeeder extends Seeder
                 'description' =>
                 'Restaurant owner with full system access.',
             ],
+
             [
                 'name' => 'Administrator',
                 'code' => 'ADMIN',
                 'description' =>
-                'System administrator.',
+                'System administrator with broad application access.',
             ],
+
             [
                 'name' => 'Manager',
                 'code' => 'MANAGER',
                 'description' =>
                 'Restaurant operational manager.',
             ],
+
             [
                 'name' => 'Cashier',
                 'code' => 'CASHIER',
                 'description' =>
                 'Cashier and POS operator.',
             ],
+
             [
                 'name' => 'Waiter',
                 'code' => 'WAITER',
@@ -62,9 +72,6 @@ class RolePermissionSeeder extends Seeder
                         'is_active' =>
                         true,
 
-                        'created_at' =>
-                        $now,
-
                         'updated_at' =>
                         $now,
                     ]
@@ -72,9 +79,18 @@ class RolePermissionSeeder extends Seeder
         }
 
         /*
-         * Remove the old broad permission
-         * from Phase 3 if it exists.
-         */
+        |--------------------------------------------------------------------------
+        | Remove Legacy Permissions
+        |--------------------------------------------------------------------------
+        |
+        | Earlier phases used the broad:
+        |
+        | users.manage
+        |
+        | It has now been replaced with granular user-management permissions.
+        |
+        */
+
         $legacyPermissionId =
             DB::table('permissions')
             ->where(
@@ -84,9 +100,7 @@ class RolePermissionSeeder extends Seeder
             ->value('id');
 
         if ($legacyPermissionId) {
-            DB::table(
-                'role_permission'
-            )
+            DB::table('role_permission')
                 ->where(
                     'permission_id',
                     $legacyPermissionId
@@ -101,83 +115,430 @@ class RolePermissionSeeder extends Seeder
                 ->delete();
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Permissions
+        |--------------------------------------------------------------------------
+        */
+
         $permissions = [
-            ['Dashboard View', 'dashboard.view', 'Dashboard'],
 
-            ['Users View', 'users.view', 'Users'],
-            ['Users Create', 'users.create', 'Users'],
-            ['Users Update', 'users.update', 'Users'],
-            ['Users Status', 'users.status', 'Users'],
-            ['Users Role Assignment', 'users.role', 'Users'],
-            ['Users Session Revocation', 'users.sessions.revoke', 'Users'],
+            /*
+             * Dashboard
+             */
+            [
+                'Dashboard View',
+                'dashboard.view',
+                'Dashboard',
+            ],
 
-            ['Roles View', 'roles.view', 'Users'],
-            ['Permissions View', 'permissions.view', 'Users'],
+            /*
+             * Users
+             */
+            [
+                'Users View',
+                'users.view',
+                'Users',
+            ],
 
-            ['Restaurant Manage', 'restaurant.manage', 'Restaurant'],
+            [
+                'Users Create',
+                'users.create',
+                'Users',
+            ],
 
-            ['Tables View', 'tables.view', 'Tables'],
-            ['Tables Manage', 'tables.manage', 'Tables'],
-            ['Tables Transfer', 'tables.transfer', 'Tables'],
-            ['Tables Merge', 'tables.merge', 'Tables'],
+            [
+                'Users Update',
+                'users.update',
+                'Users',
+            ],
 
-            ['Menu View', 'menu.view', 'Menu'],
-            ['Menu Manage', 'menu.manage', 'Menu'],
+            [
+                'Users Status',
+                'users.status',
+                'Users',
+            ],
 
-            ['Orders View', 'orders.view', 'Orders'],
-            ['Orders Create', 'orders.create', 'Orders'],
-            ['Orders Confirm', 'orders.confirm', 'Orders'],
-            ['Orders Send Kitchen', 'orders.send_kitchen', 'Orders'],
-            ['Orders Serve', 'orders.serve', 'Orders'],
-            ['Orders Complete', 'orders.complete', 'Orders'],
-            ['Orders Cancel', 'orders.cancel', 'Orders'],
+            [
+                'Users Role Assignment',
+                'users.role',
+                'Users',
+            ],
 
-            ['Kitchen Reprint', 'kitchen.reprint', 'Kitchen'],
+            [
+                'Users Session Revocation',
+                'users.sessions.revoke',
+                'Users',
+            ],
 
-            ['Invoices View', 'invoices.view', 'Billing'],
-            ['Invoices Create', 'invoices.create', 'Billing'],
-            ['Invoices Void', 'invoices.void', 'Billing'],
-            ['Payments Create', 'payments.create', 'Billing'],
-            ['Refunds Create', 'refunds.create', 'Billing'],
+            [
+                'Roles View',
+                'roles.view',
+                'Users',
+            ],
 
-            ['Cash Shift View', 'cash_shift.view', 'Cash'],
-            ['Cash Shift Open', 'cash_shift.open', 'Cash'],
-            ['Cash Shift Close', 'cash_shift.close', 'Cash'],
-            ['Cash Drawer Open', 'cash_drawer.open', 'Cash'],
-            ['Cash Drawer Movement', 'cash_drawer.movement', 'Cash'],
+            [
+                'Permissions View',
+                'permissions.view',
+                'Users',
+            ],
 
-            ['Inventory View', 'inventory.view', 'Inventory'],
-            ['Inventory Adjust', 'inventory.adjust', 'Inventory'],
+            /*
+             * Restaurant Settings
+             */
+            [
+                'Restaurant Manage',
+                'restaurant.manage',
+                'Restaurant',
+            ],
 
-            ['Recipes View', 'recipes.view', 'Recipes'],
-            ['Recipes Manage', 'recipes.manage', 'Recipes'],
+            /*
+             * Tables
+             */
+            [
+                'Tables View',
+                'tables.view',
+                'Tables',
+            ],
 
-            ['Suppliers View', 'suppliers.view', 'Suppliers'],
-            ['Suppliers Manage', 'suppliers.manage', 'Suppliers'],
+            [
+                'Tables Manage',
+                'tables.manage',
+                'Tables',
+            ],
 
-            ['Purchases View', 'purchases.view', 'Purchases'],
-            ['Purchases Create', 'purchases.create', 'Purchases'],
-            ['Purchases Manage', 'purchases.manage', 'Purchases'],
-            ['Supplier Payments', 'purchases.pay', 'Purchases'],
+            [
+                'Tables Transfer',
+                'tables.transfer',
+                'Tables',
+            ],
 
-            ['Wastage View', 'wastage.view', 'Wastage'],
-            ['Wastage Create', 'wastage.create', 'Wastage'],
-            ['Wastage Manage', 'wastage.manage', 'Wastage'],
+            [
+                'Tables Merge',
+                'tables.merge',
+                'Tables',
+            ],
 
-            ['Expenses View', 'expenses.view', 'Expenses'],
-            ['Expenses Create', 'expenses.create', 'Expenses'],
-            ['Expenses Manage', 'expenses.manage', 'Expenses'],
+            /*
+             * Menu
+             */
+            [
+                'Menu View',
+                'menu.view',
+                'Menu',
+            ],
 
-            ['Reports View', 'reports.view', 'Reports'],
+            [
+                'Menu Manage',
+                'menu.manage',
+                'Menu',
+            ],
 
-            ['Business Day View', 'business_day.view', 'Business Day'],
-            ['Business Day Close', 'business_day.close', 'Business Day'],
+            /*
+             * Orders
+             */
+            [
+                'Orders View',
+                'orders.view',
+                'Orders',
+            ],
 
-            ['Website Manage', 'website.manage', 'Website'],
-            ['Reviews Moderate', 'reviews.moderate', 'Website'],
+            [
+                'Orders Create',
+                'orders.create',
+                'Orders',
+            ],
 
-            ['Audit Logs View', 'audit.view', 'System'],
+            [
+                'Orders Confirm',
+                'orders.confirm',
+                'Orders',
+            ],
+
+            [
+                'Orders Send Kitchen',
+                'orders.send_kitchen',
+                'Orders',
+            ],
+
+            [
+                'Orders Serve',
+                'orders.serve',
+                'Orders',
+            ],
+
+            [
+                'Orders Complete',
+                'orders.complete',
+                'Orders',
+            ],
+
+            [
+                'Orders Cancel',
+                'orders.cancel',
+                'Orders',
+            ],
+
+            /*
+             * Kitchen
+             */
+            [
+                'Kitchen Reprint',
+                'kitchen.reprint',
+                'Kitchen',
+            ],
+
+            /*
+             * Billing
+             */
+            [
+                'Invoices View',
+                'invoices.view',
+                'Billing',
+            ],
+
+            [
+                'Invoices Create',
+                'invoices.create',
+                'Billing',
+            ],
+
+            [
+                'Invoices Void',
+                'invoices.void',
+                'Billing',
+            ],
+
+            [
+                'Payments Create',
+                'payments.create',
+                'Billing',
+            ],
+
+            [
+                'Refunds Create',
+                'refunds.create',
+                'Billing',
+            ],
+
+            /*
+             * Cashier / Cash Drawer
+             */
+            [
+                'Cash Shift View',
+                'cash_shift.view',
+                'Cash',
+            ],
+
+            [
+                'Cash Shift Open',
+                'cash_shift.open',
+                'Cash',
+            ],
+
+            [
+                'Cash Shift Close',
+                'cash_shift.close',
+                'Cash',
+            ],
+
+            [
+                'Cash Drawer Open',
+                'cash_drawer.open',
+                'Cash',
+            ],
+
+            [
+                'Cash Drawer Movement',
+                'cash_drawer.movement',
+                'Cash',
+            ],
+
+            /*
+             * Inventory
+             *
+             * inventory.view
+             * → Read ingredients, units and stock.
+             *
+             * inventory.manage
+             * → Create/update units and ingredient master data.
+             *
+             * inventory.adjust
+             * → Perform actual stock adjustments.
+             *
+             * These must remain separate.
+             */
+            [
+                'Inventory View',
+                'inventory.view',
+                'Inventory',
+            ],
+
+            [
+                'Inventory Manage',
+                'inventory.manage',
+                'Inventory',
+            ],
+
+            [
+                'Inventory Adjust',
+                'inventory.adjust',
+                'Inventory',
+            ],
+
+            /*
+             * Recipes
+             */
+            [
+                'Recipes View',
+                'recipes.view',
+                'Recipes',
+            ],
+
+            [
+                'Recipes Manage',
+                'recipes.manage',
+                'Recipes',
+            ],
+
+            /*
+             * Suppliers
+             */
+            [
+                'Suppliers View',
+                'suppliers.view',
+                'Suppliers',
+            ],
+
+            [
+                'Suppliers Manage',
+                'suppliers.manage',
+                'Suppliers',
+            ],
+
+            /*
+             * Purchases
+             */
+            [
+                'Purchases View',
+                'purchases.view',
+                'Purchases',
+            ],
+
+            [
+                'Purchases Create',
+                'purchases.create',
+                'Purchases',
+            ],
+
+            [
+                'Purchases Manage',
+                'purchases.manage',
+                'Purchases',
+            ],
+
+            [
+                'Supplier Payments',
+                'purchases.pay',
+                'Purchases',
+            ],
+
+            /*
+             * Wastage
+             */
+            [
+                'Wastage View',
+                'wastage.view',
+                'Wastage',
+            ],
+
+            [
+                'Wastage Create',
+                'wastage.create',
+                'Wastage',
+            ],
+
+            [
+                'Wastage Manage',
+                'wastage.manage',
+                'Wastage',
+            ],
+
+            /*
+             * Expenses
+             */
+            [
+                'Expenses View',
+                'expenses.view',
+                'Expenses',
+            ],
+
+            [
+                'Expenses Create',
+                'expenses.create',
+                'Expenses',
+            ],
+
+            [
+                'Expenses Manage',
+                'expenses.manage',
+                'Expenses',
+            ],
+
+            /*
+             * Reports
+             */
+            [
+                'Reports View',
+                'reports.view',
+                'Reports',
+            ],
+
+            /*
+             * Business Day
+             */
+            [
+                'Business Day View',
+                'business_day.view',
+                'Business Day',
+            ],
+
+            [
+                'Business Day Close',
+                'business_day.close',
+                'Business Day',
+            ],
+
+            /*
+             * Website
+             */
+            [
+                'Website Manage',
+                'website.manage',
+                'Website',
+            ],
+
+            [
+                'Reviews Moderate',
+                'reviews.moderate',
+                'Website',
+            ],
+
+            /*
+             * System / Audit
+             */
+            [
+                'Audit Logs View',
+                'audit.view',
+                'System',
+            ],
         ];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create / Update Permissions
+        |--------------------------------------------------------------------------
+        */
 
         foreach ($permissions as $permission) {
             DB::table('permissions')
@@ -196,15 +557,19 @@ class RolePermissionSeeder extends Seeder
                         'description' =>
                         null,
 
-                        'created_at' =>
-                        $now,
-
                         'updated_at' =>
                         $now,
                     ]
                 );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Load Permission and Role IDs
+        |--------------------------------------------------------------------------
+        */
+
+        /** @var Collection<string, int> $permissionMap */
         $permissionMap =
             DB::table('permissions')
             ->pluck(
@@ -212,6 +577,7 @@ class RolePermissionSeeder extends Seeder
                 'code'
             );
 
+        /** @var Collection<string, int> $roleMap */
         $roleMap =
             DB::table('roles')
             ->pluck(
@@ -220,56 +586,92 @@ class RolePermissionSeeder extends Seeder
             );
 
         /*
-         * OWNER
-         */
+        |--------------------------------------------------------------------------
+        | OWNER Permissions
+        |--------------------------------------------------------------------------
+        |
+        | Owner has every permission.
+        |
+        */
+
         $this->syncPermissions(
-            $roleMap['OWNER'],
-            $permissionMap
+            roleId: (int) $roleMap['OWNER'],
+
+            permissionCodes: $permissionMap
                 ->keys()
                 ->all(),
-            $permissionMap
+
+            permissionMap: $permissionMap
         );
 
         /*
-         * ADMIN
-         *
-         * Database permissions are broad,
-         * but RoleHierarchyService prevents
-         * ADMIN from modifying OWNER.
-         */
+        |--------------------------------------------------------------------------
+        | ADMIN Permissions
+        |--------------------------------------------------------------------------
+        |
+        | Administrator also receives all application permissions.
+        |
+        | RoleHierarchyService remains responsible for preventing an ADMIN
+        | from changing, disabling or taking over an OWNER account.
+        |
+        */
+
         $this->syncPermissions(
-            $roleMap['ADMIN'],
-            $permissionMap
+            roleId: (int) $roleMap['ADMIN'],
+
+            permissionCodes: $permissionMap
                 ->keys()
                 ->all(),
-            $permissionMap
+
+            permissionMap: $permissionMap
         );
 
         /*
-         * MANAGER
-         */
+        |--------------------------------------------------------------------------
+        | MANAGER Permissions
+        |--------------------------------------------------------------------------
+        */
+
         $this->syncPermissions(
-            $roleMap['MANAGER'],
-            [
+            roleId: (int) $roleMap['MANAGER'],
+
+            permissionCodes: [
+
+                /*
+                 * Dashboard
+                 */
                 'dashboard.view',
 
+                /*
+                 * User Management
+                 */
                 'users.view',
                 'users.create',
                 'users.update',
                 'users.status',
                 'users.role',
                 'users.sessions.revoke',
+
                 'roles.view',
                 'permissions.view',
 
+                /*
+                 * Tables
+                 */
                 'tables.view',
                 'tables.manage',
                 'tables.transfer',
                 'tables.merge',
 
+                /*
+                 * Menu
+                 */
                 'menu.view',
                 'menu.manage',
 
+                /*
+                 * Orders
+                 */
                 'orders.view',
                 'orders.create',
                 'orders.confirm',
@@ -278,8 +680,14 @@ class RolePermissionSeeder extends Seeder
                 'orders.complete',
                 'orders.cancel',
 
+                /*
+                 * Kitchen
+                 */
                 'kitchen.reprint',
 
+                /*
+                 * Billing
+                 */
                 'invoices.view',
                 'invoices.create',
                 'invoices.void',
@@ -287,59 +695,109 @@ class RolePermissionSeeder extends Seeder
                 'payments.create',
                 'refunds.create',
 
+                /*
+                 * Cash
+                 */
                 'cash_shift.view',
                 'cash_shift.open',
                 'cash_shift.close',
+
                 'cash_drawer.open',
                 'cash_drawer.movement',
 
+                /*
+                 * Inventory
+                 */
                 'inventory.view',
+                'inventory.manage',
                 'inventory.adjust',
 
+                /*
+                 * Recipes
+                 */
                 'recipes.view',
                 'recipes.manage',
 
+                /*
+                 * Suppliers
+                 */
                 'suppliers.view',
                 'suppliers.manage',
 
+                /*
+                 * Purchases
+                 */
                 'purchases.view',
                 'purchases.create',
                 'purchases.manage',
                 'purchases.pay',
 
+                /*
+                 * Wastage
+                 */
                 'wastage.view',
                 'wastage.create',
                 'wastage.manage',
 
+                /*
+                 * Expenses
+                 */
                 'expenses.view',
                 'expenses.create',
                 'expenses.manage',
 
+                /*
+                 * Reports
+                 */
                 'reports.view',
 
+                /*
+                 * Business Day
+                 */
                 'business_day.view',
                 'business_day.close',
 
+                /*
+                 * Website
+                 */
                 'website.manage',
                 'reviews.moderate',
             ],
-            $permissionMap
+
+            permissionMap: $permissionMap
         );
 
         /*
-         * CASHIER
-         */
+        |--------------------------------------------------------------------------
+        | CASHIER Permissions
+        |--------------------------------------------------------------------------
+        */
+
         $this->syncPermissions(
-            $roleMap['CASHIER'],
-            [
+            roleId: (int) $roleMap['CASHIER'],
+
+            permissionCodes: [
+
+                /*
+                 * Dashboard
+                 */
                 'dashboard.view',
 
+                /*
+                 * Tables
+                 */
                 'tables.view',
                 'tables.transfer',
                 'tables.merge',
 
+                /*
+                 * Menu
+                 */
                 'menu.view',
 
+                /*
+                 * Orders
+                 */
                 'orders.view',
                 'orders.create',
                 'orders.confirm',
@@ -348,14 +806,23 @@ class RolePermissionSeeder extends Seeder
                 'orders.complete',
                 'orders.cancel',
 
+                /*
+                 * Kitchen
+                 */
                 'kitchen.reprint',
 
+                /*
+                 * Billing
+                 */
                 'invoices.view',
                 'invoices.create',
 
                 'payments.create',
                 'refunds.create',
 
+                /*
+                 * Cash
+                 */
                 'cash_shift.view',
                 'cash_shift.open',
                 'cash_shift.close',
@@ -363,34 +830,56 @@ class RolePermissionSeeder extends Seeder
                 'cash_drawer.open',
                 'cash_drawer.movement',
 
+                /*
+                 * Business Day
+                 */
                 'business_day.view',
             ],
-            $permissionMap
+
+            permissionMap: $permissionMap
         );
 
         /*
-         * WAITER
-         */
+        |--------------------------------------------------------------------------
+        | WAITER Permissions
+        |--------------------------------------------------------------------------
+        */
+
         $this->syncPermissions(
-            $roleMap['WAITER'],
-            [
+            roleId: (int) $roleMap['WAITER'],
+
+            permissionCodes: [
                 'dashboard.view',
+
                 'tables.view',
                 'tables.transfer',
+
                 'menu.view',
+
                 'orders.view',
                 'orders.create',
                 'orders.serve',
             ],
-            $permissionMap
+
+            permissionMap: $permissionMap
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Permission Synchronization
+    |--------------------------------------------------------------------------
+    */
 
     private function syncPermissions(
         int $roleId,
         array $permissionCodes,
         Collection $permissionMap
     ): void {
+        /*
+         * Clear the current permissions for
+         * this role before rebuilding them.
+         */
         DB::table('role_permission')
             ->where(
                 'role_id',
@@ -400,9 +889,10 @@ class RolePermissionSeeder extends Seeder
 
         $now = now();
 
+        $rows = [];
+
         foreach (
-            $permissionCodes
-            as $permissionCode
+            $permissionCodes as $permissionCode
         ) {
             $permissionId =
                 $permissionMap[$permissionCode] ?? null;
@@ -411,21 +901,27 @@ class RolePermissionSeeder extends Seeder
                 continue;
             }
 
-            DB::table(
-                'role_permission'
-            )->insert([
+            $rows[] = [
                 'role_id' =>
                 $roleId,
 
                 'permission_id' =>
-                $permissionId,
+                (int) $permissionId,
 
                 'created_at' =>
                 $now,
 
                 'updated_at' =>
                 $now,
-            ]);
+            ];
+        }
+
+        if ($rows !== []) {
+            DB::table(
+                'role_permission'
+            )->insert(
+                $rows
+            );
         }
     }
 }

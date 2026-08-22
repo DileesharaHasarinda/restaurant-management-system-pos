@@ -11,88 +11,170 @@ class UnitSeeder extends Seeder
     {
         $now = now();
 
-        $baseUnits = [
+        /*
+        |--------------------------------------------------------------------------
+        | Root Units
+        |--------------------------------------------------------------------------
+        |
+        | These units are the lowest stock units used by the
+        | conversion engine.
+        |
+        */
+
+        $rootUnits = [
             [
                 'name' => 'Gram',
-                'symbol' => 'g',
+                'symbol' => 'G',
                 'measurement_type' => 'MASS',
             ],
+
             [
                 'name' => 'Millilitre',
-                'symbol' => 'ml',
+                'symbol' => 'ML',
                 'measurement_type' => 'VOLUME',
             ],
+
             [
                 'name' => 'Piece',
-                'symbol' => 'pcs',
+                'symbol' => 'PCS',
                 'measurement_type' => 'COUNT',
             ],
-            [
-                'name' => 'Pack',
-                'symbol' => 'pack',
-                'measurement_type' => 'COUNT',
-            ],
+
             [
                 'name' => 'Bottle',
-                'symbol' => 'bottle',
+                'symbol' => 'BOTTLE',
+                'measurement_type' => 'COUNT',
+            ],
+
+            [
+                'name' => 'Pack',
+                'symbol' => 'PACK',
                 'measurement_type' => 'COUNT',
             ],
         ];
 
-        foreach ($baseUnits as $unit) {
-            DB::table('units')->updateOrInsert(
-                [
-                    'symbol' => $unit['symbol'],
-                ],
-                [
-                    'name' => $unit['name'],
-                    'measurement_type' =>
-                    $unit['measurement_type'],
-                    'base_unit_id' => null,
-                    'conversion_factor' => 1,
-                    'is_active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
-            );
+        foreach ($rootUnits as $unit) {
+            DB::table('units')
+                ->updateOrInsert(
+                    [
+                        'symbol' =>
+                        $unit['symbol'],
+                    ],
+                    [
+                        'name' =>
+                        $unit['name'],
+
+                        'measurement_type' =>
+                        $unit['measurement_type'],
+
+                        'base_unit_id' =>
+                        null,
+
+                        'conversion_factor' =>
+                        1,
+
+                        'is_active' =>
+                        true,
+
+                        'created_at' =>
+                        $now,
+
+                        'updated_at' =>
+                        $now,
+                    ]
+                );
         }
 
-        $gramId = DB::table('units')
-            ->where('symbol', 'g')
+        /*
+        |--------------------------------------------------------------------------
+        | Fetch Base Unit IDs
+        |--------------------------------------------------------------------------
+        */
+
+        $gramId =
+            DB::table('units')
+            ->where(
+                'symbol',
+                'G'
+            )
             ->value('id');
 
-        $millilitreId = DB::table('units')
-            ->where('symbol', 'ml')
+        $millilitreId =
+            DB::table('units')
+            ->where(
+                'symbol',
+                'ML'
+            )
             ->value('id');
 
-        DB::table('units')->updateOrInsert(
-            [
-                'symbol' => 'kg',
-            ],
-            [
-                'name' => 'Kilogram',
-                'measurement_type' => 'MASS',
-                'base_unit_id' => $gramId,
-                'conversion_factor' => 1000,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
+        /*
+        |--------------------------------------------------------------------------
+        | Converted Units
+        |--------------------------------------------------------------------------
+        */
 
-        DB::table('units')->updateOrInsert(
-            [
-                'symbol' => 'L',
-            ],
-            [
-                'name' => 'Litre',
-                'measurement_type' => 'VOLUME',
-                'base_unit_id' => $millilitreId,
-                'conversion_factor' => 1000,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
+        DB::table('units')
+            ->updateOrInsert(
+                [
+                    'symbol' => 'KG',
+                ],
+                [
+                    'name' =>
+                    'Kilogram',
+
+                    'measurement_type' =>
+                    'MASS',
+
+                    'base_unit_id' =>
+                    $gramId,
+
+                    /*
+                     * 1 KG = 1000 G
+                     */
+                    'conversion_factor' =>
+                    1000,
+
+                    'is_active' =>
+                    true,
+
+                    'created_at' =>
+                    $now,
+
+                    'updated_at' =>
+                    $now,
+                ]
+            );
+
+        DB::table('units')
+            ->updateOrInsert(
+                [
+                    'symbol' => 'L',
+                ],
+                [
+                    'name' =>
+                    'Litre',
+
+                    'measurement_type' =>
+                    'VOLUME',
+
+                    'base_unit_id' =>
+                    $millilitreId,
+
+                    /*
+                     * 1 L = 1000 ML
+                     */
+                    'conversion_factor' =>
+                    1000,
+
+                    'is_active' =>
+                    true,
+
+                    'created_at' =>
+                    $now,
+
+                    'updated_at' =>
+                    $now,
+                ]
+            );
     }
 }

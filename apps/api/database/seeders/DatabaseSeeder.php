@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             DocumentSequenceSeeder::class,
             ExpenseCategorySeeder::class,
             MenuSeeder::class,
+            IngredientSeeder::class,
         ]);
     }
 }
