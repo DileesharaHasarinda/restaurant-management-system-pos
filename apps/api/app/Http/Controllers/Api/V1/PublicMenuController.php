@@ -72,6 +72,10 @@ class PublicMenuController extends Controller
                             true
                         )
                         ->where(
+                            'is_available',
+                            true
+                        )
+                        ->where(
                             $visibilityColumn,
                             true
                         );
@@ -110,6 +114,10 @@ class PublicMenuController extends Controller
                     $query
                         ->where(
                             'is_active',
+                            true
+                        )
+                        ->where(
+                            'is_available',
                             true
                         )
                         ->where(
@@ -155,6 +163,10 @@ class PublicMenuController extends Controller
                                 'is_active',
                                 true
                             )
+                            ->where(
+                                'is_available',
+                                true
+                            )
                             ->orderBy(
                                 'sort_order'
                             ),
@@ -164,6 +176,10 @@ class PublicMenuController extends Controller
                         $query
                             ->where(
                                 'addons.is_active',
+                                true
+                            )
+                            ->where(
+                                'addons.is_available',
                                 true
                             ),
                     ]);

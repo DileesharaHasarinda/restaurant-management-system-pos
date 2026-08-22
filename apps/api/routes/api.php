@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\InventoryStockController;
 use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
+use App\Http\Controllers\Api\V1\PublicQrOrderController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\RecipeConsumptionController;
@@ -31,23 +32,11 @@ use Illuminate\Support\Facades\Route;
 | API V1 Routes
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
+| bootstrap/app.php already adds:
 |
-| bootstrap/app.php already applies the API prefix:
+| /api/v1
 |
-|     /api/v1
-|
-| Therefore routes in this file should NOT start with:
-|
-|     /api/v1
-|
-| Example:
-|
-|     Route::get('/health', ...)
-|
-| becomes:
-|
-|     GET /api/v1/health
+| Therefore routes in this file must NOT start with /api/v1.
 |
 |--------------------------------------------------------------------------
 */
@@ -58,7 +47,7 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | Public Health Check
+    | Public Health
     |--------------------------------------------------------------------------
     */
 
@@ -158,114 +147,230 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
+    | Phase 15 - First Customer QR Order
+    |--------------------------------------------------------------------------
+    |
+    | Customer submits the first cart.
+    |
+    | Creates:
+    |
+    | Order source = QR_CUSTOMER
+    | Order type   = DINE_IN
+    | Status       = PENDING
+    |
+    */
+
+    Route::post(
+        '/public/table-qr/{token}/orders',
+        [
+            PublicQrOrderController::class,
+            'store',
+        ]
+    )
+        ->middleware(
+            'throttle:10,1'
+        )
+        ->where(
+            'token',
+            '[A-Fa-f0-9]{32}'
+        )
+        ->name(
+            'v1.public.table-qr.orders.store'
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 15 - Add More Items To Existing Order
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | This does NOT create another orders row.
+    |
+    | New order_items are appended to the SAME order.
+    |
+    | Example:
+    |
+    | ORD-260822-000025
+    |
+    | First order:
+    | Chicken Fried Rice
+    |
+    | Additional order:
+    | Coca Cola
+    |
+    | Additional order:
+    | Ice Cream
+    |
+    | All remain under ORD-260822-000025.
+    |
+    */
+
+    Route::post(
+        '/public/orders/{statusToken}/items',
+        [
+            PublicQrOrderController::class,
+            'append',
+        ]
+    )
+        ->middleware(
+            'throttle:10,1'
+        )
+        ->where(
+            'statusToken',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'v1.public.orders.items.append'
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Customer Order Status
+    |--------------------------------------------------------------------------
+    |
+    | No login is required.
+    |
+    | Customer uses the random 64-character status token.
+    |
+    | Returns the complete cumulative order:
+    |
+    | original items
+    | +
+    | all additional items
+    |
+    */
+
+    Route::get(
+        '/public/orders/{statusToken}',
+        [
+            PublicQrOrderController::class,
+            'status',
+        ]
+    )
+        ->middleware(
+            'throttle:60,1'
+        )
+        ->where(
+            'statusToken',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'v1.public.orders.status'
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication
     |--------------------------------------------------------------------------
     */
 
-    Route::prefix('auth')
-        ->name('v1.auth.')
-        ->group(function (): void {
+    Route::prefix(
+        'auth'
+    )
+        ->name(
+            'v1.auth.'
+        )
+        ->group(
+            function (): void {
 
-            /*
-             * Login.
-             */
-            Route::post(
-                '/login',
-                [
-                    AuthController::class,
-                    'login',
-                ]
-            )
-                ->middleware(
-                    'throttle:login'
-                )
-                ->name(
-                    'login'
-                );
-
-            /*
-             * Authenticated user routes.
-             */
-            Route::middleware([
-                'auth:sanctum',
-                'active',
-            ])->group(function (): void {
-
-                Route::get(
-                    '/me',
+                Route::post(
+                    '/login',
                     [
                         AuthController::class,
-                        'me',
-                    ]
-                )->name(
-                    'me'
-                );
-
-                Route::put(
-                    '/password',
-                    [
-                        AuthController::class,
-                        'changePassword',
-                    ]
-                )->name(
-                    'password.change'
-                );
-
-                Route::get(
-                    '/sessions',
-                    [
-                        AuthController::class,
-                        'sessions',
-                    ]
-                )->name(
-                    'sessions.index'
-                );
-
-                Route::delete(
-                    '/sessions/{tokenId}',
-                    [
-                        AuthController::class,
-                        'revokeSession',
+                        'login',
                     ]
                 )
-                    ->whereNumber(
-                        'tokenId'
+                    ->middleware(
+                        'throttle:login'
                     )
                     ->name(
-                        'sessions.destroy'
+                        'login'
                     );
 
-                Route::post(
-                    '/revoke-other-sessions',
-                    [
-                        AuthController::class,
-                        'revokeOtherSessions',
-                    ]
-                )->name(
-                    'sessions.revoke-others'
-                );
+                Route::middleware([
+                    'auth:sanctum',
+                    'active',
+                ])->group(
+                    function (): void {
 
-                Route::post(
-                    '/logout',
-                    [
-                        AuthController::class,
-                        'logout',
-                    ]
-                )->name(
-                    'logout'
-                );
+                        Route::get(
+                            '/me',
+                            [
+                                AuthController::class,
+                                'me',
+                            ]
+                        )->name(
+                            'me'
+                        );
 
-                Route::post(
-                    '/logout-all',
-                    [
-                        AuthController::class,
-                        'logoutAll',
-                    ]
-                )->name(
-                    'logout-all'
+                        Route::put(
+                            '/password',
+                            [
+                                AuthController::class,
+                                'changePassword',
+                            ]
+                        )->name(
+                            'password.change'
+                        );
+
+                        Route::get(
+                            '/sessions',
+                            [
+                                AuthController::class,
+                                'sessions',
+                            ]
+                        )->name(
+                            'sessions.index'
+                        );
+
+                        Route::delete(
+                            '/sessions/{tokenId}',
+                            [
+                                AuthController::class,
+                                'revokeSession',
+                            ]
+                        )
+                            ->whereNumber(
+                                'tokenId'
+                            )
+                            ->name(
+                                'sessions.destroy'
+                            );
+
+                        Route::post(
+                            '/revoke-other-sessions',
+                            [
+                                AuthController::class,
+                                'revokeOtherSessions',
+                            ]
+                        )->name(
+                            'sessions.revoke-others'
+                        );
+
+                        Route::post(
+                            '/logout',
+                            [
+                                AuthController::class,
+                                'logout',
+                            ]
+                        )->name(
+                            'logout'
+                        );
+
+                        Route::post(
+                            '/logout-all',
+                            [
+                                AuthController::class,
+                                'logoutAll',
+                            ]
+                        )->name(
+                            'logout-all'
+                        );
+                    }
                 );
-            });
-        });
+            }
+        );
 
     /*
     |--------------------------------------------------------------------------
@@ -544,7 +649,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Table Management
+        | Tables
         |--------------------------------------------------------------------------
         */
 
@@ -998,7 +1103,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Menu Add-on Groups
+        | Add-on Groups
         |--------------------------------------------------------------------------
         */
 
@@ -1032,7 +1137,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Menu Add-ons
+        | Add-ons
         |--------------------------------------------------------------------------
         */
 
@@ -1068,18 +1173,8 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 13 - Recipe Management
         |--------------------------------------------------------------------------
-        |
-        | Recipes define which ingredients are required by menu items and
-        | menu-item variants.
-        |
-        | Recipe changes NEVER directly change inventory.
-        |
-        |--------------------------------------------------------------------------
         */
 
-        /*
-         * Full menu-item recipe overview.
-         */
         Route::get(
             '/recipes/menu-items/{menuItem}/overview',
             [
@@ -1097,9 +1192,6 @@ Route::middleware(
                 'v1.recipes.menu-items.overview'
             );
 
-        /*
-         * Base menu-item recipe.
-         */
         Route::get(
             '/recipes/menu-items/{menuItem}',
             [
@@ -1117,9 +1209,6 @@ Route::middleware(
                 'v1.recipes.menu-items.show'
             );
 
-        /*
-         * Create or replace base menu-item recipe.
-         */
         Route::put(
             '/recipes/menu-items/{menuItem}',
             [
@@ -1137,9 +1226,6 @@ Route::middleware(
                 'v1.recipes.menu-items.update'
             );
 
-        /*
-         * Clear base menu-item recipe.
-         */
         Route::delete(
             '/recipes/menu-items/{menuItem}',
             [
@@ -1157,9 +1243,6 @@ Route::middleware(
                 'v1.recipes.menu-items.destroy'
             );
 
-        /*
-         * Variant-specific recipe.
-         */
         Route::get(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
             [
@@ -1180,9 +1263,6 @@ Route::middleware(
                 'v1.recipes.variants.show'
             );
 
-        /*
-         * Create or replace variant recipe.
-         */
         Route::put(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
             [
@@ -1203,9 +1283,6 @@ Route::middleware(
                 'v1.recipes.variants.update'
             );
 
-        /*
-         * Clear variant recipe.
-         */
         Route::delete(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
             [
@@ -1230,26 +1307,8 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 14 - Add-on Inventory Recipes
         |--------------------------------------------------------------------------
-        |
-        | Some add-ons consume inventory.
-        |
-        | Example:
-        |
-        | Extra Chicken
-        | Price: Rs. 300
-        |
-        | Recipe:
-        | Chicken 100 G
-        |
-        | The add-on recipe is added to the normal menu-item / variant
-        | recipe before any SALE_CONSUMPTION stock movement is created.
-        |
-        |--------------------------------------------------------------------------
         */
 
-        /*
-         * Get add-on inventory recipe and cost.
-         */
         Route::get(
             '/recipes/addons/{addon}',
             [
@@ -1267,13 +1326,6 @@ Route::middleware(
                 'v1.recipes.addons.show'
             );
 
-        /*
-         * Create or replace an add-on inventory recipe.
-         *
-         * Saving a recipe automatically marks:
-         *
-         * consumes_inventory = true
-         */
         Route::put(
             '/recipes/addons/{addon}',
             [
@@ -1291,15 +1343,6 @@ Route::middleware(
                 'v1.recipes.addons.update'
             );
 
-        /*
-         * Clear add-on inventory recipe.
-         *
-         * This also sets:
-         *
-         * consumes_inventory = false
-         *
-         * Historical stock movements remain untouched.
-         */
         Route::delete(
             '/recipes/addons/{addon}',
             [
@@ -1319,35 +1362,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Phase 14 - Recipe Consumption Preview
-        |--------------------------------------------------------------------------
-        |
-        | Calculates:
-        |
-        | base/variant recipe
-        |        +
-        | selected add-on recipes
-        |        =
-        | final ingredient requirement
-        |
-        | Example:
-        |
-        | Chicken Fried Rice Regular
-        | Chicken 120 G
-        |
-        | Extra Chicken
-        | Chicken 100 G
-        |
-        | Final requirement:
-        | Chicken 220 G
-        |
-        | IMPORTANT:
-        |
-        | This endpoint DOES NOT deduct inventory.
-        |
-        | Actual SALE_CONSUMPTION must later be triggered by the order/KOT
-        | workflow through MenuInventoryConsumptionService.
-        |
+        | Recipe Consumption Preview
         |--------------------------------------------------------------------------
         */
 
@@ -1388,9 +1403,6 @@ Route::middleware(
                 'v1.inventory.units.index'
             );
 
-        /*
-         * Keep /convert before dynamic unit routes.
-         */
         Route::post(
             '/inventory/units/convert',
             [
@@ -1544,9 +1556,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
-        /*
-         * Current stock.
-         */
         Route::get(
             '/inventory/stock',
             [
@@ -1561,9 +1570,6 @@ Route::middleware(
                 'v1.inventory.stock.current'
             );
 
-        /*
-         * Low stock.
-         */
         Route::get(
             '/inventory/stock/low',
             [
@@ -1578,9 +1584,6 @@ Route::middleware(
                 'v1.inventory.stock.low'
             );
 
-        /*
-         * Out-of-stock ingredients.
-         */
         Route::get(
             '/inventory/stock/out-of-stock',
             [
@@ -1595,9 +1598,6 @@ Route::middleware(
                 'v1.inventory.stock.out-of-stock'
             );
 
-        /*
-         * Inventory valuation.
-         */
         Route::get(
             '/inventory/stock/valuation',
             [
@@ -1612,9 +1612,6 @@ Route::middleware(
                 'v1.inventory.stock.valuation'
             );
 
-        /*
-         * Full immutable stock movement ledger.
-         */
         Route::get(
             '/inventory/stock/movements',
             [
@@ -1629,9 +1626,6 @@ Route::middleware(
                 'v1.inventory.stock.movements'
             );
 
-        /*
-         * One ingredient's complete stock history.
-         */
         Route::get(
             '/inventory/ingredients/{ingredient}/stock-history',
             [
@@ -1649,9 +1643,6 @@ Route::middleware(
                 'v1.inventory.ingredients.stock-history'
             );
 
-        /*
-         * Initial opening inventory.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/opening-balance',
             [
@@ -1669,9 +1660,6 @@ Route::middleware(
                 'v1.inventory.ingredients.opening-balance'
             );
 
-        /*
-         * Controlled manual stock increase.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/in',
             [
@@ -1689,9 +1677,6 @@ Route::middleware(
                 'v1.inventory.ingredients.adjustment-in'
             );
 
-        /*
-         * Controlled manual stock decrease.
-         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/out',
             [
@@ -1796,7 +1781,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Supplier-Specific Payment History
+        | Supplier Payment History
         |--------------------------------------------------------------------------
         */
 
@@ -1885,11 +1870,6 @@ Route::middleware(
                 'v1.purchases.update'
             );
 
-        /*
-         * Complete purchase.
-         *
-         * Inventory changes go through InventoryStockService.
-         */
         Route::post(
             '/purchases/{purchase}/complete',
             [
@@ -1926,7 +1906,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Purchase Supplier Payments
+        | Purchase Payments
         |--------------------------------------------------------------------------
         */
 
@@ -1966,7 +1946,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Global Supplier Payment History
+        | Global Supplier Payments
         |--------------------------------------------------------------------------
         */
 
@@ -1984,9 +1964,6 @@ Route::middleware(
                 'v1.supplier-payments.index'
             );
 
-        /*
-         * View one mixed-payment batch.
-         */
         Route::get(
             '/supplier-payment-batches/{paymentBatch}',
             [

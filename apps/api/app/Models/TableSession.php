@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TableSession extends Model
 {
@@ -86,6 +87,14 @@ class TableSession extends Model
         return $this->belongsTo(
             self::class,
             'merged_into_session_id'
+        );
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(
+            Order::class,
+            'table_session_id'
         );
     }
 }
