@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             RestaurantSettingsSeeder::class,
             DocumentSequenceSeeder::class,
             ExpenseCategorySeeder::class,
+            MenuSeeder::class,
         ]);
     }
 }
