@@ -1,21 +1,13 @@
 <?php
 
-$allowedOrigins = array_values(
-    array_filter(
-        array_map(
-            'trim',
-            explode(
-                ',',
-                env(
-                    'CORS_ALLOWED_ORIGINS',
-                    'http://127.0.0.1:5174,http://localhost:5174,http://127.0.0.1:3000,http://localhost:3000'
-                )
-            )
-        )
-    )
-);
-
 return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cross-Origin Resource Sharing
+    |--------------------------------------------------------------------------
+    */
+
     'paths' => [
         'api/*',
         'sanctum/csrf-cookie',
@@ -25,21 +17,28 @@ return [
         '*',
     ],
 
-    'allowed_origins' =>
-    $allowedOrigins,
+    'allowed_origins' => [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ],
 
-    'allowed_origins_patterns' =>
-    [],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => [
         '*',
     ],
 
-    'exposed_headers' =>
-    [],
+    'exposed_headers' => [],
 
     'max_age' => 0,
 
-    'supports_credentials' =>
-    true,
+    /*
+     * The Electron POS authenticates using
+     * Laravel Sanctum Bearer tokens.
+     *
+     * We are not using browser cookie/session
+     * authentication for the desktop POS.
+     */
+    'supports_credentials' => false,
+
 ];
