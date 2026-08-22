@@ -8,11 +8,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    /*
+    |--------------------------------------------------------------------------
+    | Order Types
+    |--------------------------------------------------------------------------
+    */
+
     public const TYPE_DINE_IN =
     'DINE_IN';
 
     public const TYPE_TAKEAWAY =
     'TAKEAWAY';
+
+    public const TYPES = [
+        self::TYPE_DINE_IN,
+        self::TYPE_TAKEAWAY,
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Order Sources
+    |--------------------------------------------------------------------------
+    */
 
     public const SOURCE_QR_CUSTOMER =
     'QR_CUSTOMER';
@@ -22,6 +39,18 @@ class Order extends Model
 
     public const SOURCE_CASHIER =
     'CASHIER';
+
+    public const SOURCES = [
+        self::SOURCE_QR_CUSTOMER,
+        self::SOURCE_WAITER,
+        self::SOURCE_CASHIER,
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Order Statuses
+    |--------------------------------------------------------------------------
+    */
 
     public const STATUS_PENDING =
     'PENDING';
@@ -43,6 +72,22 @@ class Order extends Model
 
     public const STATUS_REJECTED =
     'REJECTED';
+
+    public const STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_CONFIRMED,
+        self::STATUS_SENT_TO_KITCHEN,
+        self::STATUS_SERVED,
+        self::STATUS_COMPLETED,
+        self::STATUS_CANCELLED,
+        self::STATUS_REJECTED,
+    ];
+
+    public const TERMINAL_STATUSES = [
+        self::STATUS_COMPLETED,
+        self::STATUS_CANCELLED,
+        self::STATUS_REJECTED,
+    ];
 
     protected $fillable = [
         'order_number',
@@ -78,14 +123,17 @@ class Order extends Model
         'created_by',
         'confirmed_by',
         'cancelled_by',
+        'rejected_by',
 
         'confirmed_at',
         'sent_to_kitchen_at',
         'served_at',
         'completed_at',
         'cancelled_at',
+        'rejected_at',
 
         'cancellation_reason',
+        'rejection_reason',
     ];
 
     protected $hidden = [
@@ -130,6 +178,9 @@ class Order extends Model
 
             'cancelled_at' =>
             'datetime',
+
+            'rejected_at' =>
+            'datetime',
         ];
     }
 
@@ -149,11 +200,6 @@ class Order extends Model
         );
     }
 
-    /*
-     * Use restaurantTable() rather than table()
-     * to avoid confusion with Eloquent's
-     * protected $table property.
-     */
     public function restaurantTable(): BelongsTo
     {
         return $this->belongsTo(
@@ -202,6 +248,14 @@ class Order extends Model
         );
     }
 
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'rejected_by'
+        );
+    }
+
     public function additionSubmissions(): HasMany
     {
         return $this->hasMany(
@@ -214,5 +268,14 @@ class Order extends Model
     {
         return $this->status
             === self::STATUS_PENDING;
+    }
+
+    public function isTerminal(): bool
+    {
+        return in_array(
+            $this->status,
+            self::TERMINAL_STATUSES,
+            true
+        );
     }
 }

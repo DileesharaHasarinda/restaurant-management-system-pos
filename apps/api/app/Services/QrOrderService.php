@@ -15,6 +15,7 @@ use App\Models\OrderStatusHistory;
 use App\Models\RecipeComponent;
 use App\Models\RestaurantTable;
 use App\Models\TableSession;
+use App\Services\OrderLifecycleService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -718,6 +719,27 @@ final class QrOrderService
 
                     /*
                     |--------------------------------------------------------------------------
+                    | Phase 17 Lifecycle Re-entry
+                    |--------------------------------------------------------------------------
+                    |
+                    | Customer additional items must be approved again.
+                    |
+                    */
+
+                    $lockedOrder =
+                        app(
+                            OrderLifecycleService::class
+                        )
+                        ->reopenForAdditionalItems(
+                            order: $lockedOrder,
+
+                            actor: null,
+
+                            source: Order::SOURCE_QR_CUSTOMER
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
                     | Update Table Activity
                     |--------------------------------------------------------------------------
                     */
@@ -783,6 +805,61 @@ final class QrOrderService
 
             throw $exception;
         }
+    }
+
+    /*
+|--------------------------------------------------------------------------
+| Shared Dine-in Cart Preparation
+|--------------------------------------------------------------------------
+|
+| Phase 16 waiter ordering uses the same validated
+| menu selections, server prices, recipe requirements
+| and stock availability rules as customer QR ordering.
+|
+| This avoids maintaining two different pricing engines.
+|
+*/
+
+    public function prepareDineInCartForStaff(
+        array $items
+    ): array {
+        return $this->prepareCart(
+            $items
+        );
+    }
+
+    public function validatePreparedCartStock(
+        array $requirements
+    ): void {
+        $this->validateCombinedStock(
+            $requirements
+        );
+    }
+
+    public function savePreparedOrderItems(
+        Order $order,
+        array $lines
+    ): void {
+        $this->createOrderItems(
+            order: $order,
+            lines: $lines
+        );
+    }
+
+    public function recalculatePreparedOrder(
+        Order $order
+    ): void {
+        $this->recalculateOrderTotals(
+            $order
+        );
+    }
+
+    public function reloadOrderWithItems(
+        Order $order
+    ): Order {
+        return $this->loadOrder(
+            $order
+        );
     }
 
     /*

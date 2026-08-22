@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\IngredientController;
 use App\Http\Controllers\Api\V1\InventoryStockController;
 use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
+use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
 use App\Http\Controllers\Api\V1\PublicQrOrderController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
@@ -25,6 +26,8 @@ use App\Http\Controllers\Api\V1\TableSessionController;
 use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserSessionController;
+use App\Http\Controllers\Api\V1\WaiterOrderController;
+use App\Http\Controllers\Api\V1\WaiterTableController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,7 +35,7 @@ use Illuminate\Support\Facades\Route;
 | API V1 Routes
 |--------------------------------------------------------------------------
 |
-| bootstrap/app.php already adds:
+| bootstrap/app.php already applies:
 |
 | /api/v1
 |
@@ -147,16 +150,14 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | Phase 15 - First Customer QR Order
+    | Phase 15 - Customer QR Ordering
     |--------------------------------------------------------------------------
     |
-    | Customer submits the first cart.
+    | First QR order:
     |
-    | Creates:
-    |
-    | Order source = QR_CUSTOMER
-    | Order type   = DINE_IN
-    | Status       = PENDING
+    | source = QR_CUSTOMER
+    | type   = DINE_IN
+    | status = PENDING
     |
     */
 
@@ -180,29 +181,12 @@ Route::middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | Phase 15 - Add More Items To Existing Order
+    | Phase 15 - Customer Additional Items
     |--------------------------------------------------------------------------
     |
-    | IMPORTANT:
+    | Additional items are appended to the SAME order.
     |
-    | This does NOT create another orders row.
-    |
-    | New order_items are appended to the SAME order.
-    |
-    | Example:
-    |
-    | ORD-260822-000025
-    |
-    | First order:
-    | Chicken Fried Rice
-    |
-    | Additional order:
-    | Coca Cola
-    |
-    | Additional order:
-    | Ice Cream
-    |
-    | All remain under ORD-260822-000025.
+    | No second orders row is created.
     |
     */
 
@@ -228,17 +212,6 @@ Route::middleware(
     |--------------------------------------------------------------------------
     | Public Customer Order Status
     |--------------------------------------------------------------------------
-    |
-    | No login is required.
-    |
-    | Customer uses the random 64-character status token.
-    |
-    | Returns the complete cumulative order:
-    |
-    | original items
-    | +
-    | all additional items
-    |
     */
 
     Route::get(
@@ -274,6 +247,12 @@ Route::middleware(
         ->group(
             function (): void {
 
+                /*
+                |--------------------------------------------------------------------------
+                | Login
+                |--------------------------------------------------------------------------
+                */
+
                 Route::post(
                     '/login',
                     [
@@ -287,6 +266,12 @@ Route::middleware(
                     ->name(
                         'login'
                     );
+
+                /*
+                |--------------------------------------------------------------------------
+                | Authenticated User Account
+                |--------------------------------------------------------------------------
+                */
 
                 Route::middleware([
                     'auth:sanctum',
@@ -649,7 +634,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Tables
+        | Table Management
         |--------------------------------------------------------------------------
         */
 
@@ -899,6 +884,408 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 16 - Waiter Operations
+        |--------------------------------------------------------------------------
+        |
+        | WAITER permissions currently include:
+        |
+        | tables.view
+        | tables.transfer
+        | menu.view
+        | orders.view
+        | orders.create
+        | orders.serve
+        |
+        | Waiters DO NOT receive:
+        |
+        | orders.confirm
+        | orders.send_kitchen
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix(
+            'waiter'
+        )
+            ->name(
+                'v1.waiter.'
+            )
+            ->group(
+                function (): void {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Waiter Tables
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::get(
+                        '/tables',
+                        [
+                            WaiterTableController::class,
+                            'index',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:tables.view'
+                        )
+                        ->name(
+                            'tables.index'
+                        );
+
+                    Route::get(
+                        '/tables/{table}',
+                        [
+                            WaiterTableController::class,
+                            'show',
+                        ]
+                    )
+                        ->whereNumber(
+                            'table'
+                        )
+                        ->middleware(
+                            'permission:tables.view'
+                        )
+                        ->name(
+                            'tables.show'
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | First Waiter Order
+                    |--------------------------------------------------------------------------
+                    |
+                    | source = WAITER
+                    | type   = DINE_IN
+                    | status = CONFIRMED
+                    |
+                    */
+
+                    Route::post(
+                        '/tables/{table}/orders',
+                        [
+                            WaiterOrderController::class,
+                            'store',
+                        ]
+                    )
+                        ->whereNumber(
+                            'table'
+                        )
+                        ->middleware(
+                            'permission:orders.create'
+                        )
+                        ->name(
+                            'orders.store'
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Additional Waiter Items
+                    |--------------------------------------------------------------------------
+                    |
+                    | Items are appended to the SAME waiter order.
+                    |
+                    */
+
+                    Route::post(
+                        '/orders/{order}/items',
+                        [
+                            WaiterOrderController::class,
+                            'append',
+                        ]
+                    )
+                        ->whereNumber(
+                            'order'
+                        )
+                        ->middleware(
+                            'permission:orders.create'
+                        )
+                        ->name(
+                            'orders.items.append'
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Request Bill
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::post(
+                        '/tables/{table}/request-bill',
+                        [
+                            WaiterTableController::class,
+                            'requestBill',
+                        ]
+                    )
+                        ->whereNumber(
+                            'table'
+                        )
+                        ->middleware(
+                            'permission:orders.create'
+                        )
+                        ->name(
+                            'tables.request-bill'
+                        );
+                }
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 17 - Core Order Engine
+        |--------------------------------------------------------------------------
+        |
+        | Order Sources:
+        |
+        | QR_CUSTOMER
+        | WAITER
+        | CASHIER
+        |
+        | Order Types:
+        |
+        | DINE_IN
+        | TAKEAWAY
+        |
+        | Lifecycle:
+        |
+        | PENDING
+        |    -> CONFIRMED
+        |    -> REJECTED
+        |    -> CANCELLED
+        |
+        | CONFIRMED
+        |    -> SENT_TO_KITCHEN
+        |    -> CANCELLED
+        |
+        | SENT_TO_KITCHEN
+        |    -> SERVED
+        |    -> CANCELLED
+        |
+        | SERVED
+        |    -> COMPLETED
+        |    -> CANCELLED
+        |
+        | Terminal:
+        |
+        | COMPLETED
+        | CANCELLED
+        | REJECTED
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Order list.
+         */
+        Route::get(
+            '/orders',
+            [
+                OrderController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:orders.view'
+            )
+            ->name(
+                'v1.orders.index'
+            );
+
+        /*
+         * Order details including:
+         *
+         * items
+         * add-ons
+         * status history
+         * available actions
+         */
+        Route::get(
+            '/orders/{order}',
+            [
+                OrderController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.view'
+            )
+            ->name(
+                'v1.orders.show'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Confirm Order
+        |--------------------------------------------------------------------------
+        |
+        | PENDING -> CONFIRMED
+        |
+        | Mainly used for QR customer orders.
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/confirm',
+            [
+                OrderController::class,
+                'confirm',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.confirm'
+            )
+            ->name(
+                'v1.orders.confirm'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reject Order
+        |--------------------------------------------------------------------------
+        |
+        | PENDING -> REJECTED
+        |
+        | Reject permission intentionally follows orders.confirm.
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/reject',
+            [
+                OrderController::class,
+                'reject',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.confirm'
+            )
+            ->name(
+                'v1.orders.reject'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Send To Kitchen
+        |--------------------------------------------------------------------------
+        |
+        | CONFIRMED -> SENT_TO_KITCHEN
+        |
+        | Phase 17 marks the relevant order items as sent.
+        |
+        | KOT printing and inventory deduction are connected later.
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/send-to-kitchen',
+            [
+                OrderController::class,
+                'sendToKitchen',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.send_kitchen'
+            )
+            ->name(
+                'v1.orders.send-to-kitchen'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Serve Order
+        |--------------------------------------------------------------------------
+        |
+        | SENT_TO_KITCHEN -> SERVED
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/serve',
+            [
+                OrderController::class,
+                'serve',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.serve'
+            )
+            ->name(
+                'v1.orders.serve'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Complete Order
+        |--------------------------------------------------------------------------
+        |
+        | SERVED -> COMPLETED
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/complete',
+            [
+                OrderController::class,
+                'complete',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.complete'
+            )
+            ->name(
+                'v1.orders.complete'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cancel Order
+        |--------------------------------------------------------------------------
+        |
+        | Allowed from:
+        |
+        | PENDING
+        | CONFIRMED
+        | SENT_TO_KITCHEN
+        | SERVED
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/cancel',
+            [
+                OrderController::class,
+                'cancel',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:orders.cancel'
+            )
+            ->name(
+                'v1.orders.cancel'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Menu Categories
         |--------------------------------------------------------------------------
         */
@@ -1103,7 +1490,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Add-on Groups
+        | Menu Add-on Groups
         |--------------------------------------------------------------------------
         */
 
@@ -1137,7 +1524,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Add-ons
+        | Menu Add-ons
         |--------------------------------------------------------------------------
         */
 
@@ -1173,6 +1560,9 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 13 - Recipe Management
         |--------------------------------------------------------------------------
+        |
+        | Recipe changes never directly change inventory.
+        |
         */
 
         Route::get(
@@ -1192,6 +1582,9 @@ Route::middleware(
                 'v1.recipes.menu-items.overview'
             );
 
+        /*
+         * Base menu-item recipe.
+         */
         Route::get(
             '/recipes/menu-items/{menuItem}',
             [
@@ -1243,6 +1636,9 @@ Route::middleware(
                 'v1.recipes.menu-items.destroy'
             );
 
+        /*
+         * Variant-specific recipe.
+         */
         Route::get(
             '/recipes/menu-items/{menuItem}/variants/{variant}',
             [
@@ -1362,8 +1758,13 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Recipe Consumption Preview
+        | Phase 14 - Recipe Consumption Preview
         |--------------------------------------------------------------------------
+        |
+        | Calculates menu recipe + add-on recipe requirements.
+        |
+        | This DOES NOT deduct inventory.
+        |
         */
 
         Route::post(
@@ -1403,6 +1804,9 @@ Route::middleware(
                 'v1.inventory.units.index'
             );
 
+        /*
+         * Keep /convert before dynamic unit routes.
+         */
         Route::post(
             '/inventory/units/convert',
             [
@@ -1556,6 +1960,9 @@ Route::middleware(
         |--------------------------------------------------------------------------
         */
 
+        /*
+         * Current stock.
+         */
         Route::get(
             '/inventory/stock',
             [
@@ -1570,6 +1977,9 @@ Route::middleware(
                 'v1.inventory.stock.current'
             );
 
+        /*
+         * Low stock.
+         */
         Route::get(
             '/inventory/stock/low',
             [
@@ -1584,6 +1994,9 @@ Route::middleware(
                 'v1.inventory.stock.low'
             );
 
+        /*
+         * Out-of-stock ingredients.
+         */
         Route::get(
             '/inventory/stock/out-of-stock',
             [
@@ -1598,6 +2011,9 @@ Route::middleware(
                 'v1.inventory.stock.out-of-stock'
             );
 
+        /*
+         * Inventory valuation.
+         */
         Route::get(
             '/inventory/stock/valuation',
             [
@@ -1612,6 +2028,9 @@ Route::middleware(
                 'v1.inventory.stock.valuation'
             );
 
+        /*
+         * Full immutable stock movement ledger.
+         */
         Route::get(
             '/inventory/stock/movements',
             [
@@ -1626,6 +2045,9 @@ Route::middleware(
                 'v1.inventory.stock.movements'
             );
 
+        /*
+         * Ingredient stock history.
+         */
         Route::get(
             '/inventory/ingredients/{ingredient}/stock-history',
             [
@@ -1643,6 +2065,9 @@ Route::middleware(
                 'v1.inventory.ingredients.stock-history'
             );
 
+        /*
+         * Initial opening inventory.
+         */
         Route::post(
             '/inventory/ingredients/{ingredient}/opening-balance',
             [
@@ -1660,6 +2085,9 @@ Route::middleware(
                 'v1.inventory.ingredients.opening-balance'
             );
 
+        /*
+         * Controlled manual stock increase.
+         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/in',
             [
@@ -1677,6 +2105,9 @@ Route::middleware(
                 'v1.inventory.ingredients.adjustment-in'
             );
 
+        /*
+         * Controlled manual stock decrease.
+         */
         Route::post(
             '/inventory/ingredients/{ingredient}/adjustments/out',
             [
@@ -1781,7 +2212,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Supplier Payment History
+        | Supplier-Specific Payment History
         |--------------------------------------------------------------------------
         */
 
@@ -1870,6 +2301,10 @@ Route::middleware(
                 'v1.purchases.update'
             );
 
+        /*
+         * Completing a purchase updates inventory
+         * through the controlled inventory engine.
+         */
         Route::post(
             '/purchases/{purchase}/complete',
             [
@@ -1906,7 +2341,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Purchase Payments
+        | Purchase Supplier Payments
         |--------------------------------------------------------------------------
         */
 
@@ -1946,7 +2381,7 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Global Supplier Payments
+        | Global Supplier Payment History
         |--------------------------------------------------------------------------
         */
 
@@ -1964,6 +2399,9 @@ Route::middleware(
                 'v1.supplier-payments.index'
             );
 
+        /*
+         * View one mixed supplier-payment batch.
+         */
         Route::get(
             '/supplier-payment-batches/{paymentBatch}',
             [

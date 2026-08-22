@@ -38,15 +38,28 @@ class TableSession extends Model
         'closed_by',
         'close_reason',
         'last_activity_at',
+
+        'bill_requested_at',
+        'bill_requested_by',
     ];
 
     protected function casts(): array
     {
         return [
-            'guest_count' => 'integer',
-            'opened_at' => 'datetime',
-            'closed_at' => 'datetime',
-            'last_activity_at' => 'datetime',
+            'guest_count' =>
+            'integer',
+
+            'opened_at' =>
+            'datetime',
+
+            'closed_at' =>
+            'datetime',
+
+            'last_activity_at' =>
+            'datetime',
+
+            'bill_requested_at' =>
+            'datetime',
         ];
     }
 
@@ -79,6 +92,14 @@ class TableSession extends Model
         return $this->belongsTo(
             User::class,
             'closed_by'
+        );
+    }
+
+    public function billRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'bill_requested_by'
         );
     }
 

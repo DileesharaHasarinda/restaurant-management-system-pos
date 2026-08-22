@@ -49,6 +49,16 @@ class TableSessionResource extends JsonResource
             'last_activity_at' =>
             $this->last_activity_at
                 ?->toISOString(),
+
+            'bill_requested' =>
+            $this->bill_requested_at !== null,
+
+            'bill_requested_at' =>
+            $this->bill_requested_at
+                ?->toISOString(),
+
+            'bill_requested_by' =>
+            $this->bill_requested_by,
         ];
     }
 }
