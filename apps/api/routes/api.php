@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
 use App\Http\Controllers\Api\V1\PurchaseController;
+use App\Http\Controllers\Api\V1\RecipeController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use App\Http\Controllers\Api\V1\SupplierController;
@@ -1090,6 +1091,195 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 13 - Recipe Management
+        |--------------------------------------------------------------------------
+        |
+        | Recipes connect menu items / variants to inventory ingredients.
+        |
+        | IMPORTANT:
+        |
+        | Saving or editing a recipe does NOT modify inventory.
+        |
+        | Recipes are definitions only.
+        |
+        | Actual stock deduction will later call InventoryStockService and
+        | create SALE_CONSUMPTION movements when an order is sent to kitchen.
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+         * Full menu-item recipe overview.
+         *
+         * Returns:
+         *
+         * - Base recipe
+         * - Variant recipes
+         * - Current recipe cost
+         * - Selling price
+         * - Gross margin
+         * - Gross margin percentage
+         * - Uncosted ingredient warnings
+         */
+        Route::get(
+            '/recipes/menu-items/{menuItem}/overview',
+            [
+                RecipeController::class,
+                'overview',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->middleware(
+                'permission:recipes.view'
+            )
+            ->name(
+                'v1.recipes.menu-items.overview'
+            );
+
+        /*
+         * Get base menu-item recipe.
+         */
+        Route::get(
+            '/recipes/menu-items/{menuItem}',
+            [
+                RecipeController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->middleware(
+                'permission:recipes.view'
+            )
+            ->name(
+                'v1.recipes.menu-items.show'
+            );
+
+        /*
+         * Create or replace base menu-item recipe.
+         */
+        Route::put(
+            '/recipes/menu-items/{menuItem}',
+            [
+                RecipeController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.menu-items.update'
+            );
+
+        /*
+         * Clear base menu-item recipe.
+         *
+         * This removes only the current recipe definition.
+         * It does not affect historical stock movements.
+         */
+        Route::delete(
+            '/recipes/menu-items/{menuItem}',
+            [
+                RecipeController::class,
+                'destroy',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.menu-items.destroy'
+            );
+
+        /*
+         * Get one variant-specific recipe.
+         */
+        Route::get(
+            '/recipes/menu-items/{menuItem}/variants/{variant}',
+            [
+                RecipeController::class,
+                'showVariant',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->whereNumber(
+                'variant'
+            )
+            ->middleware(
+                'permission:recipes.view'
+            )
+            ->name(
+                'v1.recipes.variants.show'
+            );
+
+        /*
+         * Create or replace one variant-specific recipe.
+         *
+         * Example:
+         *
+         * Regular:
+         * Carrot 50 G
+         *
+         * Large:
+         * Carrot 80 G
+         */
+        Route::put(
+            '/recipes/menu-items/{menuItem}/variants/{variant}',
+            [
+                RecipeController::class,
+                'updateVariant',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->whereNumber(
+                'variant'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.variants.update'
+            );
+
+        /*
+         * Clear one variant-specific recipe.
+         */
+        Route::delete(
+            '/recipes/menu-items/{menuItem}/variants/{variant}',
+            [
+                RecipeController::class,
+                'destroyVariant',
+            ]
+        )
+            ->whereNumber(
+                'menuItem'
+            )
+            ->whereNumber(
+                'variant'
+            )
+            ->middleware(
+                'permission:recipes.manage'
+            )
+            ->name(
+                'v1.recipes.variants.destroy'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Units
         |--------------------------------------------------------------------------
         */
@@ -1266,12 +1456,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 12 - Inventory Stock Engine
         |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | These static /inventory/stock/... routes are
-        | intentionally defined explicitly.
-        |
         */
 
         /*
@@ -1381,9 +1565,6 @@ Route::middleware(
 
         /*
          * Initial opening inventory.
-         *
-         * Can only be recorded before the
-         * ingredient has stock history.
          */
         Route::post(
             '/inventory/ingredients/{ingredient}/opening-balance',
@@ -1621,11 +1802,8 @@ Route::middleware(
         /*
          * Complete a purchase.
          *
-         * Phase 12:
-         *
-         * Purchase completion must use
-         * InventoryStockService and create
-         * PURCHASE stock movements.
+         * Inventory changes must go through
+         * InventoryStockService.
          */
         Route::post(
             '/purchases/{purchase}/complete',

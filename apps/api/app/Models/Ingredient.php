@@ -23,20 +23,11 @@ class Ingredient extends Model
     protected function casts(): array
     {
         return [
-            'current_stock' =>
-            'decimal:4',
-
-            'reorder_level' =>
-            'decimal:4',
-
-            'average_cost' =>
-            'decimal:4',
-
-            'track_stock' =>
-            'boolean',
-
-            'is_active' =>
-            'boolean',
+            'current_stock' => 'decimal:4',
+            'reorder_level' => 'decimal:4',
+            'average_cost' => 'decimal:4',
+            'track_stock' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -56,6 +47,14 @@ class Ingredient extends Model
         );
     }
 
+    public function recipeComponents(): HasMany
+    {
+        return $this->hasMany(
+            RecipeComponent::class,
+            'ingredient_id'
+        );
+    }
+
     public function isLowStock(): bool
     {
         if (! $this->track_stock) {
@@ -63,16 +62,11 @@ class Ingredient extends Model
         }
 
         $currentStock =
-            (float)
-            $this->current_stock;
+            (float) $this->current_stock;
 
         $minimumStock =
-            (float)
-            $this->reorder_level;
+            (float) $this->reorder_level;
 
-        /*
-         * Out-of-stock is handled separately.
-         */
         if ($currentStock <= 0) {
             return false;
         }
@@ -92,8 +86,7 @@ class Ingredient extends Model
         }
 
         return (float)
-        $this->current_stock
-            <= 0;
+        $this->current_stock <= 0;
     }
 
     public function stockValue(): float

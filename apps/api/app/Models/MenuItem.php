@@ -33,24 +33,13 @@ class MenuItem extends Model
         return [
             'price' => 'decimal:2',
             'tax_rate' => 'decimal:4',
-
             'is_available' => 'boolean',
             'is_active' => 'boolean',
-
-            'is_visible_on_website' =>
-            'boolean',
-
-            'is_visible_on_qr' =>
-            'boolean',
-
-            'has_variants' =>
-            'boolean',
-
-            'sort_order' =>
-            'integer',
-
-            'metadata' =>
-            'array',
+            'is_visible_on_website' => 'boolean',
+            'is_visible_on_qr' => 'boolean',
+            'has_variants' => 'boolean',
+            'sort_order' => 'integer',
+            'metadata' => 'array',
         ];
     }
 
@@ -88,6 +77,26 @@ class MenuItem extends Model
             ->withTimestamps()
             ->orderByPivot(
                 'sort_order'
+            );
+    }
+
+    public function recipeComponents(): HasMany
+    {
+        return $this->hasMany(
+            RecipeComponent::class,
+            'menu_item_id'
+        );
+    }
+
+    public function baseRecipeComponents(): HasMany
+    {
+        return $this
+            ->hasMany(
+                RecipeComponent::class,
+                'menu_item_id'
+            )
+            ->whereNull(
+                'variant_id'
             );
     }
 }

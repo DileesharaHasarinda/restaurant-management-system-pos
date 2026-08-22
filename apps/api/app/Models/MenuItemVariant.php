@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MenuItemVariant extends Model
 {
@@ -32,7 +33,16 @@ class MenuItemVariant extends Model
     public function menuItem(): BelongsTo
     {
         return $this->belongsTo(
-            MenuItem::class
+            MenuItem::class,
+            'menu_item_id'
+        );
+    }
+
+    public function recipeComponents(): HasMany
+    {
+        return $this->hasMany(
+            RecipeComponent::class,
+            'variant_id'
         );
     }
 }
