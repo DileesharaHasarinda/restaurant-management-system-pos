@@ -26,8 +26,12 @@ class TableSessionResource extends JsonResource
             'table_id' =>
             $this->table_id,
 
+            'merged_into_session_id' =>
+            $this->merged_into_session_id,
+
             'guest_count' =>
-            (int) $this->guest_count,
+            (int)
+            $this->guest_count,
 
             'opened_source' =>
             $this->opened_source,
@@ -43,6 +47,9 @@ class TableSessionResource extends JsonResource
             $this->closed_at
                 ?->toISOString(),
 
+            'closed_by' =>
+            $this->closed_by,
+
             'close_reason' =>
             $this->close_reason,
 
@@ -51,7 +58,8 @@ class TableSessionResource extends JsonResource
                 ?->toISOString(),
 
             'bill_requested' =>
-            $this->bill_requested_at !== null,
+            $this->bill_requested_at
+                !== null,
 
             'bill_requested_at' =>
             $this->bill_requested_at

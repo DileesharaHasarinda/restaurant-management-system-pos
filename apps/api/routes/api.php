@@ -769,6 +769,41 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
+        | Phase 20 - Table Merge
+        |--------------------------------------------------------------------------
+        |
+        | The table in the URL is the PRIMARY table.
+        |
+        | Example:
+        |
+        | Table 05 + Table 06
+        |        ↓
+        |     Table 05
+        |
+        | Primary session survives.
+        | Secondary session becomes MERGED.
+        |
+        */
+
+        Route::post(
+            '/tables/{table}/merge',
+            [
+                TableController::class,
+                'merge',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.merge'
+            )
+            ->name(
+                'v1.tables.merge'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
         | Table QR Management
         |--------------------------------------------------------------------------
         */

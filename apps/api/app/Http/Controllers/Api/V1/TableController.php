@@ -5,17 +5,20 @@ namespace App\Http\Controllers\Api\V1;
 use App\Exceptions\TableOperationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Tables\ListTablesRequest;
+use App\Http\Requests\Api\V1\Tables\MergeTablesRequest;
 use App\Http\Requests\Api\V1\Tables\StoreTableRequest;
 use App\Http\Requests\Api\V1\Tables\TransferTableRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateQrOrderingRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateTableRequest;
 use App\Http\Requests\Api\V1\Tables\UpdateTableStatusRequest;
+use App\Http\Resources\TableMergeResource;
 use App\Http\Resources\TableResource;
 use App\Http\Resources\TableSessionResource;
 use App\Http\Resources\TableTransferResource;
 use App\Models\RestaurantTable;
 use App\Models\User;
 use App\Services\TableManagementService;
+use App\Services\TableMergeService;
 use App\Services\TableTransferService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +27,8 @@ class TableController extends Controller
 {
     public function __construct(
         private readonly TableManagementService $tableService,
-        private readonly TableTransferService $transferService
+        private readonly TableTransferService $transferService,
+        private readonly TableMergeService $mergeService
     ) {}
 
     public function index(
@@ -426,4 +430,113 @@ class TableController extends Controller
             message: 'Table transferred successfully.'
         );
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 20 - Merge Table Sessions
+    |--------------------------------------------------------------------------
+    */
+
+    public function merge(
+        MergeTablesRequest $request,
+        RestaurantTable $table
+    ): JsonResponse {
+        /** @var User $user */
+        $user =
+            $request->user();
+
+        $data =
+            $request->validated();
+
+        try {
+            $result =
+                $this
+                ->mergeService
+                ->merge(
+                    actor:
+                    $user,
+
+                    primaryTable:
+                    $table,
+
+                    secondaryTableId:
+                    (int)
+                    $data[
+                        'secondary_table_id'
+                    ],
+
+                    reason:
+                    $data['reason']
+                        ?? null
+                );
+        } catch (
+            TableOperationException $exception
+        ) {
+            return ApiResponse::error(
+                message:
+                $exception->getMessage(),
+
+                code:
+                $exception->errorCode,
+
+                status:
+                $exception->status
+            );
+        }
+
+        return ApiResponse::success(
+            data: [
+                'merge' =>
+                (
+                    new TableMergeResource(
+                        $result['merge']
+                    )
+                )->resolve(
+                    $request
+                ),
+
+                'primary_session' =>
+                (
+                    new TableSessionResource(
+                        $result[
+                            'primary_session'
+                        ]
+                    )
+                )->resolve(
+                    $request
+                ),
+
+                'secondary_session' =>
+                (
+                    new TableSessionResource(
+                        $result[
+                            'secondary_session'
+                        ]
+                    )
+                )->resolve(
+                    $request
+                ),
+
+                'orders_moved' =>
+                $result[
+                    'orders_moved'
+                ],
+
+                'moved_order_ids' =>
+                $result[
+                    'moved_order_ids'
+                ],
+
+                'final_billing_session_id' =>
+                $result[
+                    'final_billing_session_id'
+                ],
+            ],
+
+            message:
+            'Tables merged successfully.'
+        );
+    }
+
 }
