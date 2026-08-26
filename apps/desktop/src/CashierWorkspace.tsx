@@ -66,32 +66,6 @@ interface ProductSelection {
 |--------------------------------------------------------------------------
 | Laravel OrderResource response types
 |--------------------------------------------------------------------------
-|
-| The Laravel API returns:
-|
-| customer: {
-|   name,
-|   phone
-| }
-|
-| totals: {
-|   subtotal,
-|   discount,
-|   tax,
-|   service_charge,
-|   grand_total
-| }
-|
-| items: [
-|   {
-|     name,
-|     variant
-|   }
-| ]
-|
-| The existing desktop Order Type uses the older flattened property names.
-| We normalize the server response below instead of changing types.ts.
-|
 */
 
 interface ApiOrderCustomer {
@@ -109,9 +83,12 @@ interface ApiOrderTotals {
 
 interface ApiOrderAddon {
     id?: number;
-    addon_id?: number | null;
 
-    name?: string | null;
+    addon_id?:
+    number | null;
+
+    name?:
+    string | null;
 
     quantity?: number;
 
@@ -129,9 +106,11 @@ interface ApiOrderItem {
     variant_id?:
     number | null;
 
-    name?: string | null;
+    name?:
+    string | null;
 
-    variant?: string | null;
+    variant?:
+    string | null;
 
     quantity?: number;
 
@@ -249,6 +228,12 @@ interface ApiOrderResponse {
     string | null;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 const money =
     (
         value:
@@ -271,6 +256,17 @@ const money =
         )}`;
     };
 
+/*
+|--------------------------------------------------------------------------
+| Local UI ID
+|--------------------------------------------------------------------------
+|
+| Used only for local React/cart identifiers.
+|
+| This is NOT sent as Laravel client_order_id.
+|
+*/
+
 const makeLocalId =
     (): string =>
         `${Date.now()}-${Math.random()
@@ -279,12 +275,122 @@ const makeLocalId =
 
 /*
 |--------------------------------------------------------------------------
-| Order Normalizer
+| UUID Generator
 |--------------------------------------------------------------------------
 |
-| Converts Laravel OrderResource into the structure currently expected by
-| the Electron application and existing types.ts file.
+| Laravel validates takeaway client_order_id using the "uuid" rule.
 |
+| Therefore Takeaway submissions must use a real RFC 4122 UUID instead
+| of makeLocalId().
+|
+*/
+
+const makeUuid =
+    (): string => {
+        const bytes =
+            new Uint8Array(
+                16,
+            );
+
+        crypto.getRandomValues(
+            bytes,
+        );
+
+        /*
+         * UUID version 4.
+         */
+        bytes[6] =
+            (
+                bytes[6]
+                &
+                0x0f
+            )
+            |
+            0x40;
+
+        /*
+         * RFC 4122 variant.
+         */
+        bytes[8] =
+            (
+                bytes[8]
+                &
+                0x3f
+            )
+            |
+            0x80;
+
+        const hex =
+            Array.from(
+                bytes,
+            ).map(
+                (
+                    value,
+                ) =>
+                    value
+                        .toString(
+                            16,
+                        )
+                        .padStart(
+                            2,
+                            '0',
+                        ),
+            );
+
+        return [
+            hex
+                .slice(
+                    0,
+                    4,
+                )
+                .join(
+                    '',
+                ),
+
+            hex
+                .slice(
+                    4,
+                    6,
+                )
+                .join(
+                    '',
+                ),
+
+            hex
+                .slice(
+                    6,
+                    8,
+                )
+                .join(
+                    '',
+                ),
+
+            hex
+                .slice(
+                    8,
+                    10,
+                )
+                .join(
+                    '',
+                ),
+
+            hex
+                .slice(
+                    10,
+                    16,
+                )
+                .join(
+                    '',
+                ),
+        ].join(
+            '-',
+        );
+    };
+
+/*
+|--------------------------------------------------------------------------
+| Order Normalizer
+|--------------------------------------------------------------------------
 */
 
 const normalizeOrder =
@@ -799,12 +905,25 @@ export default function CashierWorkspace(
     ] =
         useState('');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Takeaway Idempotency UUID
+    |--------------------------------------------------------------------------
+    |
+    | Laravel StoreTakeawayOrderRequest requires a UUID.
+    |
+    | We keep this UUID unchanged while the request is being retried.
+    | A new UUID is generated only after a successful takeaway creation.
+    |
+    */
+
     const [
         takeawayClientOrderId,
         setTakeawayClientOrderId,
     ] =
-        useState(
-            makeLocalId(),
+        useState<string>(
+            () =>
+                makeUuid(),
         );
 
     const [
@@ -1273,6 +1392,9 @@ export default function CashierWorkspace(
                     return [
                         ...current,
                         {
+                            /*
+                             * Local cart ID only.
+                             */
                             id:
                                 `${signature}--${makeLocalId()}`,
 
@@ -1447,6 +1569,12 @@ export default function CashierWorkspace(
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create Takeaway Order
+    |--------------------------------------------------------------------------
+    */
+
     const placeTakeaway =
         async () => {
             if (
@@ -1472,6 +1600,9 @@ export default function CashierWorkspace(
                     >(
                         '/takeaway/orders',
                         {
+                            /*
+                             * Valid Laravel UUID.
+                             */
                             client_order_id:
                                 takeawayClientOrderId,
 
@@ -1536,6 +1667,10 @@ export default function CashierWorkspace(
                     ),
                 );
 
+                /*
+                 * Clear the cart only after the server successfully creates
+                 * the Takeaway order.
+                 */
                 setCart(
                     [],
                 );
@@ -1552,8 +1687,11 @@ export default function CashierWorkspace(
                     '',
                 );
 
+                /*
+                 * Generate the idempotency UUID for the NEXT Takeaway order.
+                 */
                 setTakeawayClientOrderId(
-                    makeLocalId(),
+                    makeUuid(),
                 );
 
                 await loadOrders();
@@ -1564,6 +1702,12 @@ export default function CashierWorkspace(
             } catch (
             exception
             ) {
+                /*
+                 * Do not regenerate client_order_id here.
+                 *
+                 * Keeping the same UUID makes a retry safe if the server
+                 * created the order but the desktop lost the response.
+                 */
                 handleError(
                     exception,
                 );
