@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserSessionController;
 use App\Http\Controllers\Api\V1\WaiterOrderController;
 use App\Http\Controllers\Api\V1\WaiterTableController;
+use App\Http\Controllers\Api\V1\WastageController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -1388,6 +1389,63 @@ Route::middleware(
                             'reprint'
                         );
                 }
+            );
+
+        /*
+|--------------------------------------------------------------------------
+| Phase 24 - Wastage Management
+|--------------------------------------------------------------------------
+|
+| Ingredient wastage is converted to the ingredient's base unit,
+| deducted through the inventory stock engine, valued using the
+| current average inventory cost, and protected by an idempotent
+| client_request_id.
+|
+*/
+
+        Route::get(
+            '/wastages',
+            [
+                WastageController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:wastage.view'
+            )
+            ->name(
+                'v1.wastages.index'
+            );
+
+        Route::post(
+            '/wastages',
+            [
+                WastageController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:wastage.create'
+            )
+            ->name(
+                'v1.wastages.store'
+            );
+
+        Route::get(
+            '/wastages/{wastage}',
+            [
+                WastageController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'wastage'
+            )
+            ->middleware(
+                'permission:wastage.view'
+            )
+            ->name(
+                'v1.wastages.show'
             );
 
         /*

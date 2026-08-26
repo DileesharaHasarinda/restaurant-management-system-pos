@@ -15,7 +15,8 @@ final class OrderLifecycleService
 {
     public function __construct(
         private readonly AuditLogger $auditLogger,
-        private readonly KitchenPrintService $kitchenPrintService
+        private readonly KitchenPrintService $kitchenPrintService,
+        private readonly OrderInventoryConsumptionService $orderInventoryConsumptionService
     ) {}
 
     /*
@@ -214,6 +215,12 @@ final class OrderLifecycleService
                 $actor,
                 $notes
             ): array {
+                /*
+                |--------------------------------------------------------------------------
+                | Lock Order
+                |--------------------------------------------------------------------------
+                */
+
                 $locked =
                     $this->lockOrder(
                         $order
@@ -235,6 +242,19 @@ final class OrderLifecycleService
                     );
                 }
 
+                /*
+                |--------------------------------------------------------------------------
+                | Lock Exact Unsent Items
+                |--------------------------------------------------------------------------
+                |
+                | These item IDs become the common boundary for:
+                |
+                | 1. recipe stock consumption
+                | 2. sent_to_kitchen_at
+                | 3. KOT generation
+                |
+                */
+
                 $unsentItems =
                     OrderItem::query()
                     ->where(
@@ -248,12 +268,17 @@ final class OrderLifecycleService
                     ->whereNull(
                         'sent_to_kitchen_at'
                     )
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
 
                 /*
-                 * Already SENT with no new items:
-                 * safely return existing state.
+                 * Already sent and there are no additional items.
+                 *
+                 * Important:
+                 *
+                 * No recipe service is called here.
+                 * No stock can be deducted again.
                  */
                 if (
                     $locked->status
@@ -268,9 +293,6 @@ final class OrderLifecycleService
                     );
                 }
 
-                $sentAt =
-                    now();
-
                 $itemIds =
                     $unsentItems
                     ->pluck('id')
@@ -280,6 +302,60 @@ final class OrderLifecycleService
                     )
                     ->values()
                     ->all();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Phase 23 - Recipe Stock Consumption
+                |--------------------------------------------------------------------------
+                |
+                | IMPORTANT ORDER:
+                |
+                | Inventory consumption happens BEFORE:
+                |
+                | - sent_to_kitchen_at
+                | - order status transition
+                | - KOT job creation
+                |
+                | If recipe validation or stock deduction fails, the surrounding
+                | transaction rolls everything back.
+                |
+                */
+
+                $inventoryResult = [
+                    'consumed_item_ids' =>
+                    [],
+
+                    'skipped_item_ids' =>
+                    [],
+
+                    'stock_movement_ids' =>
+                    [],
+
+                    'items' =>
+                    [],
+                ];
+
+                if ($itemIds !== []) {
+                    $inventoryResult =
+                        $this
+                        ->orderInventoryConsumptionService
+                        ->consumeForKitchenSend(
+                            order: $locked,
+
+                            itemIds: $itemIds,
+
+                            actor: $actor
+                        );
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Mark Exact Items Sent
+                |--------------------------------------------------------------------------
+                */
+
+                $sentAt =
+                    now();
 
                 if ($itemIds !== []) {
                     OrderItem::query()
@@ -295,6 +371,12 @@ final class OrderLifecycleService
                             $sentAt,
                         ]);
                 }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Order Status
+                |--------------------------------------------------------------------------
+                */
 
                 $from =
                     $locked->status;
@@ -314,37 +396,63 @@ final class OrderLifecycleService
                 $locked->save();
 
                 /*
-                 * Phase 22 - Kitchen KOT
-                 *
-                 * Only the exact item IDs affected by this send operation
-                 * are queued for printing. KitchenPrintService determines
-                 * whether this is the initial KOT or an additional-order KOT.
-                 *
-                 * Because this runs inside the existing database transaction,
-                 * an unexpected KOT queue failure rolls back the kitchen-send
-                 * operation as well.
-                 */
+                |--------------------------------------------------------------------------
+                | Phase 22 - Kitchen KOT
+                |--------------------------------------------------------------------------
+                |
+                | Only after inventory consumption succeeds.
+                |
+                | Therefore:
+                |
+                | insufficient stock
+                |      ↓
+                | transaction fails
+                |      ↓
+                | no KOT
+                |
+                */
+
                 if ($itemIds !== []) {
-                    $this->kitchenPrintService
+                    $this
+                        ->kitchenPrintService
                         ->queueKitchenOrder(
                             order: $locked,
+
                             itemIds: $itemIds,
+
                             actor: $actor
                         );
                 }
 
+                /*
+                |--------------------------------------------------------------------------
+                | Status History
+                |--------------------------------------------------------------------------
+                */
+
                 if ($statusChanged) {
                     $this->history(
                         order: $locked,
+
                         from: $from,
+
                         to: Order::STATUS_SENT_TO_KITCHEN,
+
                         actor: $actor,
+
                         notes: $notes
                             ?? 'Order sent to kitchen.'
                     );
                 }
 
-                $this->auditLogger
+                /*
+                |--------------------------------------------------------------------------
+                | Audit
+                |--------------------------------------------------------------------------
+                */
+
+                $this
+                    ->auditLogger
                     ->record(
                         action: 'ORDER_SENT_TO_KITCHEN',
 
@@ -378,6 +486,23 @@ final class OrderLifecycleService
                             count(
                                 $itemIds
                             ),
+
+                            /*
+                             * Phase 23 audit data.
+                             */
+                            'inventory_consumed_item_ids' =>
+                            $inventoryResult['consumed_item_ids'],
+
+                            'inventory_skipped_item_ids' =>
+                            $inventoryResult['skipped_item_ids'],
+
+                            'stock_movement_ids' =>
+                            $inventoryResult['stock_movement_ids'],
+
+                            'stock_movement_count' =>
+                            count(
+                                $inventoryResult['stock_movement_ids']
+                            ),
                         ],
 
                         userId: $actor->id
@@ -385,8 +510,11 @@ final class OrderLifecycleService
 
                 return $this->result(
                     $locked,
+
                     $statusChanged
-                        || $itemIds !== [],
+                        ||
+                        $itemIds !== [],
+
                     $itemIds
                 );
             }

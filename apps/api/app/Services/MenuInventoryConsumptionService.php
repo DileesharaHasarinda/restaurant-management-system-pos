@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Exceptions\InventoryOperationException;
 use App\Models\MenuItem;
 use App\Models\MenuItemVariant;
 use App\Models\User;
@@ -28,9 +27,29 @@ final class MenuInventoryConsumptionService
         ?int $businessDayId = null
     ): array {
         /*
-         * Calculate BASE/VARIANT + ADD-ONS
-         * before touching inventory.
-         */
+        |--------------------------------------------------------------------------
+        | Build Recipe Requirements
+        |--------------------------------------------------------------------------
+        |
+        | RecipeRequirementService calculates the required base-unit quantities.
+        |
+        | IMPORTANT:
+        |
+        | We intentionally DO NOT reject based only on
+        | "has_sufficient_stock" here.
+        |
+        | That value is useful for previews/UI, but it is not safe enough for
+        | the actual mutation because stock could change immediately afterward.
+        |
+        | InventoryStockService::consumeSaleBatch() performs the authoritative
+        | check while ingredient rows are locked.
+        |
+        | It also checks existing movement keys BEFORE checking current stock,
+        | which means an already-completed duplicate request remains safely
+        | idempotent even if current stock is now lower.
+        |
+        */
+
         $requirements =
             $this
             ->requirementService
@@ -44,18 +63,6 @@ final class MenuInventoryConsumptionService
                 itemQuantity: $itemQuantity
             );
 
-        if (
-            ! $requirements['has_sufficient_stock']
-        ) {
-            throw new InventoryOperationException(
-                message: 'There is insufficient ingredient stock to prepare this item.',
-
-                errorCode: 'INSUFFICIENT_RECIPE_STOCK',
-
-                status: 409
-            );
-        }
-
         $lines =
             collect(
                 $requirements['requirements']
@@ -65,14 +72,32 @@ final class MenuInventoryConsumptionService
                     array $requirement
                 ): array => [
                     'ingredient_id' =>
+                    (int)
                     $requirement['ingredient_id'],
 
                     'quantity' =>
+                    (float)
                     $requirement['required_quantity'],
                 ]
             )
             ->values()
             ->all();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Authoritative Inventory Mutation
+        |--------------------------------------------------------------------------
+        |
+        | consumeSaleBatch():
+        |
+        | - locks ingredients
+        | - re-checks deterministic movement keys
+        | - prevents partial duplicate states
+        | - checks ALL ingredient stock
+        | - deducts atomically
+        | - creates immutable SALE_CONSUMPTION movements
+        |
+        */
 
         $movements =
             $this

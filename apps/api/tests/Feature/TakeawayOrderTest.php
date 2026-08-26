@@ -1233,6 +1233,12 @@ class TakeawayOrderTest extends TestCase
             $this->cashier
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Create Takeaway
+        |--------------------------------------------------------------------------
+        */
+
         $this->postJson(
             '/api/v1/takeaway/orders',
             [
@@ -1288,8 +1294,60 @@ class TakeawayOrderTest extends TestCase
         );
 
         /*
-         * Existing Phase 17 endpoint.
-         */
+        |--------------------------------------------------------------------------
+        | Phase 23
+        |
+        | Creating the order itself must NOT consume inventory.
+        |--------------------------------------------------------------------------
+        */
+
+        $this->assertDatabaseCount(
+            'stock_movements',
+            0
+        );
+
+        $stockBeforeKitchen =
+            (float)
+            DB::table(
+                'ingredients'
+            )
+                ->where(
+                    'id',
+                    $this->ingredientId
+                )
+                ->value(
+                    'current_stock'
+                );
+
+        $this->assertSame(
+            10000.0,
+            $stockBeforeKitchen
+        );
+
+        $originalTakeawayToken =
+            $order->takeaway_token;
+
+        $this->assertNotNull(
+            $originalTakeawayToken
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | First Send To Kitchen
+        |--------------------------------------------------------------------------
+        |
+        | Phase 23:
+        |
+        | KOT
+        |  ↓
+        | recipe consumption
+        |  ↓
+        | stock movement
+        |  ↓
+        | inventory deduction
+        |
+        */
+
         $this->postJson(
             "/api/v1/orders/{$order->id}/send-to-kitchen",
             [
@@ -1311,6 +1369,14 @@ class TakeawayOrderTest extends TestCase
                 ->sent_to_kitchen_at
         );
 
+        /*
+         * Pickup token must remain unchanged.
+         */
+        $this->assertSame(
+            $originalTakeawayToken,
+            $order->takeaway_token
+        );
+
         $sentItem =
             DB::table(
                 'order_items'
@@ -1327,21 +1393,282 @@ class TakeawayOrderTest extends TestCase
         );
 
         /*
-         * Kitchen send still does NOT deduct
-         * inventory during Phase 18.
-         */
+        |--------------------------------------------------------------------------
+        | Recipe Stock Consumption
+        |--------------------------------------------------------------------------
+        |
+        | createMenuItem() configures:
+        |
+        | recipe quantity = 10 G
+        | order quantity  = 1
+        |
+        | Starting stock:
+        |
+        | 10,000 G
+        |
+        | Expected:
+        |
+        | 10,000 - 10 = 9,990 G
+        |
+        */
+
         $this->assertDatabaseCount(
             'stock_movements',
-            0
+            1
+        );
+
+        $movement =
+            DB::table(
+                'stock_movements'
+            )
+            ->where(
+                'ingredient_id',
+                $this->ingredientId
+            )
+            ->first();
+
+        $this->assertNotNull(
+            $movement
+        );
+
+        $this->assertSame(
+            'SALE_CONSUMPTION',
+            $movement
+                ->movement_type
+        );
+
+        $this->assertSame(
+            $this->ingredientId,
+            (int)
+            $movement
+                ->ingredient_id
         );
 
         /*
-         * Pickup token remains unchanged.
+         * Stock leaves inventory, therefore
+         * quantity_delta must be negative.
          */
-        $this->assertNotNull(
-            $order
-                ->takeaway_token
+        $this->assertSame(
+            -10.0,
+            (float)
+            $movement
+                ->quantity_delta
         );
+
+        $this->assertSame(
+            9990.0,
+            (float)
+            $movement
+                ->balance_after
+        );
+
+        /*
+         * Phase 23 idempotency is scoped to
+         * the exact order item.
+         */
+        $this->assertSame(
+            'order_item',
+            $movement
+                ->source_type
+        );
+
+        $this->assertSame(
+            (int)
+            $item->id,
+
+            (int)
+            $movement
+                ->source_id
+        );
+
+        $this->assertSame(
+            $order->order_number,
+            $movement
+                ->reference
+        );
+
+        $this->assertNotNull(
+            $movement
+                ->movement_key
+        );
+
+        $this->assertNotSame(
+            '',
+            trim(
+                (string)
+                $movement
+                    ->movement_key
+            )
+        );
+
+        /*
+         * Database inventory snapshot must also
+         * reflect the recipe consumption.
+         */
+        $stockAfterFirstSend =
+            (float)
+            DB::table(
+                'ingredients'
+            )
+                ->where(
+                    'id',
+                    $this->ingredientId
+                )
+                ->value(
+                    'current_stock'
+                );
+
+        $this->assertSame(
+            9990.0,
+            $stockAfterFirstSend
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 22 KOT
+        |--------------------------------------------------------------------------
+        |
+        | A successful first kitchen send also creates
+        | one INITIAL_ORDER kitchen print job.
+        |
+        */
+
+        $this->assertDatabaseCount(
+            'kitchen_print_jobs',
+            1
+        );
+
+        $this->assertDatabaseHas(
+            'kitchen_print_jobs',
+            [
+                'order_id' =>
+                $order->id,
+
+                'job_type' =>
+                'INITIAL_ORDER',
+
+                'status' =>
+                'PENDING',
+            ]
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Strong Duplicate Protection
+        |--------------------------------------------------------------------------
+        |
+        | Simulate the cashier/client retrying the exact
+        | same Send To Kitchen request.
+        |
+        | The same order item MUST NOT:
+        |
+        | - consume stock again
+        | - create another stock movement
+        | - create another KOT
+        |
+        */
+
+        $originalMovementKey =
+            (string)
+            $movement
+                ->movement_key;
+
+        $this->postJson(
+            "/api/v1/orders/{$order->id}/send-to-kitchen",
+            [
+                'notes' =>
+                'Duplicate send request.',
+            ]
+        )
+            ->assertStatus(200);
+
+        /*
+         * Still only the original movement.
+         */
+        $this->assertDatabaseCount(
+            'stock_movements',
+            1
+        );
+
+        /*
+         * Still only the original KOT.
+         */
+        $this->assertDatabaseCount(
+            'kitchen_print_jobs',
+            1
+        );
+
+        $movementAfterDuplicate =
+            DB::table(
+                'stock_movements'
+            )
+            ->where(
+                'ingredient_id',
+                $this->ingredientId
+            )
+            ->first();
+
+        $this->assertNotNull(
+            $movementAfterDuplicate
+        );
+
+        /*
+         * Same movement survives.
+         * No second idempotency key was generated.
+         */
+        $this->assertSame(
+            $originalMovementKey,
+            (string)
+            $movementAfterDuplicate
+                ->movement_key
+        );
+
+        /*
+         * Most important Phase 23 assertion:
+         *
+         * Stock MUST NOT become 9,980.
+         */
+        $stockAfterDuplicateSend =
+            (float)
+            DB::table(
+                'ingredients'
+            )
+                ->where(
+                    'id',
+                    $this->ingredientId
+                )
+                ->value(
+                    'current_stock'
+                );
+
+        $this->assertSame(
+            9990.0,
+            $stockAfterDuplicateSend
+        );
+
+        /*
+         * Original kitchen timestamp must remain set.
+         */
+        $itemAfterDuplicate =
+            DB::table(
+                'order_items'
+            )
+            ->where(
+                'id',
+                $item->id
+            )
+            ->first();
+
+        $this->assertNotNull(
+            $itemAfterDuplicate
+                ->sent_to_kitchen_at
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Audit
+        |--------------------------------------------------------------------------
+        */
 
         $this->assertDatabaseHas(
             'audit_logs',
