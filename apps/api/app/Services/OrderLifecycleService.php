@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 final class OrderLifecycleService
 {
     public function __construct(
-        private readonly AuditLogger $auditLogger
+        private readonly AuditLogger $auditLogger,
+        private readonly KitchenPrintService $kitchenPrintService
     ) {}
 
     /*
@@ -193,15 +194,12 @@ final class OrderLifecycleService
     | SEND TO KITCHEN
     |--------------------------------------------------------------------------
     |
-    | Phase 17 does NOT:
+    | Phase 22:
     |
-    | - print KOT
-    | - deduct inventory
+    | - marks exactly which active order_items enter the kitchen lifecycle
+    | - creates an idempotent INITIAL_ORDER or ADDITIONAL_ORDER KOT job
     |
-    | Those will hook into this action later.
-    |
-    | It DOES mark exactly which active order_items have now
-    | entered the kitchen lifecycle.
+    | Inventory deduction remains a later phase.
     |
     */
 
@@ -314,6 +312,26 @@ final class OrderLifecycleService
                     $sentAt;
 
                 $locked->save();
+
+                /*
+                 * Phase 22 - Kitchen KOT
+                 *
+                 * Only the exact item IDs affected by this send operation
+                 * are queued for printing. KitchenPrintService determines
+                 * whether this is the initial KOT or an additional-order KOT.
+                 *
+                 * Because this runs inside the existing database transaction,
+                 * an unexpected KOT queue failure rolls back the kitchen-send
+                 * operation as well.
+                 */
+                if ($itemIds !== []) {
+                    $this->kitchenPrintService
+                        ->queueKitchenOrder(
+                            order: $locked,
+                            itemIds: $itemIds,
+                            actor: $actor
+                        );
+                }
 
                 if ($statusChanged) {
                     $this->history(
@@ -654,6 +672,37 @@ final class OrderLifecycleService
                 $cancelledAt =
                     now();
 
+                /*
+                 * Phase 22 - Kitchen cancellation KOT.
+                 *
+                 * Capture only ACTIVE items that had already reached the
+                 * kitchen. Items cancelled before they were sent to the
+                 * kitchen must not generate a cancellation ticket.
+                 */
+                $sentKitchenItemIds =
+                    OrderItem::query()
+                    ->where(
+                        'order_id',
+                        $locked->id
+                    )
+                    ->where(
+                        'status',
+                        OrderItem::STATUS_ACTIVE
+                    )
+                    ->whereNotNull(
+                        'sent_to_kitchen_at'
+                    )
+                    ->lockForUpdate()
+                    ->pluck(
+                        'id'
+                    )
+                    ->map(
+                        fn($id): int =>
+                        (int) $id
+                    )
+                    ->values()
+                    ->all();
+
                 $locked->status =
                     Order::STATUS_CANCELLED;
 
@@ -695,6 +744,16 @@ final class OrderLifecycleService
                         $cancelledAt,
                     ]);
 
+                if ($sentKitchenItemIds !== []) {
+                    $this->kitchenPrintService
+                        ->queueCancellation(
+                            order: $locked,
+                            itemIds: $sentKitchenItemIds,
+                            actor: $actor,
+                            reason: $reason
+                        );
+                }
+
                 $this->clearBillRequest(
                     $locked
                 );
@@ -716,12 +775,16 @@ final class OrderLifecycleService
                     metadata: [
                         'reason' =>
                         $reason,
+
+                        'kitchen_item_ids' =>
+                        $sentKitchenItemIds,
                     ]
                 );
 
                 return $this->result(
                     $locked,
-                    true
+                    true,
+                    $sentKitchenItemIds
                 );
             }
         );
@@ -1012,8 +1075,7 @@ final class OrderLifecycleService
             $changed,
 
             /*
-             * Later KOT / stock phases will use these
-             * exact item IDs.
+             * KOT and later stock phases use these exact item IDs.
              */
             'affected_item_ids' =>
             $affectedItemIds,

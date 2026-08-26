@@ -6,6 +6,24 @@ import path from "node:path";
 
 import started from "electron-squirrel-startup";
 
+import {
+  loadKitchenPrinterSettings,
+  printKitchenKot,
+  printKitchenTestPage,
+  saveKitchenPrinterSettings,
+  testKitchenPrinterConnection,
+} from "./kitchenPrinter";
+
+import {
+  startKitchenPrintWorker,
+  stopKitchenPrintWorker,
+} from "./kitchenPrintWorker";
+
+import type {
+  KitchenKotPayload,
+  KitchenPrinterSettings,
+} from "./kitchenPrinterTypes";
+
 if (started) {
   app.quit();
 }
@@ -15,23 +33,48 @@ const SESSION_FILE = "restaurant-pos-auth.bin";
 const sessionFilePath = (): string =>
   path.join(app.getPath("userData"), SESSION_FILE);
 
-const registerIpcHandlers = (): void => {
-  ipcMain.handle("pos:session:get-token", async (): Promise<string | null> => {
-    try {
-      const encryptedBase64 = await fs.readFile(sessionFilePath(), "utf8");
+/*
+|--------------------------------------------------------------------------
+| Secure Token Storage
+|--------------------------------------------------------------------------
+*/
 
-      if (!encryptedBase64 || !safeStorage.isEncryptionAvailable()) {
-        return null;
-      }
+const getStoredAuthToken = async (): Promise<string | null> => {
+  try {
+    const encryptedBase64 = await fs.readFile(sessionFilePath(), "utf8");
 
-      return safeStorage.decryptString(Buffer.from(encryptedBase64, "base64"));
-    } catch {
+    if (!encryptedBase64 || !safeStorage.isEncryptionAvailable()) {
       return null;
     }
-  });
+
+    return safeStorage.decryptString(Buffer.from(encryptedBase64, "base64"));
+  } catch {
+    return null;
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| IPC
+|--------------------------------------------------------------------------
+*/
+
+const registerIpcHandlers = (): void => {
+  /*
+      |--------------------------------------------------------------------------
+      | Authentication
+      |--------------------------------------------------------------------------
+      */
+
+  ipcMain.handle(
+    "pos:session:get-token",
+
+    async (): Promise<string | null> => getStoredAuthToken()
+  );
 
   ipcMain.handle(
     "pos:session:set-token",
+
     async (_event, token: string): Promise<void> => {
       if (!token || !safeStorage.isEncryptionAvailable()) {
         throw new Error(
@@ -43,35 +86,126 @@ const registerIpcHandlers = (): void => {
 
       await fs.writeFile(
         sessionFilePath(),
+
         encrypted.toString("base64"),
+
         "utf8"
       );
     }
   );
 
-  ipcMain.handle("pos:session:clear-token", async (): Promise<void> => {
-    try {
-      await fs.unlink(sessionFilePath());
-    } catch {
-      // Nothing to clear.
+  ipcMain.handle(
+    "pos:session:clear-token",
+
+    async (): Promise<void> => {
+      try {
+        await fs.unlink(sessionFilePath());
+      } catch {
+        // Nothing to clear.
+      }
     }
-  });
+  );
 
-  ipcMain.handle("pos:device-info", async () => ({
-    hostname: os.hostname(),
+  /*
+      |--------------------------------------------------------------------------
+      | Device Information
+      |--------------------------------------------------------------------------
+      */
 
-    platform: process.platform,
+  ipcMain.handle(
+    "pos:device-info",
 
-    appVersion: app.getVersion(),
-  }));
+    async () => ({
+      hostname: os.hostname(),
+
+      platform: process.platform,
+
+      appVersion: app.getVersion(),
+    })
+  );
+
+  /*
+      |--------------------------------------------------------------------------
+      | Kitchen Printer Settings
+      |--------------------------------------------------------------------------
+      */
+
+  ipcMain.handle(
+    "pos:kitchen-printer:get-settings",
+
+    async () => loadKitchenPrinterSettings()
+  );
+
+  ipcMain.handle(
+    "pos:kitchen-printer:set-settings",
+
+    async (_event, settings: Partial<KitchenPrinterSettings>) =>
+      saveKitchenPrinterSettings(settings)
+  );
+
+  /*
+      |--------------------------------------------------------------------------
+      | Printer Connection Test
+      |--------------------------------------------------------------------------
+      */
+
+  ipcMain.handle(
+    "pos:kitchen-printer:test-connection",
+
+    async () => {
+      const settings = await loadKitchenPrinterSettings();
+
+      return testKitchenPrinterConnection(settings);
+    }
+  );
+
+  /*
+      |--------------------------------------------------------------------------
+      | Test Print
+      |--------------------------------------------------------------------------
+      */
+
+  ipcMain.handle(
+    "pos:kitchen-printer:test-print",
+
+    async () => {
+      const settings = await loadKitchenPrinterSettings();
+
+      return printKitchenTestPage(settings);
+    }
+  );
+
+  /*
+      |--------------------------------------------------------------------------
+      | Manual KOT Print
+      |--------------------------------------------------------------------------
+      */
+
+  ipcMain.handle(
+    "pos:kitchen-printer:print-kot",
+
+    async (_event, payload: KitchenKotPayload) => {
+      const settings = await loadKitchenPrinterSettings();
+
+      return printKitchenKot(settings, payload);
+    }
+  );
 };
+
+/*
+|--------------------------------------------------------------------------
+| Window
+|--------------------------------------------------------------------------
+*/
 
 const createWindow = (): void => {
   const mainWindow = new BrowserWindow({
     width: 1440,
+
     height: 900,
 
     minWidth: 1024,
+
     minHeight: 700,
 
     center: true,
@@ -106,8 +240,31 @@ const createWindow = (): void => {
   }
 };
 
+/*
+|--------------------------------------------------------------------------
+| Electron Lifecycle
+|--------------------------------------------------------------------------
+*/
+
 void app.whenReady().then(() => {
   registerIpcHandlers();
+
+  /*
+   * Phase 22:
+   *
+   * The worker remains harmless until:
+   *
+   * autoPrint = true
+   * AND
+   * printer host is configured.
+   */
+  startKitchenPrintWorker({
+    getAuthToken: getStoredAuthToken,
+
+    apiBaseUrl: "http://127.0.0.1:8000/api/v1",
+
+    pollIntervalMs: 1500,
+  });
 
   createWindow();
 
@@ -116,6 +273,10 @@ void app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  stopKitchenPrintWorker();
 });
 
 app.on("window-all-closed", () => {

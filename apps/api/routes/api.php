@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IngredientController;
 use App\Http\Controllers\Api\V1\InventoryStockController;
+use App\Http\Controllers\Api\V1\KitchenPrintJobController;
 use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -1269,6 +1270,124 @@ Route::middleware(
             )
             ->name(
                 'v1.orders.cancel'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 22 - Kitchen KOT Printing
+        |--------------------------------------------------------------------------
+        |
+        | Laravel owns the persistent KOT queue and print history.
+        | Electron claims a PENDING job, performs the physical LAN ESC/POS
+        | print, then reports PRINTED or FAILED back to the API.
+        |
+        */
+
+        Route::prefix(
+            'kitchen/print-jobs'
+        )
+            ->name(
+                'v1.kitchen.print-jobs.'
+            )
+            ->group(
+                function (): void {
+
+                    Route::get(
+                        '/',
+                        [
+                            KitchenPrintJobController::class,
+                            'index',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:kitchen.reprint'
+                        )
+                        ->name(
+                            'index'
+                        );
+
+                    Route::post(
+                        '/claim-next',
+                        [
+                            KitchenPrintJobController::class,
+                            'claimNext',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:orders.send_kitchen'
+                        )
+                        ->name(
+                            'claim-next'
+                        );
+
+                    Route::post(
+                        '/{kitchenPrintJob}/printed',
+                        [
+                            KitchenPrintJobController::class,
+                            'printed',
+                        ]
+                    )
+                        ->whereNumber(
+                            'kitchenPrintJob'
+                        )
+                        ->middleware(
+                            'permission:orders.send_kitchen'
+                        )
+                        ->name(
+                            'printed'
+                        );
+
+                    Route::post(
+                        '/{kitchenPrintJob}/failed',
+                        [
+                            KitchenPrintJobController::class,
+                            'failed',
+                        ]
+                    )
+                        ->whereNumber(
+                            'kitchenPrintJob'
+                        )
+                        ->middleware(
+                            'permission:orders.send_kitchen'
+                        )
+                        ->name(
+                            'failed'
+                        );
+
+                    Route::post(
+                        '/{kitchenPrintJob}/retry',
+                        [
+                            KitchenPrintJobController::class,
+                            'retry',
+                        ]
+                    )
+                        ->whereNumber(
+                            'kitchenPrintJob'
+                        )
+                        ->middleware(
+                            'permission:kitchen.reprint'
+                        )
+                        ->name(
+                            'retry'
+                        );
+
+                    Route::post(
+                        '/{kitchenPrintJob}/reprint',
+                        [
+                            KitchenPrintJobController::class,
+                            'reprint',
+                        ]
+                    )
+                        ->whereNumber(
+                            'kitchenPrintJob'
+                        )
+                        ->middleware(
+                            'permission:kitchen.reprint'
+                        )
+                        ->name(
+                            'reprint'
+                        );
+                }
             );
 
         /*

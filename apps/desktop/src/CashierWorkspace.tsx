@@ -1,3 +1,5 @@
+import KitchenPrinterModule from './KitchenPrinterModule';
+
 import {
     useCallback,
     useEffect,
@@ -3500,7 +3502,7 @@ function SettingsModule(
         <div className="module-page">
             <ModuleHeader
                 title="Settings"
-                subtitle="Cashier terminal information."
+                subtitle="Cashier terminal, connection and kitchen printer configuration."
             />
 
             <div className="settings-grid">
@@ -3548,6 +3550,8 @@ function SettingsModule(
                     value="OS Secure Storage"
                 />
             </div>
+
+            <KitchenPrinterModule />
         </div>
     );
 }
