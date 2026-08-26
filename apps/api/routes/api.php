@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
+use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\SupplierPaymentController;
 use App\Http\Controllers\Api\V1\TableController;
@@ -2306,6 +2307,68 @@ Route::middleware(
             )
             ->name(
                 'v1.inventory.ingredients.adjustment-out'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 25 - Physical Stock Adjustments
+        |--------------------------------------------------------------------------
+        |
+        | Physical stock counts compare the current system quantity against
+        | the actual counted quantity. The backend calculates the difference
+        | and records ADJUSTMENT_IN or ADJUSTMENT_OUT when required.
+        |
+        | Matching counts are still recorded for audit purposes, but no stock
+        | movement is created when the difference is zero.
+        |
+        */
+
+        Route::get(
+            '/inventory/stock-adjustments',
+            [
+                StockAdjustmentController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock-adjustments.index'
+            );
+
+        Route::get(
+            '/inventory/stock-adjustments/{stockAdjustment}',
+            [
+                StockAdjustmentController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'stockAdjustment'
+            )
+            ->middleware(
+                'permission:inventory.view'
+            )
+            ->name(
+                'v1.inventory.stock-adjustments.show'
+            );
+
+        Route::post(
+            '/inventory/ingredients/{ingredient}/physical-count',
+            [
+                StockAdjustmentController::class,
+                'physicalCount',
+            ]
+        )
+            ->whereNumber(
+                'ingredient'
+            )
+            ->middleware(
+                'permission:inventory.adjust'
+            )
+            ->name(
+                'v1.inventory.ingredients.physical-count'
             );
 
         /*

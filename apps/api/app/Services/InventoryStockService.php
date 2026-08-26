@@ -205,7 +205,10 @@ final class InventoryStockService
         ?float $unitCost,
         string $idempotencyKey,
         string $reason,
-        ?string $reference = null
+        ?string $reference = null,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $businessDayId = null
     ): StockMovement {
         $movementKey =
             'adjustment-in:' .
@@ -224,13 +227,24 @@ final class InventoryStockService
 
             movementKey: $movementKey,
 
-            sourceType: Ingredient::class,
+            /*
+             * Existing Phase 12 calls continue using
+             * Ingredient as the source.
+             *
+             * Phase 25 can instead link the movement
+             * directly to StockAdjustment.
+             */
+            sourceType: $sourceType
+                ?? Ingredient::class,
 
-            sourceId: $ingredient->id,
+            sourceId: $sourceId
+                ?? $ingredient->id,
 
             reference: $reference,
 
             notes: $reason,
+
+            businessDayId: $businessDayId,
 
             updateAverageCost: true
         );
@@ -248,7 +262,10 @@ final class InventoryStockService
         float $quantity,
         string $idempotencyKey,
         string $reason,
-        ?string $reference = null
+        ?string $reference = null,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $businessDayId = null
     ): StockMovement {
         $movementKey =
             'adjustment-out:' .
@@ -265,13 +282,17 @@ final class InventoryStockService
 
             movementKey: $movementKey,
 
-            sourceType: Ingredient::class,
+            sourceType: $sourceType
+                ?? Ingredient::class,
 
-            sourceId: $ingredient->id,
+            sourceId: $sourceId
+                ?? $ingredient->id,
 
             reference: $reference,
 
-            notes: $reason
+            notes: $reason,
+
+            businessDayId: $businessDayId
         );
     }
 
