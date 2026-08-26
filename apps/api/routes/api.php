@@ -4,6 +4,9 @@ use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\FoundationController;
+use App\Http\Controllers\Api\V1\ExpenseCategoryController;
+use App\Http\Controllers\Api\V1\ExpenseController;
+use App\Http\Controllers\Api\V1\ExpenseReportController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IngredientController;
 use App\Http\Controllers\Api\V1\InventoryStockController;
@@ -2369,6 +2372,220 @@ Route::middleware(
             )
             ->name(
                 'v1.inventory.ingredients.physical-count'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 26 - Expense Management
+        |--------------------------------------------------------------------------
+        |
+        | Expenses are financial records and are never hard-deleted.
+        |
+        | CASH expenses can be linked to the logged-in user's open cashier
+        | shift and create an auditable CASH_OUT drawer movement.
+        |
+        | Receipts are stored privately and downloaded only through an
+        | authenticated endpoint.
+        |
+        */
+
+        Route::get(
+            '/expense-categories',
+            [
+                ExpenseCategoryController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:expenses.view'
+            )
+            ->name(
+                'v1.expense-categories.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expense Payment Methods
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/expenses/payment-methods',
+            [
+                ExpenseController::class,
+                'paymentMethods',
+            ]
+        )
+            ->middleware(
+                'permission:expenses.view'
+            )
+            ->name(
+                'v1.expenses.payment-methods'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expense History
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/expenses',
+            [
+                ExpenseController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:expenses.view'
+            )
+            ->name(
+                'v1.expenses.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Add Expense
+        |--------------------------------------------------------------------------
+        */
+
+        Route::post(
+            '/expenses',
+            [
+                ExpenseController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:expenses.create'
+            )
+            ->name(
+                'v1.expenses.store'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expense Reports
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/expense-reports/summary',
+            [
+                ExpenseReportController::class,
+                'summary',
+            ]
+        )
+            ->middleware([
+                'permission:expenses.view',
+                'permission:reports.view',
+            ])
+            ->name(
+                'v1.expense-reports.summary'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expense Details
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/expenses/{expense}',
+            [
+                ExpenseController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'expense'
+            )
+            ->middleware(
+                'permission:expenses.view'
+            )
+            ->name(
+                'v1.expenses.show'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Edit Expense
+        |--------------------------------------------------------------------------
+        */
+
+        Route::put(
+            '/expenses/{expense}',
+            [
+                ExpenseController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'expense'
+            )
+            ->middleware(
+                'permission:expenses.manage'
+            )
+            ->name(
+                'v1.expenses.update'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expense Receipt
+        |--------------------------------------------------------------------------
+        */
+
+        Route::post(
+            '/expenses/{expense}/receipt',
+            [
+                ExpenseController::class,
+                'uploadReceipt',
+            ]
+        )
+            ->whereNumber(
+                'expense'
+            )
+            ->middleware(
+                'permission:expenses.manage'
+            )
+            ->name(
+                'v1.expenses.receipt.upload'
+            );
+
+        Route::get(
+            '/expenses/{expense}/receipt',
+            [
+                ExpenseController::class,
+                'downloadReceipt',
+            ]
+        )
+            ->whereNumber(
+                'expense'
+            )
+            ->middleware(
+                'permission:expenses.view'
+            )
+            ->name(
+                'v1.expenses.receipt.download'
+            );
+
+        Route::delete(
+            '/expenses/{expense}/receipt',
+            [
+                ExpenseController::class,
+                'removeReceipt',
+            ]
+        )
+            ->whereNumber(
+                'expense'
+            )
+            ->middleware(
+                'permission:expenses.manage'
+            )
+            ->name(
+                'v1.expenses.receipt.remove'
             );
 
         /*
