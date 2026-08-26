@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ExpenseReportController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IngredientController;
 use App\Http\Controllers\Api\V1\InventoryStockController;
+use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\KitchenPrintJobController;
 use App\Http\Controllers\Api\V1\MenuCategoryController;
 use App\Http\Controllers\Api\V1\MenuItemController;
@@ -1275,6 +1276,75 @@ Route::middleware(
             )
             ->name(
                 'v1.orders.cancel'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 27 - Billing / Invoice Generation
+        |--------------------------------------------------------------------------
+        |
+        | Takeaway:
+        | One invoice is generated from the takeaway order.
+        |
+        | Dine-in:
+        | One final invoice is generated for the surviving table session and
+        | includes all billable orders that belong to that session.
+        |
+        | Invoice values are historical snapshots. Existing invoices must not
+        | change when menu item, variant or add-on prices change later.
+        |
+        */
+
+        Route::post(
+            '/orders/{order}/invoice',
+            [
+                InvoiceController::class,
+                'generateForOrder',
+            ]
+        )
+            ->whereNumber(
+                'order'
+            )
+            ->middleware(
+                'permission:invoices.create'
+            )
+            ->name(
+                'v1.orders.invoice.generate'
+            );
+
+        Route::post(
+            '/table-sessions/{tableSession}/invoice',
+            [
+                InvoiceController::class,
+                'generateForTableSession',
+            ]
+        )
+            ->whereNumber(
+                'tableSession'
+            )
+            ->middleware(
+                'permission:invoices.create'
+            )
+            ->name(
+                'v1.table-sessions.invoice.generate'
+            );
+
+        Route::get(
+            '/invoices/{invoice}',
+            [
+                InvoiceController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'invoice'
+            )
+            ->middleware(
+                'permission:invoices.view'
+            )
+            ->name(
+                'v1.invoices.show'
             );
 
         /*
