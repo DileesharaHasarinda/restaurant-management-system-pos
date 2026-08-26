@@ -30,6 +30,13 @@ final class DocumentNumberService
         );
     }
 
+    public function nextPaymentNumber(): string
+    {
+        return $this->next(
+            DocumentSequence::TYPE_PAYMENT
+        );
+    }
+
     private function next(
         string $type
     ): string {

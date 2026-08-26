@@ -121,6 +121,22 @@ class Invoice extends Model
         ];
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(
+            Payment::class,
+            'invoice_id'
+        );
+    }
+
+    public function paymentBatches(): HasMany
+    {
+        return $this->hasMany(
+            PaymentBatch::class,
+            'invoice_id'
+        );
+    }
+
     public function businessDay(): BelongsTo
     {
         return $this->belongsTo(

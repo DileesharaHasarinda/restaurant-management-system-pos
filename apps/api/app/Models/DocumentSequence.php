@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class DocumentSequence extends Model
 {
+    public const TYPE_PAYMENT =
+    'PAYMENT';
+    
     public const TYPE_INVOICE =
     'INVOICE';
 

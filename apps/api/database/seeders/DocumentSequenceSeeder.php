@@ -53,6 +53,20 @@ class DocumentSequenceSeeder extends Seeder
                 'reset_period' =>
                 'DAILY',
             ],
+
+            [
+                'sequence_type' =>
+                'PAYMENT',
+
+                'prefix' =>
+                'PAY',
+
+                'padding' =>
+                6,
+
+                'reset_period' =>
+                'NEVER',
+            ],
         ];
 
         foreach ($sequences as $sequence) {

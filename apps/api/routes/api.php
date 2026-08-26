@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\ExpenseCategoryController;
 use App\Http\Controllers\Api\V1\ExpenseController;
@@ -255,12 +256,6 @@ Route::middleware(
         ->group(
             function (): void {
 
-                /*
-                |--------------------------------------------------------------------------
-                | Login
-                |--------------------------------------------------------------------------
-                */
-
                 Route::post(
                     '/login',
                     [
@@ -274,12 +269,6 @@ Route::middleware(
                     ->name(
                         'login'
                     );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Authenticated User Account
-                |--------------------------------------------------------------------------
-                */
 
                 Route::middleware([
                     'auth:sanctum',
@@ -746,15 +735,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 19 - Table Transfer
         |--------------------------------------------------------------------------
-        |
-        | Moves the existing active table session to another available table.
-        |
-        | The same session, orders, bill relationships and customer data are
-        | preserved.
-        |
-        | Existing kitchen tickets are NOT reprinted.
-        | Existing orders are NOT duplicated.
-        |
         */
 
         Route::post(
@@ -778,18 +758,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 20 - Table Merge
         |--------------------------------------------------------------------------
-        |
-        | The table in the URL is the PRIMARY table.
-        |
-        | Example:
-        |
-        | Table 05 + Table 06
-        |        ↓
-        |     Table 05
-        |
-        | Primary session survives.
-        | Secondary session becomes MERGED.
-        |
         */
 
         Route::post(
@@ -961,22 +929,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 16 - Waiter Operations
         |--------------------------------------------------------------------------
-        |
-        | WAITER permissions currently include:
-        |
-        | tables.view
-        | tables.transfer
-        | menu.view
-        | orders.view
-        | orders.create
-        | orders.serve
-        |
-        | Waiters DO NOT receive:
-        |
-        | orders.confirm
-        | orders.send_kitchen
-        |
-        |--------------------------------------------------------------------------
         */
 
         Route::prefix(
@@ -987,12 +939,6 @@ Route::middleware(
             )
             ->group(
                 function (): void {
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Waiter Tables
-                    |--------------------------------------------------------------------------
-                    */
 
                     Route::get(
                         '/tables',
@@ -1025,17 +971,6 @@ Route::middleware(
                             'tables.show'
                         );
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | First Waiter Order
-                    |--------------------------------------------------------------------------
-                    |
-                    | source = WAITER
-                    | type   = DINE_IN
-                    | status = CONFIRMED
-                    |
-                    */
-
                     Route::post(
                         '/orders',
                         [
@@ -1049,15 +984,6 @@ Route::middleware(
                         ->name(
                             'orders.store'
                         );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Additional Waiter Items
-                    |--------------------------------------------------------------------------
-                    |
-                    | Items are appended to the SAME waiter order.
-                    |
-                    */
 
                     Route::post(
                         '/orders/{order}/items',
@@ -1075,12 +1001,6 @@ Route::middleware(
                         ->name(
                             'orders.items.append'
                         );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Request Bill
-                    |--------------------------------------------------------------------------
-                    */
 
                     Route::post(
                         '/tables/{table}/request-bill',
@@ -1104,44 +1024,6 @@ Route::middleware(
         /*
         |--------------------------------------------------------------------------
         | Phase 17 - Core Order Engine
-        |--------------------------------------------------------------------------
-        |
-        | Order Sources:
-        |
-        | QR_CUSTOMER
-        | WAITER
-        | CASHIER
-        |
-        | Order Types:
-        |
-        | DINE_IN
-        | TAKEAWAY
-        |
-        | Lifecycle:
-        |
-        | PENDING
-        |    -> CONFIRMED
-        |    -> REJECTED
-        |    -> CANCELLED
-        |
-        | CONFIRMED
-        |    -> SENT_TO_KITCHEN
-        |    -> CANCELLED
-        |
-        | SENT_TO_KITCHEN
-        |    -> SERVED
-        |    -> CANCELLED
-        |
-        | SERVED
-        |    -> COMPLETED
-        |    -> CANCELLED
-        |
-        | Terminal:
-        |
-        | COMPLETED
-        | CANCELLED
-        | REJECTED
-        |
         |--------------------------------------------------------------------------
         */
 
@@ -1278,22 +1160,10 @@ Route::middleware(
                 'v1.orders.cancel'
             );
 
-
         /*
         |--------------------------------------------------------------------------
         | Phase 27 - Billing / Invoice Generation
         |--------------------------------------------------------------------------
-        |
-        | Takeaway:
-        | One invoice is generated from the takeaway order.
-        |
-        | Dine-in:
-        | One final invoice is generated for the surviving table session and
-        | includes all billable orders that belong to that session.
-        |
-        | Invoice values are historical snapshots. Existing invoices must not
-        | change when menu item, variant or add-on prices change later.
-        |
         */
 
         Route::post(
@@ -1349,13 +1219,69 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Phase 22 - Kitchen KOT Printing
+        | Phase 28 - Customer Multiple Payments
         |--------------------------------------------------------------------------
         |
-        | Laravel owns the persistent KOT queue and print history.
-        | Electron claims a PENDING job, performs the physical LAN ESC/POS
-        | print, then reports PRINTED or FAILED back to the API.
+        | Supported payment methods:
         |
+        | CASH
+        | CARD
+        | QR
+        | BANK_TRANSFER
+        | OTHER
+        |
+        | One request can contain multiple payment methods.
+        |
+        | Example:
+        |
+        | Invoice Rs. 10,000
+        |
+        | CASH Rs. 3,000
+        | CARD Rs. 5,000
+        | QR   Rs. 2,000
+        |
+        | The complete payment batch is processed atomically.
+        |
+        */
+
+        Route::post(
+            '/invoices/{invoice}/payments',
+            [
+                CustomerPaymentController::class,
+                'store',
+            ]
+        )
+            ->whereNumber(
+                'invoice'
+            )
+            ->middleware(
+                'permission:payments.create'
+            )
+            ->name(
+                'v1.invoices.payments.store'
+            );
+
+        Route::get(
+            '/invoices/{invoice}/payments',
+            [
+                CustomerPaymentController::class,
+                'index',
+            ]
+        )
+            ->whereNumber(
+                'invoice'
+            )
+            ->middleware(
+                'permission:invoices.view'
+            )
+            ->name(
+                'v1.invoices.payments.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 22 - Kitchen KOT Printing
+        |--------------------------------------------------------------------------
         */
 
         Route::prefix(
@@ -1466,16 +1392,10 @@ Route::middleware(
             );
 
         /*
-|--------------------------------------------------------------------------
-| Phase 24 - Wastage Management
-|--------------------------------------------------------------------------
-|
-| Ingredient wastage is converted to the ingredient's base unit,
-| deducted through the inventory stock engine, valued using the
-| current average inventory cost, and protected by an idempotent
-| client_request_id.
-|
-*/
+        |--------------------------------------------------------------------------
+        | Phase 24 - Wastage Management
+        |--------------------------------------------------------------------------
+        */
 
         Route::get(
             '/wastages',
@@ -2386,14 +2306,6 @@ Route::middleware(
         |--------------------------------------------------------------------------
         | Phase 25 - Physical Stock Adjustments
         |--------------------------------------------------------------------------
-        |
-        | Physical stock counts compare the current system quantity against
-        | the actual counted quantity. The backend calculates the difference
-        | and records ADJUSTMENT_IN or ADJUSTMENT_OUT when required.
-        |
-        | Matching counts are still recorded for audit purposes, but no stock
-        | movement is created when the difference is zero.
-        |
         */
 
         Route::get(
@@ -2444,20 +2356,10 @@ Route::middleware(
                 'v1.inventory.ingredients.physical-count'
             );
 
-
         /*
         |--------------------------------------------------------------------------
         | Phase 26 - Expense Management
         |--------------------------------------------------------------------------
-        |
-        | Expenses are financial records and are never hard-deleted.
-        |
-        | CASH expenses can be linked to the logged-in user's open cashier
-        | shift and create an auditable CASH_OUT drawer movement.
-        |
-        | Receipts are stored privately and downloaded only through an
-        | authenticated endpoint.
-        |
         */
 
         Route::get(
@@ -2474,12 +2376,6 @@ Route::middleware(
                 'v1.expense-categories.index'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Expense Payment Methods
-        |--------------------------------------------------------------------------
-        */
-
         Route::get(
             '/expenses/payment-methods',
             [
@@ -2493,12 +2389,6 @@ Route::middleware(
             ->name(
                 'v1.expenses.payment-methods'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Expense History
-        |--------------------------------------------------------------------------
-        */
 
         Route::get(
             '/expenses',
@@ -2514,12 +2404,6 @@ Route::middleware(
                 'v1.expenses.index'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Add Expense
-        |--------------------------------------------------------------------------
-        */
-
         Route::post(
             '/expenses',
             [
@@ -2533,12 +2417,6 @@ Route::middleware(
             ->name(
                 'v1.expenses.store'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Expense Reports
-        |--------------------------------------------------------------------------
-        */
 
         Route::get(
             '/expense-reports/summary',
@@ -2554,12 +2432,6 @@ Route::middleware(
             ->name(
                 'v1.expense-reports.summary'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Expense Details
-        |--------------------------------------------------------------------------
-        */
 
         Route::get(
             '/expenses/{expense}',
@@ -2578,12 +2450,6 @@ Route::middleware(
                 'v1.expenses.show'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Edit Expense
-        |--------------------------------------------------------------------------
-        */
-
         Route::put(
             '/expenses/{expense}',
             [
@@ -2600,12 +2466,6 @@ Route::middleware(
             ->name(
                 'v1.expenses.update'
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Expense Receipt
-        |--------------------------------------------------------------------------
-        */
 
         Route::post(
             '/expenses/{expense}/receipt',
