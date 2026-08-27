@@ -8,15 +8,15 @@ import {
     getKitchenPrintJobs,
     reprintKitchenPrintJob,
     retryKitchenPrintJob,
-} from "./kitchenPrintClient";
+} from "../../kitchenPrintClient";
 
 import type {
     KitchenPrintJobRecord,
-} from "./kitchenPrintClient";
+} from "../../kitchenPrintClient";
 
 import type {
     KitchenPrinterSettings,
-} from "./kitchenPrinterTypes";
+} from "../../kitchenPrinterTypes";
 
 const DEFAULT_SETTINGS:
     KitchenPrinterSettings = {

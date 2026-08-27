@@ -1,0 +1,882 @@
+.cashier-pos-feature,
+.cashier-pos-feature *,
+.cashier-pos-feature *::before,
+.cashier-pos-feature *::after {
+  box-sizing: border-box;
+}
+
+.cashier-pos-feature {
+  width: 100%;
+  min-width: 0;
+  color: #0f172a;
+}
+
+.cashier-pos-feature .pos-feature-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 18px;
+  align-items: start;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Menu
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-menu {
+  min-width: 0;
+}
+
+.cashier-pos-feature .pos-feature-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.cashier-pos-feature .pos-feature-kicker {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.cashier-pos-feature .pos-feature-header h1 {
+  margin: 4px 0 5px;
+  font-size: 31px;
+  line-height: 1.1;
+}
+
+.cashier-pos-feature .pos-feature-header p {
+  max-width: 600px;
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cashier-pos-feature .pos-feature-menu-total {
+  min-width: 104px;
+  padding: 11px 14px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 13px;
+}
+
+.cashier-pos-feature .pos-feature-menu-total strong,
+.cashier-pos-feature .pos-feature-menu-total span {
+  display: block;
+}
+
+.cashier-pos-feature .pos-feature-menu-total strong {
+  color: #166534;
+  font-size: 21px;
+}
+
+.cashier-pos-feature .pos-feature-menu-total span {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Toolbar
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-toolbar {
+  padding: 14px;
+  margin-bottom: 15px;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 16px;
+}
+
+.cashier-pos-feature .pos-feature-search {
+  position: relative;
+}
+
+.cashier-pos-feature .pos-feature-search input {
+  width: 100%;
+  height: 50px;
+  padding: 0 46px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.cashier-pos-feature .pos-feature-search input:focus {
+  background: #ffffff;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.08);
+}
+
+.cashier-pos-feature .pos-feature-search > span {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 20px;
+}
+
+.cashier-pos-feature .pos-feature-search > button {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 31px;
+  height: 31px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-categories {
+  margin-top: 11px;
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.cashier-pos-feature .pos-feature-categories button {
+  min-height: 42px;
+  padding: 0 11px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-categories button span {
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.cashier-pos-feature .pos-feature-categories button.active {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.cashier-pos-feature .pos-feature-categories button.active span {
+  color: #ffffff;
+  background: #16a34a;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Products
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 12px;
+}
+
+.cashier-pos-feature .pos-feature-product-card {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid #dbe3ec;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cashier-pos-feature .pos-feature-product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.cashier-pos-feature .pos-feature-product-card:disabled {
+  opacity: 0.65;
+}
+
+.cashier-pos-feature .pos-feature-product-image {
+  height: 115px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.cashier-pos-feature .pos-feature-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cashier-pos-feature .pos-feature-product-image > span {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.cashier-pos-feature .pos-feature-product-info {
+  padding: 12px;
+}
+
+.cashier-pos-feature .pos-feature-product-info > strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashier-pos-feature .pos-feature-product-info > small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashier-pos-feature .pos-feature-product-info > div {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.cashier-pos-feature .pos-feature-product-info b {
+  color: #166534;
+  font-size: 15px;
+}
+
+.cashier-pos-feature .pos-feature-product-info div span {
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Cart
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-cart {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 570px;
+  max-height: calc(100vh - 170px);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 18px;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.05);
+}
+
+.cashier-pos-feature .pos-feature-cart-header {
+  padding: 17px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.cashier-pos-feature .pos-feature-cart-header h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+
+.cashier-pos-feature .pos-feature-cart-count {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #166534;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cashier-pos-feature .pos-feature-cart-lines {
+  flex: 1;
+  min-height: 0;
+  padding: 0 17px;
+  overflow-y: auto;
+}
+
+.cashier-pos-feature .pos-feature-cart-line {
+  padding: 14px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.cashier-pos-feature .pos-feature-cart-line-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cashier-pos-feature .pos-feature-cart-item-info {
+  min-width: 0;
+}
+
+.cashier-pos-feature .pos-feature-cart-item-info > strong {
+  display: block;
+  font-size: 13px;
+}
+
+.cashier-pos-feature .pos-feature-cart-item-info > span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.cashier-pos-feature .pos-feature-cart-price {
+  color: #166534;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.cashier-pos-feature .pos-feature-cart-addons {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cashier-pos-feature .pos-feature-cart-addons span {
+  padding: 3px 5px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.cashier-pos-feature .pos-feature-cart-note {
+  display: block;
+  margin-top: 5px;
+  color: #92400e;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.cashier-pos-feature .pos-feature-cart-line-bottom {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cashier-pos-feature .pos-feature-quantity,
+.cashier-pos-feature .pos-feature-dialog-quantity {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+}
+
+.cashier-pos-feature .pos-feature-quantity button,
+.cashier-pos-feature .pos-feature-dialog-quantity button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-quantity strong,
+.cashier-pos-feature .pos-feature-dialog-quantity strong {
+  min-width: 36px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.cashier-pos-feature .pos-feature-cart-each {
+  color: #64748b;
+  font-size: 9px;
+}
+
+.cashier-pos-feature .pos-feature-remove {
+  min-height: 34px;
+  margin-left: auto;
+  padding: 0 9px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-empty-cart {
+  flex: 1;
+  min-height: 280px;
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  text-align: center;
+}
+
+.cashier-pos-feature .pos-feature-empty-cart-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 23px;
+  font-weight: 900;
+}
+
+.cashier-pos-feature .pos-feature-empty-cart strong {
+  margin-top: 11px;
+  color: #0f172a;
+}
+
+.cashier-pos-feature .pos-feature-empty-cart span {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.cashier-pos-feature .pos-feature-cart-footer {
+  padding: 15px 17px 17px;
+  border-top: 1px solid #eef2f7;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary > div:last-child {
+  text-align: right;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary span,
+.cashier-pos-feature .pos-feature-cart-summary strong {
+  display: block;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.cashier-pos-feature .pos-feature-cart-summary > div:last-child strong {
+  color: #166534;
+  font-size: 22px;
+}
+
+.cashier-pos-feature .pos-feature-order-type-note {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.cashier-pos-feature .pos-feature-order-type-note strong,
+.cashier-pos-feature .pos-feature-order-type-note span {
+  display: block;
+}
+
+.cashier-pos-feature .pos-feature-order-type-note strong {
+  color: #92400e;
+  font-size: 10px;
+}
+
+.cashier-pos-feature .pos-feature-order-type-note span {
+  margin-top: 3px;
+  color: #a16207;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.cashier-pos-feature .pos-feature-takeaway-button {
+  width: 100%;
+  min-height: 53px;
+  margin-top: 11px;
+  border: 0;
+  border-radius: 11px;
+  background: #166534;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-takeaway-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Product Dialog
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.cashier-pos-feature .pos-feature-dialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 25px 65px rgba(15, 23, 42, 0.28);
+}
+
+.cashier-pos-feature .pos-feature-dialog-header {
+  padding: 19px 21px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cashier-pos-feature .pos-feature-dialog-header h2 {
+  margin: 4px 0 3px;
+  font-size: 23px;
+}
+
+.cashier-pos-feature .pos-feature-dialog-price {
+  color: #166534;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cashier-pos-feature .pos-feature-dialog-close {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 11px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-dialog-content {
+  min-height: 0;
+  padding: 19px 21px;
+  overflow-y: auto;
+}
+
+.cashier-pos-feature .pos-feature-option-section + .pos-feature-option-section {
+  margin-top: 22px;
+}
+
+.cashier-pos-feature .pos-feature-option-heading {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cashier-pos-feature .pos-feature-option-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.cashier-pos-feature .pos-feature-option-heading span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cashier-pos-feature .pos-feature-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.cashier-pos-feature .pos-feature-variant {
+  min-height: 61px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-variant.active {
+  border-color: #4ade80;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.cashier-pos-feature .pos-feature-addon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cashier-pos-feature .pos-feature-addon-row {
+  min-height: 63px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.cashier-pos-feature .pos-feature-addon-row div:first-child strong,
+.cashier-pos-feature .pos-feature-addon-row div:first-child span {
+  display: block;
+}
+
+.cashier-pos-feature .pos-feature-addon-row div:first-child strong {
+  font-size: 13px;
+}
+
+.cashier-pos-feature .pos-feature-addon-row div:first-child span {
+  margin-top: 2px;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cashier-pos-feature .pos-feature-notes {
+  width: 100%;
+  min-height: 100px;
+  padding: 11px 12px;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.cashier-pos-feature .pos-feature-notes:focus {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.08);
+}
+
+.cashier-pos-feature .pos-feature-dialog-footer {
+  padding: 15px 21px;
+  display: grid;
+  grid-template-columns: auto minmax(200px, 1fr);
+  gap: 13px;
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.cashier-pos-feature .pos-feature-dialog-quantity button:disabled {
+  opacity: 0.4;
+}
+
+.cashier-pos-feature .pos-feature-add-button {
+  min-height: 49px;
+  border: 0;
+  border-radius: 10px;
+  background: #166534;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+/*
+|--------------------------------------------------------------------------
+| States
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-empty-menu {
+  min-height: 300px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #64748b;
+  text-align: center;
+}
+
+.cashier-pos-feature .pos-feature-empty-menu div {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cashier-pos-feature .pos-feature-empty-menu strong {
+  margin-top: 10px;
+  color: #0f172a;
+}
+
+.cashier-pos-feature .pos-feature-empty-menu span {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.cashier-pos-feature .pos-feature-loading-product,
+.cashier-pos-feature .pos-feature-product-warning {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cashier-pos-feature .pos-feature-loading-product {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.cashier-pos-feature .pos-feature-product-warning {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Responsive
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 1180px) {
+  .cashier-pos-feature .pos-feature-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+
+@media (max-width: 960px) {
+  .cashier-pos-feature .pos-feature-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cashier-pos-feature .pos-feature-cart {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 650px) {
+  .cashier-pos-feature .pos-feature-header {
+    flex-direction: column;
+  }
+
+  .cashier-pos-feature .pos-feature-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cashier-pos-feature .pos-feature-dialog-backdrop {
+    padding: 10px;
+  }
+
+  .cashier-pos-feature .pos-feature-variant-grid,
+  .cashier-pos-feature .pos-feature-dialog-footer {
+    grid-template-columns: 1fr;
+  }
+}
