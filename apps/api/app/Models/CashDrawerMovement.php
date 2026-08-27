@@ -26,12 +26,19 @@ class CashDrawerMovement extends Model
     'MANUAL_OPEN';
 
     protected $fillable = [
+        'client_request_id',
+
         'cashier_shift_id',
+
         'movement_type',
+
         'amount',
+
         'reference_type',
         'reference_id',
+
         'reason',
+
         'created_by',
         'occurred_at',
     ];

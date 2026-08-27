@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\ExpenseCategoryController;
@@ -1276,6 +1277,135 @@ Route::middleware(
             )
             ->name(
                 'v1.invoices.payments.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 29 - Cashier Shift Management
+        |--------------------------------------------------------------------------
+        |
+        | Shift cash formula:
+        |
+        | Opening Cash
+        | + Cash Sales
+        | - Cash Refunds
+        | + Cash In
+        | - Cash Out
+        | = Expected Drawer Balance
+        |
+        */
+
+        Route::get(
+            '/cashier-shifts/current',
+            [
+                CashierShiftController::class,
+                'current',
+            ]
+        )
+            ->middleware(
+                'permission:cash_shift.view'
+            )
+            ->name(
+                'v1.cashier-shifts.current'
+            );
+
+        Route::post(
+            '/cashier-shifts/open',
+            [
+                CashierShiftController::class,
+                'open',
+            ]
+        )
+            ->middleware(
+                'permission:cash_shift.open'
+            )
+            ->name(
+                'v1.cashier-shifts.open'
+            );
+
+        Route::get(
+            '/cashier-shifts/{cashierShift}',
+            [
+                CashierShiftController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_shift.view'
+            )
+            ->name(
+                'v1.cashier-shifts.show'
+            );
+
+        Route::get(
+            '/cashier-shifts/{cashierShift}/movements',
+            [
+                CashierShiftController::class,
+                'movements',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_shift.view'
+            )
+            ->name(
+                'v1.cashier-shifts.movements'
+            );
+
+        Route::post(
+            '/cashier-shifts/{cashierShift}/cash-in',
+            [
+                CashierShiftController::class,
+                'cashIn',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_drawer.movement'
+            )
+            ->name(
+                'v1.cashier-shifts.cash-in'
+            );
+
+        Route::post(
+            '/cashier-shifts/{cashierShift}/cash-out',
+            [
+                CashierShiftController::class,
+                'cashOut',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_drawer.movement'
+            )
+            ->name(
+                'v1.cashier-shifts.cash-out'
+            );
+
+        Route::post(
+            '/cashier-shifts/{cashierShift}/close',
+            [
+                CashierShiftController::class,
+                'close',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_shift.close'
+            )
+            ->name(
+                'v1.cashier-shifts.close'
             );
 
         /*

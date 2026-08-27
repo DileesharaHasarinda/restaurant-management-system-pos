@@ -15,19 +15,39 @@ class CashierShift extends Model
     'CLOSED';
 
     protected $fillable = [
+        'open_request_id',
+        'open_request_hash',
+
+        'close_request_id',
+        'close_request_hash',
+
         'shift_number',
+
         'business_day_id',
         'cashier_id',
+
+        'open_shift_key',
+
         'opening_float',
         'expected_cash',
+
         'actual_cash',
         'cash_difference',
+
         'status',
+
         'opened_at',
         'closed_at',
         'closed_by',
+
         'opening_notes',
         'closing_notes',
+    ];
+
+    protected $hidden = [
+        'open_request_hash',
+        'close_request_hash',
+        'open_shift_key',
     ];
 
     protected function casts(): array
