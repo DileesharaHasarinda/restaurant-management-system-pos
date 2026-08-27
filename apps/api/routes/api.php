@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CashDrawerController;
 use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FoundationController;
 use App\Http\Controllers\Api\V1\ExpenseCategoryController;
 use App\Http\Controllers\Api\V1\ExpenseController;
@@ -366,6 +367,26 @@ Route::middleware(
         'auth:sanctum',
         'active',
     ])->group(function (): void {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Operations Dashboard
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get(
+            '/dashboard',
+            [
+                DashboardController::class,
+                'show',
+            ]
+        )
+            ->middleware(
+                'permission:dashboard.view'
+            )
+            ->name(
+                'v1.dashboard.show'
+            );
 
         /*
         |--------------------------------------------------------------------------

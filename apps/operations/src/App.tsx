@@ -13,6 +13,9 @@ import {
   useAuth,
 } from './auth/useAuth';
 
+import DashboardPage
+  from './dashboard/DashboardPage';
+
 import ProtectedRoute
   from './auth/ProtectedRoute';
 
@@ -132,11 +135,7 @@ export default function App() {
               <Route
                 path="/dashboard"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="OVERVIEW"
-                    title="Dashboard"
-                    description="Restaurant operational overview and management indicators."
-                  />
+                  <DashboardPage />
                 }
               />
 
