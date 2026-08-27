@@ -28,7 +28,19 @@ class Purchase extends Model
 
     protected $fillable = [
         'purchase_number',
+
         'supplier_id',
+
+        /*
+         * Drafts are associated with the current
+         * open business day.
+         *
+         * Completion re-resolves the currently open
+         * day because that is when inventory and
+         * supplier liability are actually posted.
+         */
+        'business_day_id',
+
         'supplier_invoice_number',
         'purchase_date',
 
@@ -83,6 +95,14 @@ class Purchase extends Model
         return $this->belongsTo(
             Supplier::class,
             'supplier_id'
+        );
+    }
+
+    public function businessDay(): BelongsTo
+    {
+        return $this->belongsTo(
+            BusinessDay::class,
+            'business_day_id'
         );
     }
 

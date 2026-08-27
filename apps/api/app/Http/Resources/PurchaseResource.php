@@ -30,10 +30,23 @@ class PurchaseResource extends JsonResource
 
             'purchase_date' =>
             $this->purchase_date
-                ?->format('Y-m-d'),
+                ?->format(
+                    'Y-m-d'
+                ),
 
             'supplier_invoice_number' =>
             $this->supplier_invoice_number,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Financial Totals
+            |--------------------------------------------------------------------------
+            |
+            | These are authoritative backend values.
+            | The frontend must never recalculate them
+            | as persisted financial state.
+            |
+            */
 
             'subtotal' =>
             (float)
@@ -52,8 +65,11 @@ class PurchaseResource extends JsonResource
             $this->grand_total,
 
             /*
-             * Supplier-payment position.
-             */
+            |--------------------------------------------------------------------------
+            | Supplier Payment Position
+            |--------------------------------------------------------------------------
+            */
+
             'paid_amount' =>
             (float)
             $this->paid_amount,
@@ -65,29 +81,69 @@ class PurchaseResource extends JsonResource
             'payment_status' =>
             $this->payment_status,
 
+            /*
+            |--------------------------------------------------------------------------
+            | Purchase Lifecycle
+            |--------------------------------------------------------------------------
+            */
+
             'status' =>
             $this->status,
 
             'notes' =>
             $this->notes,
 
+            /*
+            |--------------------------------------------------------------------------
+            | Purchase Items
+            |--------------------------------------------------------------------------
+            |
+            | Items are normally eager loaded by
+            | PurchaseController / PurchaseManagementService.
+            |
+            | Guard with relationLoaded() so this resource
+            | remains safe even if another caller does not
+            | load the relationship.
+            |
+            */
+
             'items' =>
-            PurchaseItemResource::collection(
-                $this->whenLoaded(
-                    'items'
+            $this->relationLoaded(
+                'items'
+            )
+                ? PurchaseItemResource::collection(
+                    $this->items
+                )->resolve(
+                    $request
                 )
-            )->resolve(
-                $request
-            ),
+                : [],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Supplier Payment History
+            |--------------------------------------------------------------------------
+            |
+            | A normal purchase list/create/show response
+            | does not necessarily eager-load paymentBatches.
+            |
+            | Never call resolve() on a conditional
+            | MissingValue collection.
+            |
+            | Module 9 can explicitly load paymentBatches
+            | when payment history is required.
+            |
+            */
 
             'payment_history' =>
-            SupplierPaymentBatchResource::collection(
-                $this->whenLoaded(
-                    'paymentBatches'
+            $this->relationLoaded(
+                'paymentBatches'
+            )
+                ? SupplierPaymentBatchResource::collection(
+                    $this->paymentBatches
+                )->resolve(
+                    $request
                 )
-            )->resolve(
-                $request
-            ),
+                : [],
 
             'completed_at' =>
             $this->completed_at

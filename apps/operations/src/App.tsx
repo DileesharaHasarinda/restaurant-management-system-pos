@@ -35,6 +35,8 @@ import RecipesPage from "./recipes/RecipesPage";
 
 import SuppliersPage from "./suppliers/SuppliersPage";
 
+import PurchasesPage from "./purchases/PurchasesPage";
+
 import IngredientsPage
   from './ingredients/IngredientsPage';
 
@@ -234,11 +236,7 @@ export default function App() {
               <Route
                 path="/purchases"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="PURCHASING"
-                    title="Purchases"
-                    description="Receive ingredient purchases and update inventory."
-                  />
+                  <PurchasesPage />
                 }
               />
 

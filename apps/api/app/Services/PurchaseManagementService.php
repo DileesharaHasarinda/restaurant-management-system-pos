@@ -37,6 +37,29 @@ final class PurchaseManagementService
                 $actor,
                 $data
             ): Purchase {
+                /*
+                 * A purchase draft must belong to an
+                 * currently open restaurant business day.
+                 */
+                $businessDay =
+                    BusinessDay::query()
+                    ->where(
+                        'status',
+                        BusinessDay::STATUS_OPEN
+                    )
+                    ->latest('opened_at')
+                    ->first();
+
+                if (! $businessDay) {
+                    throw new RuntimeException(
+                        'An open business day is required to create a purchase.'
+                    );
+                }
+
+                /*
+                 * Purchases may only be created for
+                 * active suppliers.
+                 */
                 $supplier =
                     Supplier::query()
                     ->where(
@@ -51,17 +74,26 @@ final class PurchaseManagementService
                     Purchase::query()
                     ->create([
                         /*
-                             * Temporary unique number.
-                             * Replaced after ID exists.
-                             */
+                         * The database requires a unique
+                         * purchase number before the ID
+                         * exists.
+                         *
+                         * Create a temporary unique number
+                         * first and replace it immediately
+                         * after obtaining the primary key.
+                         */
                         'purchase_number' =>
                         'TMP-' .
                             Str::upper(
-                                (string) Str::ulid()
+                                (string)
+                                Str::ulid()
                             ),
 
                         'supplier_id' =>
                         $supplier->id,
+
+                        'business_day_id' =>
+                        $businessDay->id,
 
                         'supplier_invoice_number' =>
                         $data['supplier_invoice_number']
@@ -70,6 +102,10 @@ final class PurchaseManagementService
                         'purchase_date' =>
                         $data['purchase_date'],
 
+                        /*
+                         * Financial totals are always
+                         * calculated by Laravel.
+                         */
                         'subtotal' =>
                         0,
 
@@ -82,6 +118,10 @@ final class PurchaseManagementService
                         'grand_total' =>
                         0,
 
+                        /*
+                         * Supplier payments cannot happen
+                         * while this is only a draft.
+                         */
                         'paid_amount' =>
                         0,
 
@@ -89,7 +129,7 @@ final class PurchaseManagementService
                         0,
 
                         'payment_status' =>
-                        'UNPAID',
+                        Purchase::PAYMENT_STATUS_UNPAID,
 
                         'status' =>
                         Purchase::STATUS_DRAFT,
@@ -103,7 +143,11 @@ final class PurchaseManagementService
                     ]);
 
                 /*
-                 * Stable purchase number.
+                 * Stable human-readable purchase number.
+                 *
+                 * PUR-000001
+                 * PUR-000002
+                 * ...
                  */
                 $purchase->purchase_number =
                     sprintf(
@@ -113,6 +157,11 @@ final class PurchaseManagementService
 
                 $purchase->save();
 
+                /*
+                 * Replace/create draft line items.
+                 *
+                 * Inventory is NOT changed here.
+                 */
                 $total =
                     $this->replaceItems(
                         $purchase,
@@ -145,6 +194,10 @@ final class PurchaseManagementService
                         'supplier_id' =>
                         $purchase
                             ->supplier_id,
+
+                        'business_day_id' =>
+                        $purchase
+                            ->business_day_id,
 
                         'grand_total' =>
                         $purchase
@@ -190,12 +243,20 @@ final class PurchaseManagementService
                         $purchase->id
                     );
 
+                /*
+                 * Posted inventory must never be edited
+                 * through the purchase master record.
+                 */
                 if (! $locked->isDraft()) {
                     throw new RuntimeException(
                         'Only draft purchases can be edited.'
                     );
                 }
 
+                /*
+                 * The selected supplier must still be
+                 * active at the time of editing.
+                 */
                 $supplier =
                     Supplier::query()
                     ->where(
@@ -206,14 +267,27 @@ final class PurchaseManagementService
                         $data['supplier_id']
                     );
 
-                $oldValues =
-                    $locked->only([
-                        'supplier_id',
-                        'purchase_date',
-                        'supplier_invoice_number',
-                        'grand_total',
-                        'notes',
-                    ]);
+                $oldValues = [
+                    'supplier_id' =>
+                    $locked->supplier_id,
+
+                    'purchase_date' =>
+                    $locked
+                        ->purchase_date
+                        ?->format('Y-m-d'),
+
+                    'supplier_invoice_number' =>
+                    $locked
+                        ->supplier_invoice_number,
+
+                    'grand_total' =>
+                    (float)
+                    $locked
+                        ->grand_total,
+
+                    'notes' =>
+                    $locked->notes,
+                ];
 
                 $locked->supplier_id =
                     $supplier->id;
@@ -229,6 +303,10 @@ final class PurchaseManagementService
                     $data['notes']
                     ?? null;
 
+                /*
+                 * Replace the draft lines and allow
+                 * Laravel to recalculate all totals.
+                 */
                 $total =
                     $this->replaceItems(
                         $locked,
@@ -241,11 +319,21 @@ final class PurchaseManagementService
                 $locked->grand_total =
                     $total;
 
+                /*
+                 * Draft purchases should normally have
+                 * no payments. Keeping this calculation
+                 * defensive protects existing data.
+                 */
                 $locked->balance_due =
-                    max(
-                        0,
-                        $total -
-                            (float) $locked->paid_amount
+                    round(
+                        max(
+                            0,
+                            $total
+                                -
+                                (float)
+                                $locked->paid_amount
+                        ),
+                        2
                     );
 
                 $locked->save();
@@ -259,13 +347,28 @@ final class PurchaseManagementService
 
                     oldValues: $oldValues,
 
-                    newValues: $locked->only([
-                        'supplier_id',
-                        'purchase_date',
-                        'supplier_invoice_number',
-                        'grand_total',
-                        'notes',
-                    ]),
+                    newValues: [
+                        'supplier_id' =>
+                        $locked
+                            ->supplier_id,
+
+                        'purchase_date' =>
+                        $locked
+                            ->purchase_date
+                            ?->format('Y-m-d'),
+
+                        'supplier_invoice_number' =>
+                        $locked
+                            ->supplier_invoice_number,
+
+                        'grand_total' =>
+                        (float)
+                        $locked
+                            ->grand_total,
+
+                        'notes' =>
+                        $locked->notes,
+                    ],
 
                     userId: $actor->id
                 );
@@ -282,7 +385,18 @@ final class PurchaseManagementService
     | Complete Purchase
     |--------------------------------------------------------------------------
     |
-    | This is the ONLY point in Phase 10 where inventory changes.
+    | This is the ONLY point where a purchase changes inventory.
+    |
+    | Draft:
+    |   no inventory
+    |   no supplier liability
+    |
+    | Completion:
+    |   convert quantities
+    |   increase inventory
+    |   calculate weighted average cost
+    |   create immutable stock ledger movements
+    |   increase supplier outstanding balance
     |
     */
 
@@ -307,22 +421,25 @@ final class PurchaseManagementService
                         $purchase->id
                     );
 
+                /*
+                 * Completion is idempotent.
+                 *
+                 * Calling this endpoint more than once
+                 * must NEVER duplicate stock.
+                 */
                 if (
                     $lockedPurchase
                     ->isCompleted()
                 ) {
-                    /*
-                     * Idempotency.
-                     *
-                     * Calling complete twice must never
-                     * add inventory twice.
-                     */
                     return $this->loadPurchase(
                         $lockedPurchase
                     );
                 }
 
-                if (! $lockedPurchase->isDraft()) {
+                if (
+                    ! $lockedPurchase
+                        ->isDraft()
+                ) {
                     throw new RuntimeException(
                         'Only draft purchases can be completed.'
                     );
@@ -338,6 +455,13 @@ final class PurchaseManagementService
                     );
                 }
 
+                /*
+                 * Inventory becomes real only when the
+                 * purchase is completed.
+                 *
+                 * Therefore completion requires a
+                 * currently open business day.
+                 */
                 $businessDay =
                     BusinessDay::query()
                     ->where(
@@ -347,6 +471,29 @@ final class PurchaseManagementService
                     ->latest('opened_at')
                     ->first();
 
+                if (! $businessDay) {
+                    throw new RuntimeException(
+                        'An open business day is required to complete a purchase.'
+                    );
+                }
+
+                /*
+                 * A draft can potentially remain open
+                 * overnight.
+                 *
+                 * The purchase is therefore reassigned
+                 * to the business day on which inventory
+                 * was actually posted.
+                 */
+                $lockedPurchase->business_day_id =
+                    $businessDay->id;
+
+                /*
+                 * Receive every item exactly once.
+                 *
+                 * Any failure rolls back the complete
+                 * purchase transaction.
+                 */
                 foreach (
                     $lockedPurchase->items
                     as $purchaseItem
@@ -358,7 +505,7 @@ final class PurchaseManagementService
 
                         actor: $actor,
 
-                        businessDayId: $businessDay?->id
+                        businessDayId: $businessDay->id
                     );
                 }
 
@@ -374,10 +521,13 @@ final class PurchaseManagementService
                 $lockedPurchase->save();
 
                 /*
-                 * Supplier balance increases because
-                 * Phase 10 completion does not imply
-                 * the supplier has been paid.
+                 * Supplier liability becomes real only
+                 * when the purchase has been completed.
+                 *
+                 * Completion itself does NOT mean that
+                 * the supplier was paid.
                  */
+                /** @var Supplier $supplier */
                 $supplier =
                     Supplier::query()
                     ->lockForUpdate()
@@ -389,10 +539,12 @@ final class PurchaseManagementService
                 $supplier->current_balance =
                     round(
                         (float)
-                        $supplier->current_balance
+                        $supplier
+                            ->current_balance
                             +
                             (float)
-                            $lockedPurchase->balance_due,
+                            $lockedPurchase
+                                ->balance_due,
                         2
                     );
 
@@ -409,14 +561,28 @@ final class PurchaseManagementService
                         'status' =>
                         Purchase::STATUS_COMPLETED,
 
+                        'business_day_id' =>
+                        $lockedPurchase
+                            ->business_day_id,
+
+                        'completed_by' =>
+                        $lockedPurchase
+                            ->completed_by,
+
                         'completed_at' =>
                         $lockedPurchase
                             ->completed_at
                             ?->toISOString(),
 
                         'grand_total' =>
+                        (float)
                         $lockedPurchase
                             ->grand_total,
+
+                        'balance_due' =>
+                        (float)
+                        $lockedPurchase
+                            ->balance_due,
                     ],
 
                     userId: $actor->id
@@ -452,6 +618,14 @@ final class PurchaseManagementService
                         $purchase->id
                     );
 
+                /*
+                 * Once inventory has been received,
+                 * cancellation must not be used to
+                 * reverse it.
+                 *
+                 * Completed purchases require a
+                 * dedicated corrective workflow.
+                 */
                 if (! $locked->isDraft()) {
                     throw new RuntimeException(
                         'Only draft purchases can be cancelled.'
@@ -495,7 +669,7 @@ final class PurchaseManagementService
         Purchase $purchase,
         PurchaseItem $purchaseItem,
         User $actor,
-        ?int $businessDayId
+        int $businessDayId
     ): void {
         /** @var Ingredient $ingredient */
         $ingredient =
@@ -531,9 +705,12 @@ final class PurchaseManagementService
         }
 
         /*
+         * Convert purchased quantity to the
+         * ingredient stock/base unit.
+         *
          * Example:
          *
-         * 5 KG Rice
+         * 5 KG
          * ↓
          * 5000 G
          */
@@ -550,7 +727,10 @@ final class PurchaseManagementService
                 toUnit: $baseUnit
             );
 
-        if ($baseQuantity <= 0) {
+        if (
+            $baseQuantity
+            <= 0
+        ) {
             throw new RuntimeException(
                 'Converted purchase quantity must be greater than zero.'
             );
@@ -562,12 +742,19 @@ final class PurchaseManagementService
                 ->line_total;
 
         /*
-         * Cost per ONE ingredient base unit.
+         * Cost of one ingredient BASE unit.
+         *
+         * Example:
+         *
+         * Rs. 1,000 / KG
+         * becomes
+         * Rs. 1 / G
          */
         $baseUnitCost =
             round(
                 $lineTotal
-                    / $baseQuantity,
+                    /
+                    $baseQuantity,
                 4
             );
 
@@ -584,45 +771,53 @@ final class PurchaseManagementService
         $newStock =
             round(
                 $oldStock
-                    + $baseQuantity,
+                    +
+                    $baseQuantity,
                 4
             );
 
         /*
-         * Weighted Average Cost:
+         * Weighted Average Cost
          *
          * existing stock value
          * +
          * received stock value
          * ---------------------
-         * new quantity
+         * resulting stock
          */
         $existingValue =
             $oldStock
-            * $oldAverageCost;
+            *
+            $oldAverageCost;
 
         $receivedValue =
             $baseQuantity
-            * $baseUnitCost;
+            *
+            $baseUnitCost;
 
         $newAverageCost =
             $newStock > 0
             ? round(
                 (
                     $existingValue
-                    + $receivedValue
+                    +
+                    $receivedValue
                 )
-                    / $newStock,
+                    /
+                    $newStock,
                 4
             )
             : 0;
 
         /*
-         * Store conversion snapshot on
-         * purchase item.
+         * Store immutable conversion/cost snapshot
+         * on the purchase item at completion.
          */
         $purchaseItem->base_quantity =
-            $baseQuantity;
+            round(
+                $baseQuantity,
+                4
+            );
 
         $purchaseItem->base_unit_cost =
             $baseUnitCost;
@@ -630,7 +825,7 @@ final class PurchaseManagementService
         $purchaseItem->save();
 
         /*
-         * Update cached current inventory.
+         * Update cached ingredient stock state.
          */
         $ingredient->current_stock =
             $newStock;
@@ -641,7 +836,7 @@ final class PurchaseManagementService
         $ingredient->save();
 
         /*
-         * Immutable stock ledger.
+         * Create immutable stock movement.
          */
         StockMovement::query()
             ->create([
@@ -655,7 +850,10 @@ final class PurchaseManagementService
                 'PURCHASE',
 
                 'quantity_delta' =>
-                $baseQuantity,
+                round(
+                    $baseQuantity,
+                    4
+                ),
 
                 'balance_after' =>
                 $newStock,
@@ -704,6 +902,10 @@ final class PurchaseManagementService
         Purchase $purchase,
         array $items
     ): float {
+        /*
+         * Safe because this method is used only while
+         * purchases are still drafts.
+         */
         $purchase
             ->items()
             ->delete();
@@ -711,7 +913,15 @@ final class PurchaseManagementService
         $total =
             0.0;
 
-        foreach ($items as $item) {
+        foreach (
+            $items
+            as $item
+        ) {
+            /*
+             * Inactive ingredients must not be used
+             * for new purchase lines.
+             */
+            /** @var Ingredient $ingredient */
             $ingredient =
                 Ingredient::query()
                 ->where(
@@ -722,6 +932,10 @@ final class PurchaseManagementService
                     $item['ingredient_id']
                 );
 
+            /*
+             * Purchase unit must also be active.
+             */
+            /** @var Unit $unit */
             $unit =
                 Unit::query()
                 ->where(
@@ -733,15 +947,24 @@ final class PurchaseManagementService
                 );
 
             /*
-             * Validate that this purchase
-             * unit can eventually convert to
-             * the ingredient's base unit.
+             * Validate that the selected purchase unit
+             * belongs to the same physical measurement
+             * family as the ingredient base unit.
+             *
+             * Example:
+             *
+             * KG → G   valid
+             * L  → ML  valid
+             * KG → ML  invalid
              */
             $ingredient->loadMissing(
                 'baseUnit'
             );
 
-            if (! $ingredient->baseUnit) {
+            if (
+                ! $ingredient
+                    ->baseUnit
+            ) {
                 throw new RuntimeException(
                     "Ingredient {$ingredient->name} has no base unit."
                 );
@@ -775,11 +998,18 @@ final class PurchaseManagementService
             $lineTotal =
                 round(
                     $quantity
-                        * $unitCost,
+                        *
+                        $unitCost,
                     2
                 );
 
-            $purchase->items()
+            /*
+             * No base conversion snapshot exists until
+             * the draft is completed and received into
+             * inventory.
+             */
+            $purchase
+                ->items()
                 ->create([
                     'ingredient_id' =>
                     $ingredient->id,
@@ -796,10 +1026,6 @@ final class PurchaseManagementService
                     'line_total' =>
                     $lineTotal,
 
-                    /*
-                     * Filled only when the
-                     * purchase is completed.
-                     */
                     'base_quantity' =>
                     null,
 
@@ -816,6 +1042,12 @@ final class PurchaseManagementService
             2
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Purchase
+    |--------------------------------------------------------------------------
+    */
 
     private function loadPurchase(
         Purchase $purchase
