@@ -11,10 +11,21 @@ import App
 
 import './index.css';
 
-createRoot(
+const rootElement =
   document.getElementById(
     'root',
-  )!,
+  );
+
+if (
+  !rootElement
+) {
+  throw new Error(
+    'React root element was not found.',
+  );
+}
+
+createRoot(
+  rootElement,
 ).render(
   <StrictMode>
     <App />
