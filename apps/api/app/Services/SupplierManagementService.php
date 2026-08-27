@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\DatabaseTransaction;
+use Illuminate\Support\Str;
 
 final class SupplierManagementService
 {
@@ -21,35 +22,73 @@ final class SupplierManagementService
                 $actor,
                 $data
             ): Supplier {
+                /*
+                 * supplier_code is NOT NULL and UNIQUE
+                 * at database level.
+                 *
+                 * We therefore create the supplier using
+                 * a temporary unique value, allow the
+                 * database to generate the primary key,
+                 * and then replace the temporary value
+                 * with the permanent human-readable code.
+                 *
+                 * Example:
+                 *
+                 * SUP-000001
+                 * SUP-000002
+                 */
                 $supplier =
-                    Supplier::query()
-                    ->create([
-                        'name' =>
-                        $data['name'],
+                    new Supplier();
 
-                        'phone' =>
-                        $data['phone']
-                            ?? null,
+                $supplier->supplier_code =
+                    'SUP-TMP-' .
+                    Str::upper(
+                        (string)
+                        Str::ulid()
+                    );
 
-                        'email' =>
-                        $data['email']
-                            ?? null,
+                $supplier->name =
+                    $data['name'];
 
-                        'address' =>
-                        $data['address']
-                            ?? null,
+                $supplier->phone =
+                    $data['phone']
+                    ?? null;
 
-                        'notes' =>
-                        $data['notes']
-                            ?? null,
+                $supplier->email =
+                    $data['email']
+                    ?? null;
 
-                        'current_balance' =>
-                        0,
+                $supplier->address =
+                    $data['address']
+                    ?? null;
 
-                        'is_active' =>
-                        $data['is_active']
-                            ?? true,
-                    ]);
+                $supplier->notes =
+                    $data['notes']
+                    ?? null;
+
+                /*
+                 * Supplier balance is authoritative
+                 * financial state.
+                 *
+                 * It starts at zero and is later changed
+                 * only by purchasing/payment workflows.
+                 */
+                $supplier->current_balance =
+                    0;
+
+                $supplier->is_active =
+                    $data['is_active']
+                    ?? true;
+
+                $supplier->save();
+
+                $supplier->supplier_code =
+                    sprintf(
+                        'SUP-%06d',
+                        $supplier->id
+                    );
+
+                $supplier->save();
 
                 $this->auditLogger->record(
                     action: 'SUPPLIER_CREATED',
@@ -58,12 +97,42 @@ final class SupplierManagementService
 
                     entityId: $supplier->id,
 
-                    newValues: $supplier->toArray(),
+                    newValues: [
+                        'supplier_code' =>
+                        $supplier
+                            ->supplier_code,
+
+                        'name' =>
+                        $supplier->name,
+
+                        'phone' =>
+                        $supplier->phone,
+
+                        'email' =>
+                        $supplier->email,
+
+                        'address' =>
+                        $supplier->address,
+
+                        'notes' =>
+                        $supplier->notes,
+
+                        'current_balance' =>
+                        (float)
+                        $supplier
+                            ->current_balance,
+
+                        'is_active' =>
+                        (bool)
+                        $supplier
+                            ->is_active,
+                    ],
 
                     userId: $actor->id
                 );
 
-                return $supplier;
+                return $supplier
+                    ->refresh();
             }
         );
     }
@@ -87,35 +156,52 @@ final class SupplierManagementService
                         $supplier->id
                     );
 
-                $old =
-                    $locked->only([
-                        'name',
-                        'phone',
-                        'email',
-                        'address',
-                        'notes',
-                    ]);
-
-                $locked->fill([
+                $old = [
                     'name' =>
-                    $data['name'],
+                    $locked->name,
 
                     'phone' =>
-                    $data['phone']
-                        ?? null,
+                    $locked->phone,
 
                     'email' =>
-                    $data['email']
-                        ?? null,
+                    $locked->email,
 
                     'address' =>
-                    $data['address']
-                        ?? null,
+                    $locked->address,
 
                     'notes' =>
+                    $locked->notes,
+                ];
+
+                /*
+                 * Deliberately do NOT modify:
+                 *
+                 * supplier_code
+                 * current_balance
+                 * is_active
+                 *
+                 * Status has its own endpoint and
+                 * current balance is controlled by
+                 * purchasing/payment workflows.
+                 */
+                $locked->name =
+                    $data['name'];
+
+                $locked->phone =
+                    $data['phone']
+                    ?? null;
+
+                $locked->email =
+                    $data['email']
+                    ?? null;
+
+                $locked->address =
+                    $data['address']
+                    ?? null;
+
+                $locked->notes =
                     $data['notes']
-                        ?? null,
-                ]);
+                    ?? null;
 
                 $locked->save();
 
@@ -128,18 +214,28 @@ final class SupplierManagementService
 
                     oldValues: $old,
 
-                    newValues: $locked->only([
-                        'name',
-                        'phone',
-                        'email',
-                        'address',
-                        'notes',
-                    ]),
+                    newValues: [
+                        'name' =>
+                        $locked->name,
+
+                        'phone' =>
+                        $locked->phone,
+
+                        'email' =>
+                        $locked->email,
+
+                        'address' =>
+                        $locked->address,
+
+                        'notes' =>
+                        $locked->notes,
+                    ],
 
                     userId: $actor->id
                 );
 
-                return $locked->refresh();
+                return $locked
+                    ->refresh();
             }
         );
     }
@@ -164,7 +260,9 @@ final class SupplierManagementService
                     );
 
                 $old =
-                    $locked->is_active;
+                    (bool)
+                    $locked
+                        ->is_active;
 
                 $locked->is_active =
                     $active;
@@ -191,7 +289,8 @@ final class SupplierManagementService
                     userId: $actor->id
                 );
 
-                return $locked->refresh();
+                return $locked
+                    ->refresh();
             }
         );
     }

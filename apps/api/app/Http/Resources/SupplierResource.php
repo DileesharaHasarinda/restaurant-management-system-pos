@@ -14,6 +14,9 @@ class SupplierResource extends JsonResource
             'id' =>
             $this->id,
 
+            'supplier_code' =>
+            $this->supplier_code,
+
             'name' =>
             $this->name,
 
@@ -31,10 +34,14 @@ class SupplierResource extends JsonResource
 
             'current_balance' =>
             (float)
-            ($this->current_balance ?? 0),
+            (
+                $this->current_balance
+                ?? 0
+            ),
 
             'is_active' =>
-            (bool) $this->is_active,
+            (bool)
+            $this->is_active,
 
             'created_at' =>
             $this->created_at

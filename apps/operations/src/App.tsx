@@ -31,6 +31,10 @@ import AccessDeniedPage
 import InventoryPage
   from './inventory/InventoryPage';
 
+import RecipesPage from "./recipes/RecipesPage";
+
+import SuppliersPage from "./suppliers/SuppliersPage";
+
 import IngredientsPage
   from './ingredients/IngredientsPage';
 
@@ -216,22 +220,14 @@ export default function App() {
               <Route
                 path="/recipes"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="RECIPES & COSTING"
-                    title="Recipes"
-                    description="Link menu products to ingredient consumption and recipe costing."
-                  />
+                  <RecipesPage />
                 }
               />
 
               <Route
                 path="/suppliers"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="PURCHASING"
-                    title="Suppliers"
-                    description="Manage restaurant suppliers and supplier account information."
-                  />
+                  <SuppliersPage />
                 }
               />
 
