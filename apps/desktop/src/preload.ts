@@ -7,6 +7,14 @@ import type {
   KitchenPrinterSettings,
 } from "./kitchenPrinterTypes";
 
+import type {
+  CashDrawerResult,
+  CustomerReceiptPayload,
+  ReceiptPrinterConnectionResult,
+  ReceiptPrinterResult,
+  ReceiptPrinterSettings,
+} from "./receiptPrinterTypes";
+
 contextBridge.exposeInMainWorld("posBridge", {
   /*
     |--------------------------------------------------------------------------
@@ -59,4 +67,35 @@ contextBridge.exposeInMainWorld("posBridge", {
 
   printKitchenKot: (payload: KitchenKotPayload): Promise<KitchenPrintResult> =>
     ipcRenderer.invoke("pos:kitchen-printer:print-kot", payload),
+
+  /*
+    |--------------------------------------------------------------------------
+    | Phase 30 - Receipt Printer / Cash Drawer
+    |--------------------------------------------------------------------------
+    */
+
+  getReceiptPrinterSettings: (): Promise<ReceiptPrinterSettings> =>
+    ipcRenderer.invoke("pos:receipt-printer:get-settings"),
+
+  setReceiptPrinterSettings: (
+    settings: Partial<ReceiptPrinterSettings>
+  ): Promise<ReceiptPrinterSettings> =>
+    ipcRenderer.invoke("pos:receipt-printer:set-settings", settings),
+
+  testReceiptPrinterConnection: (): Promise<ReceiptPrinterConnectionResult> =>
+    ipcRenderer.invoke("pos:receipt-printer:test-connection"),
+
+  testReceiptPrinter: (): Promise<ReceiptPrinterResult> =>
+    ipcRenderer.invoke("pos:receipt-printer:test-print"),
+
+  printCustomerReceipt: (
+    payload: CustomerReceiptPayload
+  ): Promise<ReceiptPrinterResult> =>
+    ipcRenderer.invoke("pos:receipt-printer:print-receipt", payload),
+
+  testCashDrawer: (): Promise<CashDrawerResult> =>
+    ipcRenderer.invoke("pos:cash-drawer:test"),
+
+  openCashDrawerHardware: (): Promise<CashDrawerResult> =>
+    ipcRenderer.invoke("pos:cash-drawer:open-hardware"),
 });

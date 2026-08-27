@@ -5,6 +5,14 @@ import type {
   KitchenPrinterSettings,
 } from "./kitchenPrinterTypes";
 
+import type {
+  CashDrawerResult,
+  CustomerReceiptPayload,
+  ReceiptPrinterConnectionResult,
+  ReceiptPrinterResult,
+  ReceiptPrinterSettings,
+} from "./receiptPrinterTypes";
+
 export {};
 
 declare global {
@@ -55,6 +63,30 @@ declare global {
       printKitchenKot: (
         payload: KitchenKotPayload
       ) => Promise<KitchenPrintResult>;
+
+      /*
+      |--------------------------------------------------------------------------
+      | Phase 30 - Receipt Printer / Cash Drawer
+      |--------------------------------------------------------------------------
+      */
+
+      getReceiptPrinterSettings: () => Promise<ReceiptPrinterSettings>;
+
+      setReceiptPrinterSettings: (
+        settings: Partial<ReceiptPrinterSettings>
+      ) => Promise<ReceiptPrinterSettings>;
+
+      testReceiptPrinterConnection: () => Promise<ReceiptPrinterConnectionResult>;
+
+      testReceiptPrinter: () => Promise<ReceiptPrinterResult>;
+
+      printCustomerReceipt: (
+        payload: CustomerReceiptPayload
+      ) => Promise<ReceiptPrinterResult>;
+
+      testCashDrawer: () => Promise<CashDrawerResult>;
+
+      openCashDrawerHardware: () => Promise<CashDrawerResult>;
     };
   }
 

@@ -26,6 +26,10 @@ import type {
     SelectedAddon,
 } from './types';
 
+import type {
+    ReceiptPrinterSettings,
+} from './receiptPrinterTypes';
+
 type PosModule =
     | 'tables'
     | 'incoming'
@@ -230,6 +234,158 @@ interface ApiOrderResponse {
 
 /*
 |--------------------------------------------------------------------------
+| Phase 27-30 - Billing / Payments / Cashier Shift Types
+|--------------------------------------------------------------------------
+*/
+
+interface CashierInvoiceItem {
+    id: number;
+    name: string;
+    variant: string | null;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+}
+
+interface CashierInvoice {
+    id: number;
+    invoice_number: string;
+    invoice_type: string;
+    business_day_id: number;
+    cashier_shift_id: number | null;
+    order_id: number | null;
+    table_session_id: number | null;
+    table_name: string | null;
+    customer: {
+        name: string | null;
+        phone: string | null;
+    };
+    items: CashierInvoiceItem[];
+    totals: {
+        subtotal: number;
+        discount: number;
+        service_charge: number;
+        tax: number;
+        grand_total: number;
+    };
+    payment: {
+        paid_amount: number;
+        change_amount: number;
+        balance_due: number;
+        status: string;
+    };
+    status: string;
+    issued_at: string | null;
+}
+
+interface GeneratedInvoiceData {
+    invoice: CashierInvoice;
+    created: boolean;
+}
+
+interface CustomerPaymentRecord {
+    id?: number;
+    payment_number?: string;
+    payment_method?: string;
+    method?: string;
+    amount: number;
+    tendered_amount?: number | null;
+    change_given?: number;
+    reference_number?: string | null;
+    paid_at?: string | null;
+}
+
+interface CustomerPaymentHistoryData {
+    invoice_id: number;
+    invoice_number: string;
+    payment_status: string;
+    paid_amount: number;
+    balance_due: number;
+    payments: CustomerPaymentRecord[];
+}
+
+interface CustomerPaymentResultData {
+    batch: {
+        id: number;
+        client_request_id: string;
+        total_amount: number;
+        cash_amount: number;
+        payment_count: number;
+        status: string;
+        processed_at?: string | null;
+    };
+    payments: CustomerPaymentRecord[];
+    invoice: CashierInvoice;
+    cash_drawer: {
+        should_open: boolean;
+        cash_amount: number;
+    };
+    created: boolean;
+}
+
+type CustomerPaymentMethod =
+    | 'CASH'
+    | 'CARD'
+    | 'QR'
+    | 'BANK_TRANSFER'
+    | 'OTHER';
+
+interface PaymentInputRow {
+    payment_method: CustomerPaymentMethod;
+    amount: number;
+    tendered_amount?: number;
+    reference_number?: string;
+}
+
+interface CashierShiftRecord {
+    id: number;
+    shift_number: string;
+    business_day_id: number;
+    cashier_id: number;
+    opening_cash: number;
+    expected_cash: number;
+    actual_cash: number | null;
+    cash_difference: number | null;
+    status: string;
+    opened_at?: string | null;
+    closed_at?: string | null;
+    opening_notes?: string | null;
+    closing_notes?: string | null;
+}
+
+interface CashierShiftSummary {
+    opening_cash: number;
+    cash_sales: number;
+    cash_refunds: number;
+    cash_in: number;
+    cash_out: number;
+    calculated_expected_cash: number;
+    expected_cash: number;
+    actual_cash: number | null;
+    cash_difference: number | null;
+}
+
+interface CurrentCashierShiftData {
+    shift: CashierShiftRecord | null;
+    summary?: CashierShiftSummary;
+}
+
+interface CashierShiftMutationData {
+    shift: CashierShiftRecord;
+    summary: CashierShiftSummary;
+    created?: boolean;
+    closed?: boolean;
+}
+
+interface CashDrawerManualOpenData {
+    cash_drawer: {
+        should_open: boolean;
+    };
+    created: boolean;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Helpers
 |--------------------------------------------------------------------------
 */
@@ -254,6 +410,73 @@ const money =
                     2,
             },
         )}`;
+    };
+
+const roundMoney =
+    (
+        value:
+            number | string | null | undefined,
+    ): number =>
+        Math.round(
+            (
+                Number(
+                    value
+                    ?? 0,
+                )
+                +
+                Number.EPSILON
+            )
+            *
+            100,
+        )
+        /
+        100;
+
+const hasUserPermission =
+    (
+        user:
+            PosUser,
+
+        code:
+            string,
+    ): boolean => {
+        const permissions =
+            user.permissions as unknown[];
+
+        return permissions.some(
+            (
+                permission,
+            ) => {
+                if (
+                    typeof permission
+                    === 'string'
+                ) {
+                    return permission
+                        === code;
+                }
+
+                if (
+                    permission
+                    &&
+                    typeof permission
+                    === 'object'
+                ) {
+                    const permissionCode =
+                        (
+                            permission as Record<string, unknown>
+                        ).code;
+
+                    return String(
+                        permissionCode
+                        ??
+                        '',
+                    )
+                        === code;
+                }
+
+                return false;
+            },
+        );
     };
 
 /*
@@ -1851,6 +2074,12 @@ export default function CashierWorkspace(
                             onTransition={
                                 transitionOrder
                             }
+                            onPayment={
+                                () =>
+                                    setActiveModule(
+                                        'payment',
+                                    )
+                            }
                         />
                     );
 
@@ -1859,6 +2088,21 @@ export default function CashierWorkspace(
                         <PaymentModule
                             order={
                                 selectedOrder
+                            }
+                            onOrderPaid={
+                                async (
+                                    paidOrder,
+                                ) => {
+                                    if (
+                                        paidOrder.status
+                                        === 'SERVED'
+                                    ) {
+                                        await transitionOrder(
+                                            paidOrder,
+                                            'complete',
+                                        );
+                                    }
+                                }
                             }
                         />
                     );
@@ -1883,19 +2127,37 @@ export default function CashierWorkspace(
 
                 case 'drawer':
                     return (
-                        <UnavailableModule
-                            title="Cash Drawer"
-                            message="Cash drawer database structures and permissions exist, but the Laravel cash drawer API and Electron printer/drawer IPC are not implemented yet."
-                            actionLabel="Manual Drawer Open"
+                        <CashDrawerModule
+                            canManualOpen={
+                                hasUserPermission(
+                                    user,
+                                    'cash_drawer.open',
+                                )
+                            }
                         />
                     );
 
                 case 'shift':
                     return (
-                        <UnavailableModule
-                            title="Cashier Shift"
-                            message="Cashier shift tables and permissions exist, but shift open/close API endpoints have not been implemented yet."
-                            actionLabel="Open Shift"
+                        <CashierShiftModule
+                            canOpen={
+                                hasUserPermission(
+                                    user,
+                                    'cash_shift.open',
+                                )
+                            }
+                            canClose={
+                                hasUserPermission(
+                                    user,
+                                    'cash_shift.close',
+                                )
+                            }
+                            canMoveCash={
+                                hasUserPermission(
+                                    user,
+                                    'cash_drawer.movement',
+                                )
+                            }
                         />
                     );
 
@@ -3016,6 +3278,7 @@ function CurrentOrderModule(
     {
         order,
         onTransition,
+        onPayment,
     }: {
         order:
         Order | null;
@@ -3029,6 +3292,9 @@ function CurrentOrderModule(
                 | 'serve'
                 | 'complete',
         ) => Promise<void>;
+
+        onPayment:
+        () => void;
     },
 ) {
     if (!order) {
@@ -3398,20 +3664,22 @@ function CurrentOrderModule(
                             order.status
                                 === 'SERVED'
                                 ? (
-                                    <button
-                                        type="button"
-                                        className="success-button big-action-button"
-                                        onClick={
-                                            () => {
-                                                void onTransition(
-                                                    order,
-                                                    'complete',
-                                                );
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="success-button big-action-button"
+                                            onClick={
+                                                onPayment
                                             }
-                                        }
-                                    >
-                                        Complete Order
-                                    </button>
+                                        >
+                                            Proceed to Payment
+                                        </button>
+
+                                        <div className="backend-note">
+                                            Payment is required before the order is completed.
+                                            The final invoice will be generated in the Payment module.
+                                        </div>
+                                    </>
                                 )
                                 : null
                         }
@@ -3422,25 +3690,560 @@ function CurrentOrderModule(
     );
 }
 
+const printInvoiceReceipt =
+    async (
+        invoice:
+            CashierInvoice,
+
+        paymentHistory:
+            CustomerPaymentRecord[],
+
+        copyLabel:
+            string | null = null,
+    ): Promise<void> => {
+        await window
+            .posBridge
+            .printCustomerReceipt({
+                invoiceNumber:
+                    invoice.invoice_number,
+
+                tableName:
+                    invoice.table_name,
+
+                customerName:
+                    invoice.customer.name,
+
+                customerPhone:
+                    invoice.customer.phone,
+
+                items:
+                    (
+                        invoice.items
+                        ?? []
+                    ).map(
+                        (
+                            item,
+                        ) => ({
+                            name:
+                                item.name,
+
+                            variant:
+                                item.variant,
+
+                            quantity:
+                                Number(
+                                    item.quantity,
+                                ),
+
+                            unitPrice:
+                                Number(
+                                    item.unit_price,
+                                ),
+
+                            lineTotal:
+                                Number(
+                                    item.line_total,
+                                ),
+                        }),
+                    ),
+
+                subtotal:
+                    Number(
+                        invoice.totals.subtotal,
+                    ),
+
+                discount:
+                    Number(
+                        invoice.totals.discount,
+                    ),
+
+                serviceCharge:
+                    Number(
+                        invoice.totals.service_charge,
+                    ),
+
+                tax:
+                    Number(
+                        invoice.totals.tax,
+                    ),
+
+                grandTotal:
+                    Number(
+                        invoice.totals.grand_total,
+                    ),
+
+                paidAmount:
+                    Number(
+                        invoice.payment.paid_amount,
+                    ),
+
+                changeAmount:
+                    Number(
+                        invoice.payment.change_amount,
+                    ),
+
+                balanceDue:
+                    Number(
+                        invoice.payment.balance_due,
+                    ),
+
+                paymentStatus:
+                    invoice.payment.status,
+
+                payments:
+                    paymentHistory.map(
+                        (
+                            payment,
+                        ) => ({
+                            method:
+                                payment.payment_method
+                                ??
+                                payment.method
+                                ??
+                                'OTHER',
+
+                            amount:
+                                Number(
+                                    payment.amount,
+                                ),
+
+                            tenderedAmount:
+                                payment.tendered_amount
+                                ??
+                                null,
+
+                            changeGiven:
+                                Number(
+                                    payment.change_given
+                                    ??
+                                    0,
+                                ),
+
+                            referenceNumber:
+                                payment.reference_number
+                                ??
+                                null,
+                        }),
+                    ),
+
+                issuedAt:
+                    invoice.issued_at,
+
+                printedAt:
+                    new Date()
+                        .toISOString(),
+
+                copyLabel:
+                    copyLabel,
+            });
+    };
+
 function PaymentModule(
     {
         order,
+        onOrderPaid,
     }: {
         order:
         Order | null;
+
+        onOrderPaid:
+        (
+            order:
+                Order,
+        ) => Promise<void>;
     },
 ) {
     const [
-        amount,
-        setAmount,
+        invoice,
+        setInvoice,
+    ] =
+        useState<
+            CashierInvoice | null
+        >(null);
+
+    const [
+        mode,
+        setMode,
+    ] =
+        useState<
+            CustomerPaymentMethod
+            | 'MIXED'
+        >(
+            'CASH',
+        );
+
+    const [
+        cashReceived,
+        setCashReceived,
     ] =
         useState('');
 
-    const append =
+    const [
+        cashAmount,
+        setCashAmount,
+    ] =
+        useState('');
+
+    const [
+        cardAmount,
+        setCardAmount,
+    ] =
+        useState('');
+
+    const [
+        qrAmount,
+        setQrAmount,
+    ] =
+        useState('');
+
+    const [
+        bankAmount,
+        setBankAmount,
+    ] =
+        useState('');
+
+    const [
+        otherAmount,
+        setOtherAmount,
+    ] =
+        useState('');
+
+    const [
+        cardReference,
+        setCardReference,
+    ] =
+        useState('');
+
+    const [
+        qrReference,
+        setQrReference,
+    ] =
+        useState('');
+
+    const [
+        bankReference,
+        setBankReference,
+    ] =
+        useState('');
+
+    const [
+        otherReference,
+        setOtherReference,
+    ] =
+        useState('');
+
+    const [
+        loadingInvoice,
+        setLoadingInvoice,
+    ] =
+        useState(false);
+
+    const [
+        processing,
+        setProcessing,
+    ] =
+        useState(false);
+
+    const [
+        message,
+        setMessage,
+    ] =
+        useState('');
+
+    const [
+        localError,
+        setLocalError,
+    ] =
+        useState('');
+
+    const [
+        paymentRequestId,
+        setPaymentRequestId,
+    ] =
+        useState<string>(
+            () =>
+                makeUuid(),
+        );
+
+    useEffect(
+        () => {
+            setInvoice(
+                null,
+            );
+
+            setMode(
+                'CASH',
+            );
+
+            setPaymentRequestId(
+                makeUuid(),
+            );
+
+            setCashReceived(
+                '',
+            );
+
+            setCashAmount(
+                '',
+            );
+
+            setCardAmount(
+                '',
+            );
+
+            setQrAmount(
+                '',
+            );
+
+            setBankAmount(
+                '',
+            );
+
+            setOtherAmount(
+                '',
+            );
+
+            setCardReference(
+                '',
+            );
+
+            setQrReference(
+                '',
+            );
+
+            setBankReference(
+                '',
+            );
+
+            setOtherReference(
+                '',
+            );
+
+            setMessage(
+                '',
+            );
+
+            setLocalError(
+                '',
+            );
+        },
+        [
+            order?.id,
+        ],
+    );
+
+    const orderReadyForBilling =
+        Boolean(
+            order
+            &&
+            [
+                'SERVED',
+                'COMPLETED',
+            ].includes(
+                order.status,
+            ),
+        );
+
+    const ensureInvoice =
+        useCallback(
+            async (): Promise<CashierInvoice | null> => {
+                if (
+                    !order
+                ) {
+                    return null;
+                }
+
+                if (
+                    ![
+                        'SERVED',
+                        'COMPLETED',
+                    ].includes(
+                        order.status,
+                    )
+                ) {
+                    setLocalError(
+                        'The order must be served before billing.',
+                    );
+
+                    return null;
+                }
+
+                if (
+                    invoice
+                ) {
+                    return invoice;
+                }
+
+                setLoadingInvoice(
+                    true,
+                );
+
+                setLocalError(
+                    '',
+                );
+
+                try {
+                    const response =
+                        await api.post<
+                            GeneratedInvoiceData
+                        >(
+                            `/orders/${order.id}/invoice`,
+                            {},
+                        );
+
+                    const generated =
+                        response.data.invoice;
+
+                    setInvoice(
+                        generated,
+                    );
+
+                    return generated;
+                } catch (
+                exception
+                ) {
+                    setLocalError(
+                        exception
+                            instanceof Error
+                            ? exception.message
+                            : 'Unable to generate invoice.',
+                    );
+
+                    return null;
+                } finally {
+                    setLoadingInvoice(
+                        false,
+                    );
+                }
+            },
+            [
+                order,
+                invoice,
+            ],
+        );
+
+    useEffect(
+        () => {
+            if (
+                orderReadyForBilling
+            ) {
+                void ensureInvoice();
+            }
+        },
+        [
+            orderReadyForBilling,
+            ensureInvoice,
+        ],
+    );
+
+    if (
+        !order
+    ) {
+        return (
+            <div className="module-page">
+                <ModuleHeader
+                    title="Payment"
+                    subtitle="Select a served order before processing payment."
+                />
+
+                <EmptyState
+                    title="No order selected"
+                    message="Open an order, mark it as served and then return to Payment."
+                />
+            </div>
+        );
+    }
+
+    const balance =
+        roundMoney(
+            invoice
+                ?.payment
+                .balance_due
+            ??
+            order.grand_total
+            ??
+            0,
+        );
+
+    const cashTendered =
+        roundMoney(
+            cashReceived
+            ||
+            0,
+        );
+
+    const mixedCash =
+        roundMoney(
+            cashAmount
+            ||
+            0,
+        );
+
+    const mixedAllocated =
+        roundMoney(
+            mixedCash
+            +
+            roundMoney(
+                cardAmount
+                ||
+                0,
+            )
+            +
+            roundMoney(
+                qrAmount
+                ||
+                0,
+            )
+            +
+            roundMoney(
+                bankAmount
+                ||
+                0,
+            )
+            +
+            roundMoney(
+                otherAmount
+                ||
+                0,
+            ),
+        );
+
+    const mixedRemaining =
+        roundMoney(
+            balance
+            -
+            mixedAllocated,
+        );
+
+    const displayChange =
+        mode
+            === 'CASH'
+            ? Math.max(
+                0,
+                roundMoney(
+                    cashTendered
+                    -
+                    balance,
+                ),
+            )
+            : mode
+                === 'MIXED'
+                ? Math.max(
+                    0,
+                    roundMoney(
+                        cashTendered
+                        -
+                        mixedCash,
+                    ),
+                )
+                : 0;
+
+    const appendCashReceived =
         (
-            value: string,
+            value:
+                string,
         ) => {
-            setAmount(
+            setCashReceived(
                 (
                     current,
                 ) =>
@@ -3450,182 +4253,2911 @@ function PaymentModule(
             );
         };
 
-    const backspace =
-        () => {
-            setAmount(
+
+    const buildPayments =
+        (
+            payableBalance:
+                number,
+        ): PaymentInputRow[] => {
+            if (
+                payableBalance
+                <=
+                0
+            ) {
+                throw new Error(
+                    'This invoice has no outstanding balance.',
+                );
+            }
+
+            if (
+                mode
+                === 'CASH'
+            ) {
+                if (
+                    cashTendered
+                    <
+                    payableBalance
+                ) {
+                    throw new Error(
+                        'Cash received cannot be less than the invoice balance.',
+                    );
+                }
+
+                return [
+                    {
+                        payment_method:
+                            'CASH',
+
+                        amount:
+                            payableBalance,
+
+                        tendered_amount:
+                            cashTendered,
+                    },
+                ];
+            }
+
+            if (
+                mode
+                !== 'MIXED'
+            ) {
+                const reference =
+                    mode
+                        === 'CARD'
+                        ? cardReference
+                        : mode
+                            === 'QR'
+                            ? qrReference
+                            : mode
+                                === 'BANK_TRANSFER'
+                                ? bankReference
+                                : otherReference;
+
+                return [
+                    {
+                        payment_method:
+                            mode,
+
+                        amount:
+                            payableBalance,
+
+                        reference_number:
+                            reference.trim()
+                            ||
+                            undefined,
+                    },
+                ];
+            }
+
+            if (
+                Math.abs(
+                    mixedRemaining,
+                )
+                >
+                0.009
+            ) {
+                throw new Error(
+                    `Mixed payments must exactly equal the invoice balance. Remaining: ${money(
+                        mixedRemaining,
+                    )}`,
+                );
+            }
+
+            const rows:
+                PaymentInputRow[] =
+                [];
+
+            if (
+                mixedCash
+                >
+                0
+            ) {
+                if (
+                    cashTendered
+                    <
+                    mixedCash
+                ) {
+                    throw new Error(
+                        'Cash received cannot be less than the cash allocation.',
+                    );
+                }
+
+                rows.push({
+                    payment_method:
+                        'CASH',
+
+                    amount:
+                        mixedCash,
+
+                    tendered_amount:
+                        cashTendered,
+                });
+            }
+
+            const addNonCash =
                 (
-                    current,
-                ) =>
-                    current.slice(
-                        0,
-                        -1,
-                    ),
+                    paymentMethod:
+                        CustomerPaymentMethod,
+
+                    rawAmount:
+                        string,
+
+                    reference:
+                        string,
+                ): void => {
+                    const value =
+                        roundMoney(
+                            rawAmount
+                            ||
+                            0,
+                        );
+
+                    if (
+                        value
+                        <=
+                        0
+                    ) {
+                        return;
+                    }
+
+                    rows.push({
+                        payment_method:
+                            paymentMethod,
+
+                        amount:
+                            value,
+
+                        reference_number:
+                            reference.trim()
+                            ||
+                            undefined,
+                    });
+                };
+
+            addNonCash(
+                'CARD',
+                cardAmount,
+                cardReference,
             );
+
+            addNonCash(
+                'QR',
+                qrAmount,
+                qrReference,
+            );
+
+            addNonCash(
+                'BANK_TRANSFER',
+                bankAmount,
+                bankReference,
+            );
+
+            addNonCash(
+                'OTHER',
+                otherAmount,
+                otherReference,
+            );
+
+            if (
+                rows.length
+                ===
+                0
+            ) {
+                throw new Error(
+                    'Add at least one payment.',
+                );
+            }
+
+            return rows;
         };
 
-    const received =
-        Number(
-            amount
-            || 0,
-        );
+    const processPayment =
+        async (): Promise<void> => {
+            if (
+                processing
+            ) {
+                return;
+            }
 
-    const total =
-        Number(
-            order
-                ?.grand_total
-            ?? 0,
-        );
+            setMessage(
+                '',
+            );
 
-    const change =
-        Math.max(
-            0,
-            received
-            -
-            total,
-        );
+            setLocalError(
+                '',
+            );
+
+            const currentInvoice =
+                await ensureInvoice();
+
+            if (
+                !currentInvoice
+            ) {
+                return;
+            }
+
+            const currentBalance =
+                roundMoney(
+                    currentInvoice.payment.balance_due,
+                );
+
+            if (
+                currentBalance
+                <=
+                0.009
+            ) {
+                setMessage(
+                    'This invoice is already fully paid.',
+                );
+
+                return;
+            }
+
+            setProcessing(
+                true,
+            );
+
+            try {
+                const payments =
+                    buildPayments(
+                        currentBalance,
+                    );
+
+                const containsCash =
+                    payments.some(
+                        (
+                            payment,
+                        ) =>
+                            payment.payment_method
+                            === 'CASH',
+                    );
+
+                let shiftId:
+                    number | null =
+                    null;
+
+                try {
+                    const shiftResponse =
+                        await api.get<
+                            CurrentCashierShiftData
+                        >(
+                            '/cashier-shifts/current',
+                        );
+
+                    shiftId =
+                        shiftResponse.data.shift
+                            ?.id
+                        ??
+                        null;
+                } catch (
+                shiftException
+                ) {
+                    if (
+                        containsCash
+                    ) {
+                        throw shiftException;
+                    }
+                }
+
+                if (
+                    containsCash
+                    &&
+                    !shiftId
+                ) {
+                    throw new Error(
+                        'Open a cashier shift before accepting cash.',
+                    );
+                }
+
+                const response =
+                    await api.post<
+                        CustomerPaymentResultData
+                    >(
+                        `/invoices/${currentInvoice.id}/payments`,
+                        {
+                            client_request_id:
+                                paymentRequestId,
+
+                            cashier_shift_id:
+                                shiftId,
+
+                            payments:
+                                payments,
+                        },
+                    );
+
+                const result =
+                    response.data;
+
+                setInvoice(
+                    result.invoice,
+                );
+
+                setPaymentRequestId(
+                    makeUuid(),
+                );
+
+                if (
+                    result.invoice.payment.status
+                    === 'PAID'
+                ) {
+                    await onOrderPaid(
+                        order,
+                    );
+                }
+
+                if (
+                    !result.created
+                ) {
+                    setMessage(
+                        'This payment request was already processed. No duplicate receipt or drawer opening was performed.',
+                    );
+
+                    return;
+                }
+
+                const [
+                    freshInvoiceResponse,
+                    historyResponse,
+                ] =
+                    await Promise.all([
+                        api.get<
+                            CashierInvoice
+                        >(
+                            `/invoices/${result.invoice.id}`,
+                        ),
+
+                        api.get<
+                            CustomerPaymentHistoryData
+                        >(
+                            `/invoices/${result.invoice.id}/payments`,
+                        ),
+                    ]);
+
+                const freshInvoice =
+                    freshInvoiceResponse.data;
+
+                setInvoice(
+                    freshInvoice,
+                );
+
+                try {
+                    await printInvoiceReceipt(
+                        freshInvoice,
+
+                        historyResponse.data.payments,
+                    );
+                } catch (
+                receiptException
+                ) {
+                    setLocalError(
+                        `Payment was SAVED successfully, but the receipt could not be sent to the printer. The cash drawer was NOT opened. ${receiptException
+                            instanceof Error
+                            ? receiptException.message
+                            : ''
+                        }`,
+                    );
+
+                    return;
+                }
+
+                if (
+                    result.cash_drawer.should_open
+                ) {
+                    try {
+                        await window
+                            .posBridge
+                            .openCashDrawerHardware();
+                    } catch (
+                    drawerException
+                    ) {
+                        setLocalError(
+                            `Payment was SAVED and the receipt was sent successfully, but the cash drawer did not open. Use the audited Manual Open option in Cash Drawer. ${drawerException
+                                instanceof Error
+                                ? drawerException.message
+                                : ''
+                            }`,
+                        );
+
+                        return;
+                    }
+                }
+
+                setMessage(
+                    result.cash_drawer.should_open
+                        ? 'Payment completed. Receipt sent and cash drawer pulse sent.'
+                        : 'Payment completed and receipt sent. Cash drawer remained closed.',
+                );
+            } catch (
+            exception
+            ) {
+                setLocalError(
+                    exception
+                        instanceof Error
+                        ? exception.message
+                        : 'Unable to process payment.',
+                );
+            } finally {
+                setProcessing(
+                    false,
+                );
+            }
+        };
+
+    const reprintReceipt =
+        async (): Promise<void> => {
+            if (
+                !invoice
+            ) {
+                return;
+            }
+
+            setProcessing(
+                true,
+            );
+
+            setLocalError(
+                '',
+            );
+
+            setMessage(
+                '',
+            );
+
+            try {
+                const [
+                    invoiceResponse,
+                    paymentHistory,
+                ] =
+                    await Promise.all([
+                        api.get<
+                            CashierInvoice
+                        >(
+                            `/invoices/${invoice.id}`,
+                        ),
+
+                        api.get<
+                            CustomerPaymentHistoryData
+                        >(
+                            `/invoices/${invoice.id}/payments`,
+                        ),
+                    ]);
+
+                await printInvoiceReceipt(
+                    invoiceResponse.data,
+
+                    paymentHistory.data.payments,
+
+                    'REPRINT',
+                );
+
+                setMessage(
+                    'Receipt reprinted successfully. The cash drawer was not opened.',
+                );
+            } catch (
+            exception
+            ) {
+                setLocalError(
+                    exception
+                        instanceof Error
+                        ? exception.message
+                        : 'Unable to reprint receipt.',
+                );
+            } finally {
+                setProcessing(
+                    false,
+                );
+            }
+        };
+
 
     return (
         <div className="module-page">
             <ModuleHeader
                 title="Payment"
-                subtitle="Touchscreen payment workspace."
+                subtitle="Secure customer payment, receipt printing and cash drawer control."
             />
+
+            {
+                localError
+                    ? (
+                        <div className="workspace-alert">
+                            <span>
+                                {localError}
+                            </span>
+                        </div>
+                    )
+                    : null
+            }
+
+            {
+                message
+                    ? (
+                        <div className="backend-note">
+                            {message}
+                        </div>
+                    )
+                    : null
+            }
+
+            {
+                !orderReadyForBilling
+                    ? (
+                        <div className="backend-note">
+                            This order is not ready for billing.
+                            Mark it as served before accepting payment.
+                        </div>
+                    )
+                    : null
+            }
 
             <div className="payment-layout">
                 <section className="module-card payment-summary">
                     <span>
-                        Order Total
+                        Order
+                    </span>
+
+                    <strong>
+                        {
+                            order.order_number
+                        }
+                    </strong>
+
+                    <span>
+                        Invoice
+                    </span>
+
+                    <strong>
+                        {
+                            loadingInvoice
+                                ? 'Loading...'
+                                : invoice?.invoice_number
+                                ??
+                                'Not generated'
+                        }
+                    </strong>
+
+                    <span>
+                        Balance Due
                     </span>
 
                     <strong>
                         {
                             money(
-                                total,
-                            )
-                        }
-                    </strong>
-
-                    <span>
-                        Amount Received
-                    </span>
-
-                    <div className="received-display">
-                        {
-                            money(
-                                received,
-                            )
-                        }
-                    </div>
-
-                    <span>
-                        Change
-                    </span>
-
-                    <strong className="change-value">
-                        {
-                            money(
-                                change,
+                                balance,
                             )
                         }
                     </strong>
 
                     <div className="payment-methods">
-                        <button
-                            type="button"
-                            disabled
-                        >
-                            CASH
-                        </button>
+                        {
+                            [
+                                'CASH',
+                                'CARD',
+                                'QR',
+                                'BANK_TRANSFER',
+                                'OTHER',
+                                'MIXED',
+                            ].map(
+                                (
+                                    method,
+                                ) => (
+                                    <button
+                                        key={
+                                            method
+                                        }
+                                        type="button"
+                                        className={
+                                            mode
+                                                === method
+                                                ? 'is-active'
+                                                : ''
+                                        }
+                                        disabled={
+                                            processing
+                                            ||
+                                            !orderReadyForBilling
+                                        }
+                                        onClick={
+                                            () => {
+                                                setMode(
+                                                    method as CustomerPaymentMethod | 'MIXED',
+                                                );
 
-                        <button
-                            type="button"
-                            disabled
-                        >
-                            CARD
-                        </button>
+                                                setMessage(
+                                                    '',
+                                                );
 
-                        <button
-                            type="button"
-                            disabled
-                        >
-                            QR
-                        </button>
-
-                        <button
-                            type="button"
-                            disabled
-                        >
-                            MIXED
-                        </button>
+                                                setLocalError(
+                                                    '',
+                                                );
+                                            }
+                                        }
+                                    >
+                                        {
+                                            method.replace(
+                                                /_/g,
+                                                ' ',
+                                            )
+                                        }
+                                    </button>
+                                ),
+                            )
+                        }
                     </div>
 
-                    <div className="backend-note">
-                        Customer invoice/payment APIs are not implemented yet.
-                        Payment processing is intentionally disabled.
+                    {
+                        mode
+                            === 'CASH'
+                            ? (
+                                <>
+                                    <span>
+                                        Cash Received
+                                    </span>
+
+                                    <div className="received-display">
+                                        {
+                                            money(
+                                                cashTendered,
+                                            )
+                                        }
+                                    </div>
+
+                                    <span>
+                                        Change
+                                    </span>
+
+                                    <strong className="change-value">
+                                        {
+                                            money(
+                                                displayChange,
+                                            )
+                                        }
+                                    </strong>
+                                </>
+                            )
+                            : null
+                    }
+
+                    {
+                        mode
+                            === 'CARD'
+                            ? (
+                                <div>
+                                    <label className="field-label">
+                                        Card Reference
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        value={
+                                            cardReference
+                                        }
+                                        placeholder="Optional reference / last digits"
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setCardReference(
+                                                    event.target.value,
+                                                )
+                                        }
+                                    />
+                                </div>
+                            )
+                            : null
+                    }
+
+                    {
+                        mode
+                            === 'QR'
+                            ? (
+                                <div>
+                                    <label className="field-label">
+                                        QR Reference
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        value={
+                                            qrReference
+                                        }
+                                        placeholder="Optional QR transaction reference"
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setQrReference(
+                                                    event.target.value,
+                                                )
+                                        }
+                                    />
+                                </div>
+                            )
+                            : null
+                    }
+
+                    {
+                        mode
+                            === 'BANK_TRANSFER'
+                            ? (
+                                <div>
+                                    <label className="field-label">
+                                        Bank Transfer Reference
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        value={
+                                            bankReference
+                                        }
+                                        placeholder="Optional bank reference"
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setBankReference(
+                                                    event.target.value,
+                                                )
+                                        }
+                                    />
+                                </div>
+                            )
+                            : null
+                    }
+
+                    {
+                        mode
+                            === 'OTHER'
+                            ? (
+                                <div>
+                                    <label className="field-label">
+                                        Payment Reference
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        value={
+                                            otherReference
+                                        }
+                                        placeholder="Optional payment reference"
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setOtherReference(
+                                                    event.target.value,
+                                                )
+                                        }
+                                    />
+                                </div>
+                            )
+                            : null
+                    }
+
+                    {
+                        mode
+                            === 'MIXED'
+                            ? (
+                                <>
+                                    <div className="form-grid">
+                                        <div>
+                                            <label className="field-label">
+                                                Cash Allocation
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    cashAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setCashAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Cash Received
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    cashReceived
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setCashReceived(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Card
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    cardAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setCardAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                QR
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    qrAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setQrAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Bank Transfer
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    bankAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setBankAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Other
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    otherAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setOtherAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Card Reference
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    cardReference
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setCardReference(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                QR Reference
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    qrReference
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setQrReference(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Bank Reference
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    bankReference
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setBankReference(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Other Reference
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    otherReference
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setOtherReference(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="backend-note">
+                                        Allocated: {
+                                            money(
+                                                mixedAllocated,
+                                            )
+                                        }
+                                        {' • '}
+                                        Remaining: {
+                                            money(
+                                                mixedRemaining,
+                                            )
+                                        }
+                                        {' • '}
+                                        Cash Change: {
+                                            money(
+                                                displayChange,
+                                            )
+                                        }
+                                    </div>
+                                </>
+                            )
+                            : null
+                    }
+
+                    <div className="order-action-stack">
+                        <button
+                            type="button"
+                            className="success-button big-action-button"
+                            disabled={
+                                processing
+                                ||
+                                loadingInvoice
+                                ||
+                                !invoice
+                                ||
+                                !orderReadyForBilling
+                                ||
+                                balance
+                                <=
+                                0.009
+                            }
+                            onClick={
+                                () => {
+                                    void processPayment();
+                                }
+                            }
+                        >
+                            {
+                                processing
+                                    ? 'Processing...'
+                                    : `Complete Payment • ${money(
+                                        balance,
+                                    )}`
+                            }
+                        </button>
+
+                        {
+                            invoice
+                                &&
+                                Number(
+                                    invoice.payment.paid_amount,
+                                )
+                                >
+                                0
+                                ? (
+                                    <button
+                                        type="button"
+                                        className="secondary-button"
+                                        disabled={
+                                            processing
+                                        }
+                                        onClick={
+                                            () => {
+                                                void reprintReceipt();
+                                            }
+                                        }
+                                    >
+                                        Reprint Receipt
+                                    </button>
+                                )
+                                : null
+                        }
                     </div>
                 </section>
 
-                <section className="numeric-keypad">
-                    {
-                        [
-                            '7',
-                            '8',
-                            '9',
-                            '4',
-                            '5',
-                            '6',
-                            '1',
-                            '2',
-                            '3',
-                            '00',
-                            '0',
-                            '.',
-                        ].map(
-                            (
-                                key,
-                            ) => (
+                {
+                    mode
+                        === 'CASH'
+                        ? (
+                            <section className="numeric-keypad">
+                                {
+                                    [
+                                        '7',
+                                        '8',
+                                        '9',
+                                        '4',
+                                        '5',
+                                        '6',
+                                        '1',
+                                        '2',
+                                        '3',
+                                        '00',
+                                        '0',
+                                        '.',
+                                    ].map(
+                                        (
+                                            key,
+                                        ) => (
+                                            <button
+                                                key={
+                                                    key
+                                                }
+                                                type="button"
+                                                disabled={
+                                                    processing
+                                                }
+                                                onClick={
+                                                    () =>
+                                                        appendCashReceived(
+                                                            key,
+                                                        )
+                                                }
+                                            >
+                                                {key}
+                                            </button>
+                                        ),
+                                    )
+                                }
+
                                 <button
-                                    key={
-                                        key
-                                    }
                                     type="button"
+                                    className="keypad-clear"
+                                    disabled={
+                                        processing
+                                    }
                                     onClick={
                                         () =>
-                                            append(
-                                                key,
+                                            setCashReceived(
+                                                '',
                                             )
                                     }
                                 >
-                                    {key}
+                                    CLEAR
                                 </button>
-                            ),
+
+                                <button
+                                    type="button"
+                                    className="keypad-back"
+                                    disabled={
+                                        processing
+                                    }
+                                    onClick={
+                                        () =>
+                                            setCashReceived(
+                                                (
+                                                    current,
+                                                ) =>
+                                                    current.slice(
+                                                        0,
+                                                        -1,
+                                                    ),
+                                            )
+                                    }
+                                >
+                                    BACK
+                                </button>
+                            </section>
                         )
+                        : (
+                            <section className="module-card">
+                                <h3>
+                                    Cash Drawer Rule
+                                </h3>
+
+                                <p>
+                                    Laravel is the authority for whether the drawer may open.
+                                </p>
+
+                                <p>
+                                    Card-only and QR-only payments never open the drawer.
+                                    Mixed payment opens it only when Laravel confirms a cash component.
+                                </p>
+
+                                <p>
+                                    Receipt reprints never open the drawer.
+                                </p>
+                            </section>
+                        )
+                }
+            </div>
+        </div>
+    );
+}
+
+
+function CashDrawerModule(
+    {
+        canManualOpen,
+    }: {
+        canManualOpen:
+        boolean;
+    },
+) {
+    const [
+        shift,
+        setShift,
+    ] =
+        useState<
+            CashierShiftRecord | null
+        >(null);
+
+    const [
+        settings,
+        setSettings,
+    ] =
+        useState<
+            ReceiptPrinterSettings
+        >({
+            printerName:
+                'Cashier Receipt Printer',
+
+            host:
+                '',
+
+            port:
+                9100,
+
+            paperWidthMm:
+                80,
+
+            connectTimeoutMs:
+                4000,
+
+            drawerPin:
+                0,
+
+            drawerPulseOnMs:
+                50,
+
+            drawerPulseOffMs:
+                500,
+        });
+
+    const [
+        reason,
+        setReason,
+    ] =
+        useState('');
+
+    const [
+        manualOpenRequestId,
+        setManualOpenRequestId,
+    ] =
+        useState<string>(
+            () =>
+                makeUuid(),
+        );
+
+    const [
+        busy,
+        setBusy,
+    ] =
+        useState(false);
+
+    const [
+        message,
+        setMessage,
+    ] =
+        useState('');
+
+    const [
+        localError,
+        setLocalError,
+    ] =
+        useState('');
+
+    const load =
+        useCallback(
+            async (): Promise<void> => {
+                try {
+                    const [
+                        savedSettings,
+                        shiftResponse,
+                    ] =
+                        await Promise.all([
+                            window
+                                .posBridge
+                                .getReceiptPrinterSettings(),
+
+                            api.get<
+                                CurrentCashierShiftData
+                            >(
+                                '/cashier-shifts/current',
+                            ),
+                        ]);
+
+                    setSettings(
+                        savedSettings,
+                    );
+
+                    setShift(
+                        shiftResponse.data.shift,
+                    );
+                } catch (
+                exception
+                ) {
+                    setLocalError(
+                        exception
+                            instanceof Error
+                            ? exception.message
+                            : 'Unable to load cash drawer.',
+                    );
+                }
+            },
+            [],
+        );
+
+    useEffect(
+        () => {
+            void load();
+        },
+        [
+            load,
+        ],
+    );
+
+    useEffect(
+        () => {
+            setManualOpenRequestId(
+                makeUuid(),
+            );
+        },
+        [
+            reason,
+        ],
+    );
+
+    const run =
+        async (
+            action:
+                () => Promise<void>,
+        ): Promise<void> => {
+            setBusy(
+                true,
+            );
+
+            setMessage(
+                '',
+            );
+
+            setLocalError(
+                '',
+            );
+
+            try {
+                await action();
+            } catch (
+            exception
+            ) {
+                setLocalError(
+                    exception
+                        instanceof Error
+                        ? exception.message
+                        : 'Cash drawer operation failed.',
+                );
+            } finally {
+                setBusy(
+                    false,
+                );
+            }
+        };
+
+    const save =
+        async (): Promise<void> => {
+            await run(
+                async () => {
+                    const saved =
+                        await window
+                            .posBridge
+                            .setReceiptPrinterSettings(
+                                settings,
+                            );
+
+                    setSettings(
+                        saved,
+                    );
+
+                    setMessage(
+                        'Receipt printer settings saved.',
+                    );
+                },
+            );
+        };
+
+    const saveSettingsForTest =
+        async (): Promise<void> => {
+            const saved =
+                await window
+                    .posBridge
+                    .setReceiptPrinterSettings(
+                        settings,
+                    );
+
+            setSettings(
+                saved,
+            );
+        };
+
+    const testConnection =
+        async (): Promise<void> => {
+            await run(
+                async () => {
+                    await saveSettingsForTest();
+
+                    const result =
+                        await window
+                            .posBridge
+                            .testReceiptPrinterConnection();
+
+                    setMessage(
+                        result.message,
+                    );
+                },
+            );
+        };
+
+    const testReceipt =
+        async (): Promise<void> => {
+            await run(
+                async () => {
+                    await saveSettingsForTest();
+
+                    const result =
+                        await window
+                            .posBridge
+                            .testReceiptPrinter();
+
+                    setMessage(
+                        result.message,
+                    );
+                },
+            );
+        };
+
+    const testDrawer =
+        async (): Promise<void> => {
+            await run(
+                async () => {
+                    await saveSettingsForTest();
+
+                    const result =
+                        await window
+                            .posBridge
+                            .testCashDrawer();
+
+                    setMessage(
+                        `${result.message} This was a local hardware test and did not create a financial record.`,
+                    );
+                },
+            );
+        };
+
+    const manualOpen =
+        async (): Promise<void> => {
+            if (
+                !shift
+            ) {
+                setLocalError(
+                    'Open a cashier shift before manually opening the drawer.',
+                );
+
+                return;
+            }
+
+            if (
+                !canManualOpen
+            ) {
+                setLocalError(
+                    'Your account does not have permission to manually open the cash drawer.',
+                );
+
+                return;
+            }
+
+            if (
+                !reason.trim()
+            ) {
+                setLocalError(
+                    'Enter a reason for manually opening the drawer.',
+                );
+
+                return;
+            }
+
+            await run(
+                async () => {
+                    const response =
+                        await api.post<
+                            CashDrawerManualOpenData
+                        >(
+                            `/cashier-shifts/${shift.id}/manual-open`,
+                            {
+                                client_request_id:
+                                    manualOpenRequestId,
+
+                                reason:
+                                    reason.trim(),
+                            },
+                        );
+
+                    if (
+                        !response.data.cash_drawer.should_open
+                    ) {
+                        setMessage(
+                            'This manual-open authorization was already processed. No second drawer pulse was sent.',
+                        );
+
+                        return;
                     }
 
-                    <button
-                        type="button"
-                        className="keypad-clear"
-                        onClick={
-                            () =>
-                                setAmount(
-                                    '',
-                                )
-                        }
-                    >
-                        CLEAR
-                    </button>
+                    try {
+                        await window
+                            .posBridge
+                            .openCashDrawerHardware();
+                    } catch (
+                    hardwareException
+                    ) {
+                        setLocalError(
+                            `Laravel authorized and audited the manual open, but the hardware pulse failed. ${hardwareException
+                                instanceof Error
+                                ? hardwareException.message
+                                : ''
+                            }`,
+                        );
+
+                        return;
+                    }
+
+                    setMessage(
+                        'Manual drawer opening authorized, audited and sent to the printer.',
+                    );
+
+                    setReason(
+                        '',
+                    );
+
+                    setManualOpenRequestId(
+                        makeUuid(),
+                    );
+
+                    await load();
+                },
+            );
+        };
+
+    return (
+        <div className="module-page">
+            <ModuleHeader
+                title="Cash Drawer"
+                subtitle="Configure the cashier receipt printer and control its attached drawer."
+            />
+
+            {
+                localError
+                    ? (
+                        <div className="workspace-alert">
+                            <span>
+                                {localError}
+                            </span>
+                        </div>
+                    )
+                    : null
+            }
+
+            {
+                message
+                    ? (
+                        <div className="backend-note">
+                            {message}
+                        </div>
+                    )
+                    : null
+            }
+
+            <div className="settings-grid">
+                <section className="module-card">
+                    <h2>
+                        Receipt Printer
+                    </h2>
+
+                    <div className="form-grid">
+                        <div>
+                            <label className="field-label">
+                                Printer Name
+                            </label>
+
+                            <input
+                                className="touch-input"
+                                value={
+                                    settings.printerName
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            printerName:
+                                                event.target.value,
+                                        })
+                                }
+                            />
+                        </div>
+
+                        <div>
+                            <label className="field-label">
+                                Printer IP Address
+                            </label>
+
+                            <input
+                                className="touch-input"
+                                value={
+                                    settings.host
+                                }
+                                placeholder="192.168.1.150"
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            host:
+                                                event.target.value,
+                                        })
+                                }
+                            />
+                        </div>
+
+                        <div>
+                            <label className="field-label">
+                                TCP Port
+                            </label>
+
+                            <input
+                                className="touch-input"
+                                type="number"
+                                min="1"
+                                max="65535"
+                                value={
+                                    settings.port
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            port:
+                                                Number(
+                                                    event.target.value,
+                                                ),
+                                        })
+                                }
+                            />
+                        </div>
+
+                        <div>
+                            <label className="field-label">
+                                Drawer Pin
+                            </label>
+
+                            <select
+                                className="touch-input"
+                                value={
+                                    settings.drawerPin
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            drawerPin:
+                                                Number(
+                                                    event.target.value,
+                                                )
+                                                    ===
+                                                    1
+                                                    ? 1
+                                                    : 0,
+                                        })
+                                }
+                            >
+                                <option value={0}>
+                                    Pin 2 / ESC p 0
+                                </option>
+
+                                <option value={1}>
+                                    Pin 5 / ESC p 1
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="field-label">
+                                Pulse ON (ms)
+                            </label>
+
+                            <input
+                                className="touch-input"
+                                type="number"
+                                min="2"
+                                max="510"
+                                value={
+                                    settings.drawerPulseOnMs
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            drawerPulseOnMs:
+                                                Number(
+                                                    event.target.value,
+                                                ),
+                                        })
+                                }
+                            />
+                        </div>
+
+                        <div>
+                            <label className="field-label">
+                                Pulse OFF (ms)
+                            </label>
+
+                            <input
+                                className="touch-input"
+                                type="number"
+                                min="2"
+                                max="510"
+                                value={
+                                    settings.drawerPulseOffMs
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) =>
+                                        setSettings({
+                                            ...settings,
+
+                                            drawerPulseOffMs:
+                                                Number(
+                                                    event.target.value,
+                                                ),
+                                        })
+                                }
+                            />
+                        </div>
+                    </div>
+
+                    <div className="order-action-stack">
+                        <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={
+                                busy
+                            }
+                            onClick={
+                                () => {
+                                    void save();
+                                }
+                            }
+                        >
+                            Save Printer Settings
+                        </button>
+
+                        <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={
+                                busy
+                            }
+                            onClick={
+                                () => {
+                                    void testConnection();
+                                }
+                            }
+                        >
+                            Test Connection
+                        </button>
+
+                        <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={
+                                busy
+                            }
+                            onClick={
+                                () => {
+                                    void testReceipt();
+                                }
+                            }
+                        >
+                            Test Receipt
+                        </button>
+
+                        <button
+                            type="button"
+                            className="primary-button"
+                            disabled={
+                                busy
+                            }
+                            onClick={
+                                () => {
+                                    void testDrawer();
+                                }
+                            }
+                        >
+                            Test Drawer
+                        </button>
+                    </div>
+                </section>
+
+
+                <section className="module-card">
+                    <h2>
+                        Manual Drawer Open
+                    </h2>
+
+                    <div className="customer-summary">
+                        <div>
+                            <span>
+                                Current Shift
+                            </span>
+
+                            <strong>
+                                {
+                                    shift?.shift_number
+                                    ??
+                                    'No open shift'
+                                }
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Expected Cash
+                            </span>
+
+                            <strong>
+                                {
+                                    money(
+                                        shift?.expected_cash
+                                        ??
+                                        0,
+                                    )
+                                }
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="field-label">
+                            Reason
+                        </label>
+
+                        <input
+                            className="touch-input"
+                            value={
+                                reason
+                            }
+                            placeholder="Example: customer needs change"
+                            onChange={
+                                (
+                                    event,
+                                ) =>
+                                    setReason(
+                                        event.target.value,
+                                    )
+                            }
+                        />
+                    </div>
+
+                    <div className="backend-note">
+                        Manual Open is permission checked and audited by Laravel.
+                        It does not change the expected drawer cash balance.
+                    </div>
 
                     <button
                         type="button"
-                        className="keypad-back"
+                        className="success-button big-action-button"
+                        disabled={
+                            busy
+                            ||
+                            !shift
+                            ||
+                            !canManualOpen
+                        }
                         onClick={
-                            backspace
+                            () => {
+                                void manualOpen();
+                            }
                         }
                     >
-                        BACK
+                        {
+                            busy
+                                ? 'Please Wait...'
+                                : 'Manual Open Drawer'
+                        }
                     </button>
                 </section>
             </div>
+        </div>
+    );
+}
+
+function CashierShiftModule(
+    {
+        canOpen,
+        canClose,
+        canMoveCash,
+    }: {
+        canOpen:
+        boolean;
+
+        canClose:
+        boolean;
+
+        canMoveCash:
+        boolean;
+    },
+) {
+    const [
+        shift,
+        setShift,
+    ] =
+        useState<
+            CashierShiftRecord | null
+        >(null);
+
+    const [
+        summary,
+        setSummary,
+    ] =
+        useState<
+            CashierShiftSummary | null
+        >(null);
+
+    const [
+        openingCash,
+        setOpeningCash,
+    ] =
+        useState('');
+
+    const [
+        openingNotes,
+        setOpeningNotes,
+    ] =
+        useState('');
+
+    const [
+        movementType,
+        setMovementType,
+    ] =
+        useState<
+            'cash-in'
+            |
+            'cash-out'
+        >(
+            'cash-in',
+        );
+
+    const [
+        movementAmount,
+        setMovementAmount,
+    ] =
+        useState('');
+
+    const [
+        movementReason,
+        setMovementReason,
+    ] =
+        useState('');
+
+    const [
+        actualCash,
+        setActualCash,
+    ] =
+        useState('');
+
+    const [
+        closingNotes,
+        setClosingNotes,
+    ] =
+        useState('');
+
+    const [
+        openRequestId,
+        setOpenRequestId,
+    ] =
+        useState<string>(
+            () =>
+                makeUuid(),
+        );
+
+    const [
+        movementRequestId,
+        setMovementRequestId,
+    ] =
+        useState<string>(
+            () =>
+                makeUuid(),
+        );
+
+    const [
+        closeRequestId,
+        setCloseRequestId,
+    ] =
+        useState<string>(
+            () =>
+                makeUuid(),
+        );
+
+    const [
+        busy,
+        setBusy,
+    ] =
+        useState(false);
+
+    const [
+        message,
+        setMessage,
+    ] =
+        useState('');
+
+    const [
+        localError,
+        setLocalError,
+    ] =
+        useState('');
+
+    const loadCurrentShift =
+        useCallback(
+            async (): Promise<void> => {
+                try {
+                    const response =
+                        await api.get<
+                            CurrentCashierShiftData
+                        >(
+                            '/cashier-shifts/current',
+                        );
+
+                    setShift(
+                        response.data.shift,
+                    );
+
+                    setSummary(
+                        response.data.summary
+                        ??
+                        null,
+                    );
+                } catch (
+                exception
+                ) {
+                    setLocalError(
+                        exception
+                            instanceof Error
+                            ? exception.message
+                            : 'Unable to load cashier shift.',
+                    );
+                }
+            },
+            [],
+        );
+
+    useEffect(
+        () => {
+            void loadCurrentShift();
+        },
+        [
+            loadCurrentShift,
+        ],
+    );
+
+    useEffect(
+        () => {
+            setOpenRequestId(
+                makeUuid(),
+            );
+        },
+        [
+            openingCash,
+            openingNotes,
+        ],
+    );
+
+    useEffect(
+        () => {
+            setMovementRequestId(
+                makeUuid(),
+            );
+        },
+        [
+            movementType,
+            movementAmount,
+            movementReason,
+        ],
+    );
+
+    useEffect(
+        () => {
+            setCloseRequestId(
+                makeUuid(),
+            );
+        },
+        [
+            actualCash,
+            closingNotes,
+        ],
+    );
+
+    const run =
+        async (
+            action:
+                () => Promise<void>,
+        ): Promise<void> => {
+            setBusy(
+                true,
+            );
+
+            setMessage(
+                '',
+            );
+
+            setLocalError(
+                '',
+            );
+
+            try {
+                await action();
+            } catch (
+            exception
+            ) {
+                setLocalError(
+                    exception
+                        instanceof Error
+                        ? exception.message
+                        : 'Cashier shift operation failed.',
+                );
+            } finally {
+                setBusy(
+                    false,
+                );
+            }
+        };
+
+    const openShift =
+        async (): Promise<void> => {
+            if (
+                !canOpen
+            ) {
+                setLocalError(
+                    'Your account does not have permission to open a cashier shift.',
+                );
+
+                return;
+            }
+
+            const opening =
+                roundMoney(
+                    openingCash
+                    ||
+                    0,
+                );
+
+            if (
+                opening
+                <
+                0
+            ) {
+                setLocalError(
+                    'Opening cash cannot be negative.',
+                );
+
+                return;
+            }
+
+            await run(
+                async () => {
+                    const response =
+                        await api.post<
+                            CashierShiftMutationData
+                        >(
+                            '/cashier-shifts/open',
+                            {
+                                client_request_id:
+                                    openRequestId,
+
+                                opening_cash:
+                                    opening,
+
+                                opening_notes:
+                                    openingNotes.trim()
+                                    ||
+                                    null,
+                            },
+                        );
+
+                    setShift(
+                        response.data.shift,
+                    );
+
+                    setSummary(
+                        response.data.summary,
+                    );
+
+                    setOpeningCash(
+                        '',
+                    );
+
+                    setOpeningNotes(
+                        '',
+                    );
+
+                    setOpenRequestId(
+                        makeUuid(),
+                    );
+
+                    setMessage(
+                        response.data.created
+                            === false
+                            ? 'The existing open-shift request was returned safely.'
+                            : 'Cashier shift opened successfully.',
+                    );
+                },
+            );
+        };
+
+    const recordMovement =
+        async (): Promise<void> => {
+            if (
+                !shift
+                ||
+                shift.status
+                !== 'OPEN'
+            ) {
+                setLocalError(
+                    'An open cashier shift is required.',
+                );
+
+                return;
+            }
+
+            if (
+                !canMoveCash
+            ) {
+                setLocalError(
+                    'Your account does not have permission to record cash drawer movements.',
+                );
+
+                return;
+            }
+
+            const amount =
+                roundMoney(
+                    movementAmount
+                    ||
+                    0,
+                );
+
+            if (
+                amount
+                <=
+                0
+            ) {
+                setLocalError(
+                    'Enter a cash movement amount greater than zero.',
+                );
+
+                return;
+            }
+
+            if (
+                !movementReason.trim()
+            ) {
+                setLocalError(
+                    'A reason is required for Cash In / Cash Out.',
+                );
+
+                return;
+            }
+
+            await run(
+                async () => {
+                    const response =
+                        await api.post<
+                            CashierShiftMutationData
+                        >(
+                            `/cashier-shifts/${shift.id}/${movementType}`,
+                            {
+                                client_request_id:
+                                    movementRequestId,
+
+                                amount:
+                                    amount,
+
+                                reason:
+                                    movementReason.trim(),
+                            },
+                        );
+
+                    setShift(
+                        response.data.shift,
+                    );
+
+                    setSummary(
+                        response.data.summary,
+                    );
+
+                    setMovementAmount(
+                        '',
+                    );
+
+                    setMovementReason(
+                        '',
+                    );
+
+                    setMovementRequestId(
+                        makeUuid(),
+                    );
+
+                    setMessage(
+                        movementType
+                            === 'cash-in'
+                            ? 'Cash In recorded successfully.'
+                            : 'Cash Out recorded successfully.',
+                    );
+                },
+            );
+        };
+
+
+    const closeShift =
+        async (): Promise<void> => {
+            if (
+                !shift
+                ||
+                shift.status
+                !== 'OPEN'
+            ) {
+                setLocalError(
+                    'There is no open cashier shift to close.',
+                );
+
+                return;
+            }
+
+            if (
+                !canClose
+            ) {
+                setLocalError(
+                    'Your account does not have permission to close a cashier shift.',
+                );
+
+                return;
+            }
+
+            const countedCash =
+                roundMoney(
+                    actualCash
+                    ||
+                    0,
+                );
+
+            if (
+                countedCash
+                <
+                0
+            ) {
+                setLocalError(
+                    'Actual cash cannot be negative.',
+                );
+
+                return;
+            }
+
+            await run(
+                async () => {
+                    const response =
+                        await api.post<
+                            CashierShiftMutationData
+                        >(
+                            `/cashier-shifts/${shift.id}/close`,
+                            {
+                                client_request_id:
+                                    closeRequestId,
+
+                                actual_cash:
+                                    countedCash,
+
+                                closing_notes:
+                                    closingNotes.trim()
+                                    ||
+                                    null,
+                            },
+                        );
+
+                    setShift(
+                        response.data.shift,
+                    );
+
+                    setSummary(
+                        response.data.summary,
+                    );
+
+                    setActualCash(
+                        '',
+                    );
+
+                    setClosingNotes(
+                        '',
+                    );
+
+                    setCloseRequestId(
+                        makeUuid(),
+                    );
+
+                    setMessage(
+                        response.data.closed
+                            === false
+                            ? 'The existing shift-close request was returned safely.'
+                            : 'Cashier shift closed successfully.',
+                    );
+                },
+            );
+        };
+
+    const isOpen =
+        shift?.status
+        === 'OPEN';
+
+    return (
+        <div className="module-page">
+            <ModuleHeader
+                title="Cashier Shift"
+                subtitle="Opening cash, cash movement tracking and drawer reconciliation."
+            />
+
+            {
+                localError
+                    ? (
+                        <div className="workspace-alert">
+                            <span>
+                                {localError}
+                            </span>
+                        </div>
+                    )
+                    : null
+            }
+
+            {
+                message
+                    ? (
+                        <div className="backend-note">
+                            {message}
+                        </div>
+                    )
+                    : null
+            }
+
+            {
+                isOpen
+                    ? (
+                        <>
+                            <div className="settings-grid">
+                                <SettingCard
+                                    label="Shift"
+                                    value={
+                                        shift?.shift_number
+                                        ??
+                                        '—'
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Opening Cash"
+                                    value={
+                                        money(
+                                            summary?.opening_cash
+                                            ??
+                                            shift?.opening_cash
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Cash Sales"
+                                    value={
+                                        money(
+                                            summary?.cash_sales
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Cash Refunds"
+                                    value={
+                                        money(
+                                            summary?.cash_refunds
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Cash In"
+                                    value={
+                                        money(
+                                            summary?.cash_in
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Cash Out"
+                                    value={
+                                        money(
+                                            summary?.cash_out
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+
+                                <SettingCard
+                                    label="Expected Drawer"
+                                    value={
+                                        money(
+                                            summary?.expected_cash
+                                            ??
+                                            shift?.expected_cash
+                                            ??
+                                            0,
+                                        )
+                                    }
+                                />
+                            </div>
+
+                            <div className="settings-grid">
+                                <section className="module-card">
+                                    <h2>
+                                        Cash In / Cash Out
+                                    </h2>
+
+                                    <div className="payment-methods">
+                                        <button
+                                            type="button"
+                                            className={
+                                                movementType
+                                                    === 'cash-in'
+                                                    ? 'is-active'
+                                                    : ''
+                                            }
+                                            disabled={
+                                                busy
+                                            }
+                                            onClick={
+                                                () =>
+                                                    setMovementType(
+                                                        'cash-in',
+                                                    )
+                                            }
+                                        >
+                                            CASH IN
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className={
+                                                movementType
+                                                    === 'cash-out'
+                                                    ? 'is-active'
+                                                    : ''
+                                            }
+                                            disabled={
+                                                busy
+                                            }
+                                            onClick={
+                                                () =>
+                                                    setMovementType(
+                                                        'cash-out',
+                                                    )
+                                            }
+                                        >
+                                            CASH OUT
+                                        </button>
+                                    </div>
+
+                                    <div className="form-grid">
+                                        <div>
+                                            <label className="field-label">
+                                                Amount
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    movementAmount
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setMovementAmount(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Reason
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    movementReason
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setMovementReason(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="primary-button big-action-button"
+                                        disabled={
+                                            busy
+                                            ||
+                                            !canMoveCash
+                                        }
+                                        onClick={
+                                            () => {
+                                                void recordMovement();
+                                            }
+                                        }
+                                    >
+                                        {
+                                            movementType
+                                                === 'cash-in'
+                                                ? 'Record Cash In'
+                                                : 'Record Cash Out'
+                                        }
+                                    </button>
+                                </section>
+
+                                <section className="module-card">
+                                    <h2>
+                                        Close Shift
+                                    </h2>
+
+                                    <div className="backend-note">
+                                        Expected Drawer: {
+                                            money(
+                                                summary?.expected_cash
+                                                ??
+                                                shift?.expected_cash
+                                                ??
+                                                0,
+                                            )
+                                        }
+                                    </div>
+
+                                    <div className="form-grid">
+                                        <div>
+                                            <label className="field-label">
+                                                Actual Cash Counted
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={
+                                                    actualCash
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setActualCash(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="field-label">
+                                                Closing Notes
+                                            </label>
+
+                                            <input
+                                                className="touch-input"
+                                                value={
+                                                    closingNotes
+                                                }
+                                                onChange={
+                                                    (
+                                                        event,
+                                                    ) =>
+                                                        setClosingNotes(
+                                                            event.target.value,
+                                                        )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="success-button big-action-button"
+                                        disabled={
+                                            busy
+                                            ||
+                                            !canClose
+                                        }
+                                        onClick={
+                                            () => {
+                                                void closeShift();
+                                            }
+                                        }
+                                    >
+                                        Close Shift
+                                    </button>
+                                </section>
+                            </div>
+                        </>
+                    )
+                    : (
+                        <section className="module-card">
+                            <h2>
+                                Open Cashier Shift
+                            </h2>
+
+                            {
+                                shift
+                                    &&
+                                    shift.status
+                                    === 'CLOSED'
+                                    ? (
+                                        <div className="backend-note">
+                                            Previous shift closed.
+                                            Expected: {
+                                                money(
+                                                    shift.expected_cash,
+                                                )
+                                            }
+                                            {' • '}
+                                            Actual: {
+                                                money(
+                                                    shift.actual_cash
+                                                    ??
+                                                    0,
+                                                )
+                                            }
+                                            {' • '}
+                                            Difference: {
+                                                money(
+                                                    shift.cash_difference
+                                                    ??
+                                                    0,
+                                                )
+                                            }
+                                        </div>
+                                    )
+                                    : null
+                            }
+
+                            <div className="form-grid">
+                                <div>
+                                    <label className="field-label">
+                                        Opening Cash
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={
+                                            openingCash
+                                        }
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setOpeningCash(
+                                                    event.target.value,
+                                                )
+                                        }
+                                        placeholder="10000.00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="field-label">
+                                        Opening Notes
+                                    </label>
+
+                                    <input
+                                        className="touch-input"
+                                        value={
+                                            openingNotes
+                                        }
+                                        onChange={
+                                            (
+                                                event,
+                                            ) =>
+                                                setOpeningNotes(
+                                                    event.target.value,
+                                                )
+                                        }
+                                        placeholder="Optional"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="success-button big-action-button"
+                                disabled={
+                                    busy
+                                    ||
+                                    !canOpen
+                                }
+                                onClick={
+                                    () => {
+                                        void openShift();
+                                    }
+                                }
+                            >
+                                Open Shift
+                            </button>
+                        </section>
+                    )
+            }
+
+            <button
+                type="button"
+                className="secondary-button"
+                disabled={
+                    busy
+                }
+                onClick={
+                    () => {
+                        void loadCurrentShift();
+                    }
+                }
+            >
+                Refresh Shift
+            </button>
         </div>
     );
 }
@@ -3696,53 +7228,6 @@ function SettingsModule(
             </div>
 
             <KitchenPrinterModule />
-        </div>
-    );
-}
-
-function UnavailableModule(
-    {
-        title,
-        message,
-        actionLabel,
-    }: {
-        title: string;
-        message: string;
-        actionLabel: string;
-    },
-) {
-    return (
-        <div className="module-page">
-            <ModuleHeader
-                title={
-                    title
-                }
-                subtitle="Touchscreen module prepared."
-            />
-
-            <section className="unavailable-card">
-                <div className="unavailable-icon">
-                    !
-                </div>
-
-                <h3>
-                    Backend integration pending
-                </h3>
-
-                <p>
-                    {message}
-                </p>
-
-                <button
-                    type="button"
-                    className="primary-button big-action-button"
-                    disabled
-                >
-                    {
-                        actionLabel
-                    }
-                </button>
-            </section>
         </div>
     );
 }

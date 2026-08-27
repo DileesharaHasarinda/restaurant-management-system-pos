@@ -19,10 +19,24 @@ import {
   stopKitchenPrintWorker,
 } from "./kitchenPrintWorker";
 
+import {
+  loadReceiptPrinterSettings,
+  printCustomerReceipt,
+  printReceiptTestPage,
+  pulseCashDrawer,
+  saveReceiptPrinterSettings,
+  testReceiptPrinterConnection,
+} from "./receiptPrinter";
+
 import type {
   KitchenKotPayload,
   KitchenPrinterSettings,
 } from "./kitchenPrinterTypes";
+
+import type {
+  CustomerReceiptPayload,
+  ReceiptPrinterSettings,
+} from "./receiptPrinterTypes";
 
 if (started) {
   app.quit();
@@ -61,10 +75,10 @@ const getStoredAuthToken = async (): Promise<string | null> => {
 
 const registerIpcHandlers = (): void => {
   /*
-      |--------------------------------------------------------------------------
-      | Authentication
-      |--------------------------------------------------------------------------
-      */
+  |--------------------------------------------------------------------------
+  | Authentication
+  |--------------------------------------------------------------------------
+  */
 
   ipcMain.handle(
     "pos:session:get-token",
@@ -107,10 +121,10 @@ const registerIpcHandlers = (): void => {
   );
 
   /*
-      |--------------------------------------------------------------------------
-      | Device Information
-      |--------------------------------------------------------------------------
-      */
+  |--------------------------------------------------------------------------
+  | Device Information
+  |--------------------------------------------------------------------------
+  */
 
   ipcMain.handle(
     "pos:device-info",
@@ -125,10 +139,10 @@ const registerIpcHandlers = (): void => {
   );
 
   /*
-      |--------------------------------------------------------------------------
-      | Kitchen Printer Settings
-      |--------------------------------------------------------------------------
-      */
+  |--------------------------------------------------------------------------
+  | Phase 22 - Kitchen Printer
+  |--------------------------------------------------------------------------
+  */
 
   ipcMain.handle(
     "pos:kitchen-printer:get-settings",
@@ -143,12 +157,6 @@ const registerIpcHandlers = (): void => {
       saveKitchenPrinterSettings(settings)
   );
 
-  /*
-      |--------------------------------------------------------------------------
-      | Printer Connection Test
-      |--------------------------------------------------------------------------
-      */
-
   ipcMain.handle(
     "pos:kitchen-printer:test-connection",
 
@@ -158,12 +166,6 @@ const registerIpcHandlers = (): void => {
       return testKitchenPrinterConnection(settings);
     }
   );
-
-  /*
-      |--------------------------------------------------------------------------
-      | Test Print
-      |--------------------------------------------------------------------------
-      */
 
   ipcMain.handle(
     "pos:kitchen-printer:test-print",
@@ -175,12 +177,6 @@ const registerIpcHandlers = (): void => {
     }
   );
 
-  /*
-      |--------------------------------------------------------------------------
-      | Manual KOT Print
-      |--------------------------------------------------------------------------
-      */
-
   ipcMain.handle(
     "pos:kitchen-printer:print-kot",
 
@@ -188,6 +184,89 @@ const registerIpcHandlers = (): void => {
       const settings = await loadKitchenPrinterSettings();
 
       return printKitchenKot(settings, payload);
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Phase 30 - Cashier Receipt Printer
+  |--------------------------------------------------------------------------
+  */
+
+  ipcMain.handle(
+    "pos:receipt-printer:get-settings",
+
+    async () => loadReceiptPrinterSettings()
+  );
+
+  ipcMain.handle(
+    "pos:receipt-printer:set-settings",
+
+    async (_event, settings: Partial<ReceiptPrinterSettings>) =>
+      saveReceiptPrinterSettings(settings)
+  );
+
+  ipcMain.handle(
+    "pos:receipt-printer:test-connection",
+
+    async () => {
+      const settings = await loadReceiptPrinterSettings();
+
+      return testReceiptPrinterConnection(settings);
+    }
+  );
+
+  ipcMain.handle(
+    "pos:receipt-printer:test-print",
+
+    async () => {
+      const settings = await loadReceiptPrinterSettings();
+
+      return printReceiptTestPage(settings);
+    }
+  );
+
+  ipcMain.handle(
+    "pos:receipt-printer:print-receipt",
+
+    async (_event, payload: CustomerReceiptPayload) => {
+      const settings = await loadReceiptPrinterSettings();
+
+      return printCustomerReceipt(settings, payload);
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Phase 30 - Cash Drawer Hardware
+  |--------------------------------------------------------------------------
+  |
+  | Test Drawer:
+  | Local hardware diagnostics only.
+  |
+  | Open Hardware:
+  | Renderer calls this only after Laravel returns
+  | cash_drawer.should_open = true.
+  |--------------------------------------------------------------------------
+  */
+
+  ipcMain.handle(
+    "pos:cash-drawer:test",
+
+    async () => {
+      const settings = await loadReceiptPrinterSettings();
+
+      return pulseCashDrawer(settings);
+    }
+  );
+
+  ipcMain.handle(
+    "pos:cash-drawer:open-hardware",
+
+    async () => {
+      const settings = await loadReceiptPrinterSettings();
+
+      return pulseCashDrawer(settings);
     }
   );
 };
@@ -250,9 +329,9 @@ void app.whenReady().then(() => {
   registerIpcHandlers();
 
   /*
-   * Phase 22:
+   * Phase 22 kitchen printer worker.
    *
-   * The worker remains harmless until:
+   * It remains harmless until:
    *
    * autoPrint = true
    * AND
@@ -268,19 +347,31 @@ void app.whenReady().then(() => {
 
   createWindow();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+  app.on(
+    "activate",
+
+    () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
     }
-  });
+  );
 });
 
-app.on("before-quit", () => {
-  stopKitchenPrintWorker();
-});
+app.on(
+  "before-quit",
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
+  () => {
+    stopKitchenPrintWorker();
   }
-});
+);
+
+app.on(
+  "window-all-closed",
+
+  () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  }
+);

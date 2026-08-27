@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\CashDrawerController;
 use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\FoundationController;
@@ -1406,6 +1407,39 @@ Route::middleware(
             )
             ->name(
                 'v1.cashier-shifts.close'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 30 - Cash Drawer Manual Open
+        |--------------------------------------------------------------------------
+        |
+        | This endpoint authorizes and audits a manual drawer opening.
+        |
+        | Electron must only send the physical ESC/POS drawer pulse when
+        | the API response returns:
+        |
+        | cash_drawer.should_open = true
+        |
+        | Idempotent retries return should_open = false.
+        |
+        */
+
+        Route::post(
+            '/cashier-shifts/{cashierShift}/manual-open',
+            [
+                CashDrawerController::class,
+                'manualOpen',
+            ]
+        )
+            ->whereNumber(
+                'cashierShift'
+            )
+            ->middleware(
+                'permission:cash_drawer.open'
+            )
+            ->name(
+                'v1.cashier-shifts.manual-open'
             );
 
         /*
