@@ -31,6 +31,9 @@ import AccessDeniedPage
 import ModulePlaceholderPage
   from './pages/ModulePlaceholderPage';
 
+import MenuManagementPage
+  from './menu/MenuManagementPage';
+
 import {
   defaultRouteForUser,
 } from './navigation/navigation';
@@ -164,11 +167,7 @@ export default function App() {
               <Route
                 path="/menu"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="RESTAURANT"
-                    title="Menu Management"
-                    description="Manage categories, items, variants, add-ons, prices and availability."
-                  />
+                  <MenuManagementPage />
                 }
               />
 

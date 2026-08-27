@@ -50,21 +50,15 @@ export class ApiError extends Error {
 
   constructor(
     message: string,
-
     status: number,
-
     code: string | null = null,
-
     errors: Record<string, string[]> = {}
   ) {
     super(message);
 
     this.name = "ApiError";
-
     this.status = status;
-
     this.code = code;
-
     this.errors = errors;
   }
 }
@@ -125,21 +119,34 @@ interface RequestOptions extends RequestInit {
 
 async function request<T>(
   endpoint: string,
-
   options: RequestOptions = {}
 ): Promise<ApiSuccess<T>> {
-  const {
-    authenticated = true,
-
-    headers,
-    ...requestOptions
-  } = options;
+  const { authenticated = true, headers, ...requestOptions } = options;
 
   const token = authTokenStorage.get();
 
   const requestHeaders = new Headers(headers);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Default Headers
+  |--------------------------------------------------------------------------
+  */
+
   requestHeaders.set("Accept", "application/json");
+
+  /*
+  |--------------------------------------------------------------------------
+  | JSON Content-Type
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  |
+  | Do not manually set Content-Type when FormData is used.
+  |
+  | The browser must generate the multipart boundary itself.
+  |--------------------------------------------------------------------------
+  */
 
   if (
     requestOptions.body !== undefined &&
@@ -150,16 +157,27 @@ async function request<T>(
     requestHeaders.set("Content-Type", "application/json");
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Authentication
+  |--------------------------------------------------------------------------
+  */
+
   if (authenticated && token) {
     requestHeaders.set("Authorization", `Bearer ${token}`);
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | HTTP Request
+  |--------------------------------------------------------------------------
+  */
 
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...requestOptions,
-
       headers: requestHeaders,
     });
   } catch {
@@ -171,26 +189,24 @@ async function request<T>(
   }
 
   /*
-    |--------------------------------------------------------------------------
-    | Handle Empty Response
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Empty Response
+  |--------------------------------------------------------------------------
+  */
 
   if (response.status === 204) {
     return {
       success: true,
-
       data: undefined as T,
-
       message: "Request completed successfully.",
     };
   }
 
   /*
-    |--------------------------------------------------------------------------
-    | Parse JSON
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Parse JSON
+  |--------------------------------------------------------------------------
+  */
 
   let payload: unknown;
 
@@ -205,10 +221,10 @@ async function request<T>(
   }
 
   /*
-    |--------------------------------------------------------------------------
-    | HTTP Error Response
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | HTTP Error Response
+  |--------------------------------------------------------------------------
+  */
 
   if (!response.ok) {
     if (!isRecord(payload)) {
@@ -230,10 +246,10 @@ async function request<T>(
   }
 
   /*
-    |--------------------------------------------------------------------------
-    | Validate Successful Envelope
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Validate Successful Envelope
+  |--------------------------------------------------------------------------
+  */
 
   if (!isRecord(payload)) {
     throw new ApiError(
@@ -263,10 +279,10 @@ async function request<T>(
   }
 
   /*
-    |--------------------------------------------------------------------------
-    | Successful Response
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Successful Response
+  |--------------------------------------------------------------------------
+  */
 
   return {
     success: true,
@@ -274,6 +290,8 @@ async function request<T>(
     data: payload.data as T,
 
     message: getString(payload.message) ?? "Request completed successfully.",
+
+    meta: isRecord(payload.meta) ? payload.meta : undefined,
   };
 }
 
@@ -284,66 +302,102 @@ async function request<T>(
 */
 
 export const api = {
-  get<T>(
-    endpoint: string,
+  /*
+  |--------------------------------------------------------------------------
+  | GET
+  |--------------------------------------------------------------------------
+  */
 
-    authenticated = true
-  ): Promise<ApiSuccess<T>> {
+  get<T>(endpoint: string, authenticated = true): Promise<ApiSuccess<T>> {
     return request<T>(endpoint, {
       method: "GET",
-
       authenticated,
     });
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | POST JSON
+  |--------------------------------------------------------------------------
+  */
+
   post<T>(
     endpoint: string,
-
     body?: unknown,
-
     authenticated = true
   ): Promise<ApiSuccess<T>> {
     return request<T>(endpoint, {
       method: "POST",
-
       authenticated,
 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   },
 
-  put<T>(
-    endpoint: string,
+  /*
+  |--------------------------------------------------------------------------
+  | POST FORM DATA
+  |--------------------------------------------------------------------------
+  |
+  | Used for:
+  |
+  | POST /menu/items/{menuItem}/photo
+  |
+  | and any future multipart uploads.
+  |--------------------------------------------------------------------------
+  */
 
-    body?: unknown
+  postForm<T>(
+    endpoint: string,
+    body: FormData,
+    authenticated = true
   ): Promise<ApiSuccess<T>> {
+    return request<T>(endpoint, {
+      method: "POST",
+      authenticated,
+      body,
+    });
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | PUT
+  |--------------------------------------------------------------------------
+  */
+
+  put<T>(endpoint: string, body?: unknown): Promise<ApiSuccess<T>> {
     return request<T>(endpoint, {
       method: "PUT",
-
       authenticated: true,
 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   },
 
-  patch<T>(
-    endpoint: string,
+  /*
+  |--------------------------------------------------------------------------
+  | PATCH
+  |--------------------------------------------------------------------------
+  */
 
-    body?: unknown
-  ): Promise<ApiSuccess<T>> {
+  patch<T>(endpoint: string, body?: unknown): Promise<ApiSuccess<T>> {
     return request<T>(endpoint, {
       method: "PATCH",
-
       authenticated: true,
 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   },
+
+  /*
+  |--------------------------------------------------------------------------
+  | DELETE
+  |--------------------------------------------------------------------------
+  */
 
   delete<T>(endpoint: string): Promise<ApiSuccess<T>> {
     return request<T>(endpoint, {
       method: "DELETE",
-
       authenticated: true,
     });
   },
