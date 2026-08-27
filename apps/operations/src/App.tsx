@@ -28,6 +28,12 @@ import LoginPage
 import AccessDeniedPage
   from './pages/AccessDeniedPage';
 
+import InventoryPage
+  from './inventory/InventoryPage';
+
+import IngredientsPage
+  from './ingredients/IngredientsPage';
+
 import ModulePlaceholderPage
   from './pages/ModulePlaceholderPage';
 
@@ -174,22 +180,14 @@ export default function App() {
               <Route
                 path="/inventory"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="INVENTORY"
-                    title="Stock"
-                    description="Review current ingredient stock, low stock, movements and valuation."
-                  />
+                  <InventoryPage />
                 }
               />
 
               <Route
                 path="/ingredients"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="INVENTORY"
-                    title="Ingredients"
-                    description="Manage ingredients, base units, minimum stock and inventory configuration."
-                  />
+                  <IngredientsPage />
                 }
               />
 
