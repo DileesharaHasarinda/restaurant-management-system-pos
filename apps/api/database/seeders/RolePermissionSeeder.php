@@ -834,6 +834,13 @@ class RolePermissionSeeder extends Seeder
                 'purchases.pay',
 
                 /*
+                * Expenses
+                */
+                'expenses.view',
+                'expenses.create',
+                'expenses.manage',
+
+                /*
                  * Business Day
                  */
                 'business_day.view',

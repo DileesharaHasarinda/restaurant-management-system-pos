@@ -40,6 +40,9 @@ import PurchasesPage from "./purchases/PurchasesPage";
 import StockAdjustmentsPage
   from "./stockAdjustments/StockAdjustmentsPage";
 
+import ExpensesPage
+  from "./expenses/ExpensesPage";
+
 import WastagePage
   from "./wastage/WastagePage";
 
@@ -247,15 +250,10 @@ export default function App() {
                   <SupplierPaymentsPage />
                 }
               />
-
               <Route
                 path="/expenses"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="FINANCE"
-                    title="Expenses"
-                    description="Record and manage restaurant operational expenses."
-                  />
+                  <ExpensesPage />
                 }
               />
 
