@@ -37,6 +37,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import WastagePage
+  from "./wastage/WastagePage";
+
 import SupplierPaymentsPage
   from "./supplierPayments/SupplierPaymentsPage";
 
@@ -214,11 +217,7 @@ export default function App() {
               <Route
                 path="/wastage"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="INVENTORY"
-                    title="Wastage"
-                    description="Record spoiled, damaged and other ingredient wastage."
-                  />
+                  <WastagePage />
                 }
               />
 

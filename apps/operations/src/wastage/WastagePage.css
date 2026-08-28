@@ -1,0 +1,545 @@
+.wastage-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.wastage-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.wastage-page-header h1 {
+  margin: 4px 0 8px;
+  color: #111827;
+  font-size: 30px;
+}
+
+.wastage-page-header p {
+  max-width: 760px;
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.wastage-eyebrow {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.wastage-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wastage-button {
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.wastage-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.wastage-button-primary {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
+.wastage-button-secondary {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.wastage-alert {
+  padding: 13px 15px;
+  border: 1px solid;
+  border-radius: 11px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wastage-alert-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.wastage-alert-success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.wastage-alert-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.wastage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.wastage-summary-grid article {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.wastage-summary-grid span {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wastage-summary-grid strong {
+  color: #111827;
+  font-size: 20px;
+}
+
+.wastage-summary-grid small {
+  color: #9ca3af;
+}
+
+.wastage-panel {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+}
+
+.wastage-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.3fr)
+    minmax(150px, 1fr)
+    minmax(130px, 0.7fr)
+    minmax(140px, 0.8fr)
+    minmax(140px, 0.8fr)
+    auto;
+  gap: 10px;
+  align-items: end;
+  padding: 17px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wastage-filter-field,
+.wastage-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wastage-filter-field > span,
+.wastage-field > span {
+  color: #374151;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.wastage-filter-field input,
+.wastage-filter-field select,
+.wastage-field input,
+.wastage-field select,
+.wastage-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+}
+
+.wastage-filter-field input,
+.wastage-filter-field select,
+.wastage-field input,
+.wastage-field select {
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.wastage-field textarea {
+  min-height: 90px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.wastage-field small {
+  align-self: flex-end;
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+.wastage-filter-field input:focus,
+.wastage-filter-field select:focus,
+.wastage-field input:focus,
+.wastage-field select:focus,
+.wastage-field textarea:focus {
+  outline: 2px solid #dbeafe;
+  border-color: #93c5fd;
+}
+
+.wastage-filter-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.wastage-loading,
+.wastage-empty {
+  padding: 48px 24px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.wastage-empty strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #374151;
+}
+
+.wastage-empty p {
+  margin: 0;
+}
+
+.wastage-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.wastage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wastage-table th,
+.wastage-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #edf0f3;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.wastage-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.wastage-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.wastage-cell-meta {
+  display: block;
+  margin-top: 3px;
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+.wastage-reason-badge {
+  display: inline-flex;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.wastage-small-button {
+  min-height: 31px;
+  padding: 5px 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #374151;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.wastage-small-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.wastage-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 14px 18px;
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.wastage-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wastage-modal-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgb(15 23 42 / 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.wastage-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: calc(100vh - 44px);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 0.28);
+}
+
+.wastage-details-modal {
+  width: min(900px, 100%);
+}
+
+.wastage-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 23px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wastage-modal-header h2 {
+  margin: 4px 0 5px;
+  color: #111827;
+  font-size: 22px;
+}
+
+.wastage-modal-header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.wastage-icon-button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.wastage-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+  padding: 21px 23px 23px;
+  overflow-y: auto;
+}
+
+.wastage-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.wastage-field-full {
+  grid-column: 1 / -1;
+}
+
+.wastage-stock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 15px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.wastage-stock-card span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.wastage-stock-card strong {
+  color: #111827;
+  font-size: 20px;
+}
+
+.wastage-stock-card small {
+  color: #9ca3af;
+}
+
+.wastage-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 17px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.wastage-details-summary,
+.wastage-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wastage-details-summary article,
+.wastage-details-grid article {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.wastage-details-summary span,
+.wastage-details-grid span,
+.wastage-record-meta span,
+.wastage-note-box span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.wastage-details-summary strong,
+.wastage-details-grid strong,
+.wastage-record-meta strong {
+  color: #111827;
+}
+
+.wastage-details-grid small {
+  color: #9ca3af;
+}
+
+.wastage-note-box {
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.wastage-note-box p {
+  margin: 6px 0 0;
+  color: #374151;
+  line-height: 1.55;
+}
+
+.wastage-record-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wastage-record-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+@media (max-width: 1100px) {
+  .wastage-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wastage-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .wastage-page-header {
+    flex-direction: column;
+  }
+
+  .wastage-summary-grid,
+  .wastage-filters,
+  .wastage-form-grid,
+  .wastage-details-summary,
+  .wastage-details-grid,
+  .wastage-record-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .wastage-field-full {
+    grid-column: auto;
+  }
+
+  .wastage-header-actions,
+  .wastage-filter-actions {
+    width: 100%;
+  }
+
+  .wastage-header-actions .wastage-button,
+  .wastage-filter-actions .wastage-button {
+    flex: 1;
+  }
+
+  .wastage-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wastage-pagination > div {
+    justify-content: space-between;
+  }
+
+  .wastage-modal-backdrop {
+    padding: 8px;
+  }
+
+  .wastage-modal {
+    max-height: calc(100vh - 16px);
+  }
+}
