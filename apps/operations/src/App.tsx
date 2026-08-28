@@ -37,6 +37,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import StockAdjustmentsPage
+  from "./stockAdjustments/StockAdjustmentsPage";
+
 import WastagePage
   from "./wastage/WastagePage";
 
@@ -206,11 +209,7 @@ export default function App() {
               <Route
                 path="/stock-adjustments"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="INVENTORY"
-                    title="Stock Adjustments"
-                    description="Record and review controlled physical inventory corrections."
-                  />
+                  <StockAdjustmentsPage />
                 }
               />
 
