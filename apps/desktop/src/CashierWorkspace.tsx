@@ -7,6 +7,10 @@ import CashDrawerModule
 import PaymentModule
     from './cashier/payments/PaymentModule';
 
+import type {
+    CashierInvoice,
+} from './cashier/payments/types';
+
 import CurrentOrderModule
     from './cashier/orders/CurrentOrderModule';
 
@@ -1552,6 +1556,183 @@ export default function CashierWorkspace(
 
     /*
     |--------------------------------------------------------------------------
+    | Finalize Orders After Full Payment
+    |--------------------------------------------------------------------------
+    |
+    | PaymentModule calls this only after Laravel confirms that the invoice
+    | is fully PAID.
+    |
+    | Single-order invoice:
+    |     complete invoice.order_id
+    |
+    | Table-session invoice:
+    |     complete every SERVED order belonging to that billed session
+    |
+    | The financial payment has already been committed at this point. If an
+    | order completion request fails, the error is allowed to propagate back
+    | to PaymentModule so it can clearly tell the cashier that the payment
+    | itself was saved and only lifecycle finalization needs recovery.
+    |--------------------------------------------------------------------------
+    */
+
+    const finalizePaidInvoiceOrders =
+        useCallback(
+            async (
+                invoice:
+                    CashierInvoice,
+            ): Promise<void> => {
+                const candidateIds =
+                    new Set<number>();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Direct Order Invoice
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    invoice.order_id
+                    !==
+                    null
+                ) {
+                    candidateIds.add(
+                        invoice.order_id,
+                    );
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Table Session Invoice
+                |--------------------------------------------------------------------------
+                |
+                | A final dine-in invoice can represent several SERVED orders
+                | in the same table session.
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    invoice.table_session_id
+                    !==
+                    null
+                ) {
+                    orders
+                        .filter(
+                            (
+                                item,
+                            ) =>
+                                item.status
+                                ===
+                                'SERVED'
+                                &&
+                                item.table_session_id
+                                ===
+                                invoice.table_session_id,
+                        )
+                        .forEach(
+                            (
+                                item,
+                            ) => {
+                                candidateIds.add(
+                                    item.id,
+                                );
+                            },
+                        );
+
+                    if (
+                        selectedOrder
+                        &&
+                        selectedOrder.status
+                        ===
+                        'SERVED'
+                        &&
+                        selectedOrder.table_session_id
+                        ===
+                        invoice.table_session_id
+                    ) {
+                        candidateIds.add(
+                            selectedOrder.id,
+                        );
+                    }
+                }
+
+                /*
+                 * If the order was already finalized elsewhere, there may be
+                 * no local SERVED session candidates left. Refresh the lists
+                 * so Incoming Orders and Sales History still synchronize.
+                 */
+                if (
+                    candidateIds.size
+                    ===
+                    0
+                ) {
+                    await Promise.all([
+                        loadOrders(),
+                        loadTables(),
+                    ]);
+
+                    return;
+                }
+
+                setLoading(
+                    true,
+                );
+
+                setError(
+                    null,
+                );
+
+                try {
+                    for (
+                        const orderId
+                        of candidateIds
+                    ) {
+                        const response =
+                            await api.post<ApiOrderResponse>(
+                                `/orders/${orderId}/complete`,
+                                {},
+                            );
+
+                        if (
+                            response.data
+                            &&
+                            selectedOrder
+                            &&
+                            selectedOrder.id
+                            ===
+                            orderId
+                        ) {
+                            setSelectedOrder(
+                                normalizeOrder(
+                                    response.data,
+                                ),
+                            );
+                        }
+                    }
+
+                    /*
+                     * COMPLETED orders leave Incoming Orders and become part
+                     * of Sales History through the existing derived filters.
+                     */
+                    await Promise.all([
+                        loadOrders(),
+                        loadTables(),
+                    ]);
+                } finally {
+                    setLoading(
+                        false,
+                    );
+                }
+            },
+            [
+                loadOrders,
+                loadTables,
+                orders,
+                selectedOrder,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Create Takeaway
     |--------------------------------------------------------------------------
     */
@@ -1864,6 +2045,9 @@ export default function CashierWorkspace(
                             }
                             onSessionExpired={
                                 onSessionExpired
+                            }
+                            onPaymentCompleted={
+                                finalizePaidInvoiceOrders
                             }
                         />
                     );

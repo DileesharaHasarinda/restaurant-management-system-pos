@@ -2,6 +2,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
 
@@ -44,12 +45,19 @@ interface PaymentModuleProps {
 
     onSessionExpired?:
     () => void;
+
+    onPaymentCompleted?:
+    (
+        invoice:
+            CashierInvoice,
+    ) => Promise<void>;
 }
 
 export default function PaymentModule(
     {
         order,
         onSessionExpired,
+        onPaymentCompleted,
     }: PaymentModuleProps,
 ) {
     const [
@@ -217,6 +225,21 @@ export default function PaymentModule(
 
     /*
     |--------------------------------------------------------------------------
+    | Paid Order Finalization Recovery
+    |--------------------------------------------------------------------------
+    |
+    | Prevent repeated automatic completion calls for the same paid invoice.
+    | If finalization fails, the ref is cleared so a later retry can recover.
+    |--------------------------------------------------------------------------
+    */
+
+    const finalizationAttemptInvoiceId =
+        useRef<number | null>(
+            null,
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Error Handler
     |--------------------------------------------------------------------------
     */
@@ -315,6 +338,10 @@ export default function PaymentModule(
             setError(
                 "",
             );
+
+            finalizationAttemptInvoiceId
+                .current =
+                null;
 
             setPaymentRequestId(
                 makePaymentUuid(),
@@ -537,6 +564,78 @@ export default function PaymentModule(
 
     /*
     |--------------------------------------------------------------------------
+    | Finalize Order(s) After Full Payment
+    |--------------------------------------------------------------------------
+    |
+    | Payment is authoritative and already committed by Laravel before this
+    | function is called.
+    |
+    | If order finalization fails:
+    | - never reverse or retry the financial transaction automatically
+    | - never print a second automatic receipt
+    | - keep the error visible so the cashier can recover safely
+    |--------------------------------------------------------------------------
+    */
+
+    const finalizePaidInvoice =
+        useCallback(
+            async (
+                paidInvoice:
+                    CashierInvoice,
+            ): Promise<string | null> => {
+                const fullyPaid =
+                    paidInvoice
+                        .payment
+                        .status
+                    ===
+                    "PAID"
+                    ||
+                    Number(
+                        paidInvoice
+                            .payment
+                            .balance_due,
+                    )
+                    <=
+                    0.009;
+
+                if (
+                    !fullyPaid
+                    ||
+                    !onPaymentCompleted
+                ) {
+                    return null;
+                }
+
+                try {
+                    await onPaymentCompleted(
+                        paidInvoice,
+                    );
+
+                    return null;
+                } catch (
+                exception
+                ) {
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status === 401
+                    ) {
+                        onSessionExpired?.();
+                    }
+
+                    return exception instanceof Error
+                        ? `Payment was SAVED successfully, but the order could not be finalized: ${exception.message}`
+                        : "Payment was SAVED successfully, but the order could not be finalized.";
+                }
+            },
+            [
+                onPaymentCompleted,
+                onSessionExpired,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Derived Amounts
     |--------------------------------------------------------------------------
     */
@@ -654,6 +753,83 @@ export default function PaymentModule(
                 balance <= 0.009
             ),
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Recover A Paid Invoice That Is Still Attached To A SERVED Order
+    |--------------------------------------------------------------------------
+    |
+    | This also repairs the exact failure mode that existed before this fix:
+    |
+    | invoice = PAID
+    | order   = SERVED
+    |
+    | Opening the Payment module again will safely retry only the order
+    | lifecycle completion. It does not create another payment.
+    |--------------------------------------------------------------------------
+    */
+
+    useEffect(
+        () => {
+            if (
+                !invoice
+                ||
+                !order
+                ||
+                order.status !== "SERVED"
+                ||
+                !isPaid
+                ||
+                !onPaymentCompleted
+                ||
+                finalizationAttemptInvoiceId
+                    .current
+                ===
+                invoice.id
+            ) {
+                return;
+            }
+
+            finalizationAttemptInvoiceId
+                .current =
+                invoice.id;
+
+            void finalizePaidInvoice(
+                invoice,
+            )
+                .then(
+                    (
+                        warning,
+                    ) => {
+                        if (
+                            warning
+                        ) {
+                            finalizationAttemptInvoiceId
+                                .current =
+                                null;
+
+                            setError(
+                                warning,
+                            );
+                        }
+                    },
+                )
+                .catch(
+                    () => {
+                        finalizationAttemptInvoiceId
+                            .current =
+                            null;
+                    },
+                );
+        },
+        [
+            finalizePaidInvoice,
+            invoice,
+            isPaid,
+            onPaymentCompleted,
+            order,
+        ],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -1044,6 +1220,19 @@ export default function PaymentModule(
             if (
                 currentBalance <= 0.009
             ) {
+                const finalizationWarning =
+                    await finalizePaidInvoice(
+                        currentInvoice,
+                    );
+
+                if (
+                    finalizationWarning
+                ) {
+                    setError(
+                        finalizationWarning,
+                    );
+                }
+
                 setMessage(
                     "This invoice is already fully paid.",
                 );
@@ -1136,6 +1325,15 @@ export default function PaymentModule(
                 const result =
                     response.data;
 
+                /*
+                 * This payment flow will finalize the order explicitly below.
+                 * Mark the invoice now so the recovery effect cannot start a
+                 * second concurrent completion request during this operation.
+                 */
+                finalizationAttemptInvoiceId
+                    .current =
+                    result.invoice.id;
+
                 setInvoice(
                     result.invoice,
                 );
@@ -1156,12 +1354,26 @@ export default function PaymentModule(
                 if (
                     !result.created
                 ) {
-                    await refreshBilling(
-                        result.invoice.id,
-                    );
+                    const refreshed =
+                        await refreshBilling(
+                            result.invoice.id,
+                        );
+
+                    const finalizationWarning =
+                        await finalizePaidInvoice(
+                            refreshed.invoice,
+                        );
+
+                    if (
+                        finalizationWarning
+                    ) {
+                        setError(
+                            finalizationWarning,
+                        );
+                    }
 
                     setMessage(
-                        "This payment request was already processed. No duplicate receipt or drawer opening was performed.",
+                        "This payment request was already processed. No duplicate payment, receipt or drawer opening was performed.",
                     );
 
                     return;
@@ -1183,6 +1395,22 @@ export default function PaymentModule(
                     );
 
                 clearEntry();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Finalize Fully Paid Order(s)
+                |--------------------------------------------------------------------------
+                |
+                | Do this after Laravel has committed the payment and before
+                | receipt/drawer hardware. A printer failure must not leave a
+                | fully paid order incorrectly stuck in SERVED.
+                |--------------------------------------------------------------------------
+                */
+
+                const finalizationWarning =
+                    await finalizePaidInvoice(
+                        refreshed.invoice,
+                    );
 
                 /*
                 |--------------------------------------------------------------------------
@@ -1233,7 +1461,7 @@ export default function PaymentModule(
                 } catch (
                 hardwareException
                 ) {
-                    setError(
+                    const hardwareMessage =
                         receiptPrinted
                             ? `Payment was SAVED and the receipt printed, but the cash drawer hardware failed: ${hardwareException instanceof Error
                                 ? hardwareException.message
@@ -1242,10 +1470,23 @@ export default function PaymentModule(
                             : `Payment was SAVED successfully, but receipt printing failed: ${hardwareException instanceof Error
                                 ? hardwareException.message
                                 : "Unknown hardware error."
-                            }`,
+                            }`;
+
+                    setError(
+                        finalizationWarning
+                            ? `${finalizationWarning} ${hardwareMessage}`
+                            : hardwareMessage,
                     );
 
                     return;
+                }
+
+                if (
+                    finalizationWarning
+                ) {
+                    setError(
+                        finalizationWarning,
+                    );
                 }
 
                 setMessage(
@@ -1554,7 +1795,7 @@ export default function PaymentModule(
                 />
 
                 <SummaryCard
-                    label="Paid Amount"
+                    label="Applied to Invoice"
                     value={
                         paymentMoney(
                             paidAmount,
@@ -1578,7 +1819,7 @@ export default function PaymentModule(
                 />
 
                 <SummaryCard
-                    label="Change"
+                    label="Change Returned"
                     value={
                         paymentMoney(
                             invoice
@@ -2290,6 +2531,32 @@ export default function PaymentModule(
                                                     </strong>
 
                                                     {
+                                                        payment.payment_method
+                                                            ===
+                                                            "CASH"
+                                                            &&
+                                                            payment.tendered_amount
+                                                            !==
+                                                            null
+                                                            &&
+                                                            payment.tendered_amount
+                                                            !==
+                                                            undefined
+                                                            ? (
+                                                                <small>
+                                                                    Cash received:
+                                                                    {" "}
+                                                                    {
+                                                                        paymentMoney(
+                                                                            payment.tendered_amount,
+                                                                        )
+                                                                    }
+                                                                </small>
+                                                            )
+                                                            : null
+                                                    }
+
+                                                    {
                                                         Number(
                                                             payment.change_given
                                                             ??
@@ -2297,7 +2564,7 @@ export default function PaymentModule(
                                                         ) > 0
                                                             ? (
                                                                 <small>
-                                                                    Change:
+                                                                    Change returned:
                                                                     {" "}
                                                                     {
                                                                         paymentMoney(
