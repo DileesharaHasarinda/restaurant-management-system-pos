@@ -1467,9 +1467,10 @@ Route::middleware(
 
         /*
         |--------------------------------------------------------------------------
-        | Phase 32 - Restaurant Day Closing
+        | Phase 32 - Restaurant Business Day Control
         |--------------------------------------------------------------------------
         |
+        | Authorized POS users can start the restaurant business day.
         | Manager / owner reviews the current restaurant business day,
         | resolves all operational blockers, and closes the day.
         |
@@ -1483,6 +1484,31 @@ Route::middleware(
         | - business day CLOSED state
         |
         */
+
+        /*
+        |--------------------------------------------------------------------------
+        | Open / Start Business Day
+        |--------------------------------------------------------------------------
+        |
+        | Authorized POS users can start the restaurant business day before
+        | opening cashier shifts or processing restaurant operations.
+        | Laravel remains authoritative for business-date and open-day rules.
+        |
+        */
+
+        Route::post(
+            '/business-days/open',
+            [
+                BusinessDayClosingController::class,
+                'open',
+            ]
+        )
+            ->middleware(
+                'permission:business_day.open'
+            )
+            ->name(
+                'v1.business-days.open'
+            );
 
         Route::get(
             '/business-days/current',

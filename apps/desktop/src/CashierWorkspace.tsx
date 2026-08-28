@@ -1,6 +1,9 @@
 import CashierShiftModule
     from './cashier/shifts/CashierShiftModule';
 
+import BusinessDayModule
+    from './cashier/businessDay/BusinessDayModule';
+
 import CashDrawerModule
     from './cashier/drawer/CashDrawerModule';
 
@@ -86,6 +89,7 @@ type PosModule =
     | 'history'
     | 'drawer'
     | 'shift'
+    | 'business-day'
     | 'settings';
 
 /*
@@ -729,6 +733,17 @@ const moduleItems:
 
         {
             key:
+                'business-day',
+
+            label:
+                'Business Day',
+
+            short:
+                'BD',
+        },
+
+        {
+            key:
                 'settings',
 
             label:
@@ -1214,6 +1229,32 @@ export default function CashierWorkspace(
                 ),
             [
                 orders,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Permission-Aware Navigation
+    |--------------------------------------------------------------------------
+    */
+
+    const visibleModuleItems =
+        useMemo(
+            () =>
+                moduleItems.filter(
+                    (
+                        item,
+                    ) =>
+                        item.key
+                        !==
+                        'business-day'
+                        ||
+                        user.permissions.includes(
+                            'business_day.view',
+                        ),
+                ),
+            [
+                user.permissions,
             ],
         );
 
@@ -2108,6 +2149,24 @@ export default function CashierWorkspace(
 
                 /*
                 |--------------------------------------------------------------------------
+                | Business Day
+                |--------------------------------------------------------------------------
+                */
+
+                case 'business-day':
+                    return (
+                        <BusinessDayModule
+                            permissions={
+                                user.permissions
+                            }
+                            onSessionExpired={
+                                onSessionExpired
+                            }
+                        />
+                    );
+
+                /*
+                |--------------------------------------------------------------------------
                 | Settings
                 |--------------------------------------------------------------------------
                 */
@@ -2162,7 +2221,7 @@ export default function CashierWorkspace(
 
                 <nav className="pos-nav">
                     {
-                        moduleItems.map(
+                        visibleModuleItems.map(
                             (
                                 item,
                             ) => (
@@ -2259,7 +2318,7 @@ export default function CashierWorkspace(
                     <div>
                         <p className="eyebrow">
                             {
-                                moduleItems
+                                visibleModuleItems
                                     .find(
                                         (
                                             item,

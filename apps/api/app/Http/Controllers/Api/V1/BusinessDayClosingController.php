@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\BusinessDayClosingException;
+use App\Exceptions\BusinessDayOpeningException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BusinessDay\CloseBusinessDayRequest;
+use App\Http\Requests\Api\V1\BusinessDay\OpenBusinessDayRequest;
 use App\Http\Resources\BusinessDayClosingResource;
 use App\Http\Resources\BusinessDayResource;
 use App\Models\BusinessDay;
 use App\Models\BusinessDayClosing;
 use App\Services\BusinessDayClosingService;
+use App\Services\BusinessDayOpeningService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,8 +21,83 @@ use Throwable;
 final class BusinessDayClosingController extends Controller
 {
     public function __construct(
-        private readonly BusinessDayClosingService $closingService
+        private readonly BusinessDayClosingService $closingService,
+        private readonly BusinessDayOpeningService $openingService
     ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Business Day
+    |--------------------------------------------------------------------------
+    */
+
+    public function open(
+        OpenBusinessDayRequest $request
+    ): JsonResponse {
+        try {
+            $result =
+                $this
+                ->openingService
+                ->open(
+                    actor: $request->user(),
+                    data: $request->validated()
+                );
+
+            return ApiResponse::success(
+                data: [
+                    'business_day' => (
+                        new BusinessDayResource(
+                            $result['business_day']
+                        )
+                    )
+                        ->resolve(
+                            $request
+                        ),
+
+                    'created' =>
+                    $result['created'],
+                ],
+
+                message: $result['created']
+                    ? 'Restaurant business day opened successfully.'
+                    : 'Current open restaurant business day returned successfully.',
+
+                status: $result['created']
+                    ? 201
+                    : 200
+            );
+        } catch (
+            BusinessDayOpeningException $exception
+        ) {
+            return ApiResponse::error(
+                message: $exception
+                    ->getMessage(),
+
+                code: $exception
+                    ->errorCode,
+
+                errors: $exception
+                    ->errors,
+
+                status: $exception
+                    ->status
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+
+            return ApiResponse::error(
+                message: 'Unable to open the restaurant business day.',
+
+                code: 'BUSINESS_DAY_OPEN_FAILED',
+
+                status: 500
+            );
+        }
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -60,7 +138,6 @@ final class BusinessDayClosingController extends Controller
         return ApiResponse::success(
             data: $this->previewData(
                 request: $request,
-
                 result: $result
             ),
 
@@ -88,7 +165,6 @@ final class BusinessDayClosingController extends Controller
         return ApiResponse::success(
             data: $this->previewData(
                 request: $request,
-
                 result: $result
             ),
 
@@ -98,7 +174,7 @@ final class BusinessDayClosingController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Close
+    | Close Business Day
     |--------------------------------------------------------------------------
     */
 
@@ -112,9 +188,7 @@ final class BusinessDayClosingController extends Controller
                 ->closingService
                 ->close(
                     actor: $request->user(),
-
                     businessDay: $businessDay,
-
                     data: $request->validated()
                 );
 

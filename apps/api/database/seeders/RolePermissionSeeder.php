@@ -486,6 +486,12 @@ class RolePermissionSeeder extends Seeder
             ],
 
             [
+                'Business Day Open',
+                'business_day.open',
+                'Business Day',
+            ],
+
+            [
                 'Business Day Close',
                 'business_day.close',
                 'Business Day',
@@ -725,6 +731,7 @@ class RolePermissionSeeder extends Seeder
                  * Business Day
                  */
                 'business_day.view',
+                'business_day.open',
                 'business_day.close',
 
                 /*
@@ -841,9 +848,11 @@ class RolePermissionSeeder extends Seeder
                 'expenses.manage',
 
                 /*
-                 * Business Day
-                 */
+ * Business Day
+ */
                 'business_day.view',
+                'business_day.open',
+                'business_day.close',
             ],
 
             permissionMap: $permissionMap
