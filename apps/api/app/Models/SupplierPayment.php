@@ -24,14 +24,31 @@ class SupplierPayment extends Model
 
     protected $fillable = [
         'payment_batch_id',
+
         'supplier_id',
         'purchase_id',
+
+        'business_day_id',
+        'cashier_shift_id',
+
         'payment_number',
+
         'payment_date',
+
         'amount',
+
         'payment_method',
-        'reference',
+
+        /*
+         * Database column.
+         *
+         * The public API continues to call
+         * this field "reference".
+         */
+        'reference_number',
+
         'notes',
+
         'created_by',
     ];
 
@@ -78,6 +95,22 @@ class SupplierPayment extends Model
         return $this->belongsTo(
             Purchase::class,
             'purchase_id'
+        );
+    }
+
+    public function businessDay(): BelongsTo
+    {
+        return $this->belongsTo(
+            BusinessDay::class,
+            'business_day_id'
+        );
+    }
+
+    public function cashierShift(): BelongsTo
+    {
+        return $this->belongsTo(
+            CashierShift::class,
+            'cashier_shift_id'
         );
     }
 

@@ -25,10 +25,15 @@ class SupplierPaymentResource extends JsonResource
             $this->payment_method,
 
             'amount' =>
-            (float) $this->amount,
+            (float)
+            $this->amount,
 
+            /*
+             * Keep the external API contract
+             * as "reference".
+             */
             'reference' =>
-            $this->reference,
+            $this->reference_number,
 
             'notes' =>
             $this->notes,

@@ -44,7 +44,7 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Cashier',
                 'code' => 'CASHIER',
                 'description' =>
-                'Cashier and POS operator.',
+                'Local cashier, POS operator and waiter.',
             ],
 
             [
@@ -82,13 +82,6 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | Remove Legacy Permissions
         |--------------------------------------------------------------------------
-        |
-        | Earlier phases used the broad:
-        |
-        | users.manage
-        |
-        | It has now been replaced with granular user-management permissions.
-        |
         */
 
         $legacyPermissionId =
@@ -356,17 +349,6 @@ class RolePermissionSeeder extends Seeder
 
             /*
              * Inventory
-             *
-             * inventory.view
-             * → Read ingredients, units and stock.
-             *
-             * inventory.manage
-             * → Create/update units and ingredient master data.
-             *
-             * inventory.adjust
-             * → Perform actual stock adjustments.
-             *
-             * These must remain separate.
              */
             [
                 'Inventory View',
@@ -589,9 +571,6 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | OWNER Permissions
         |--------------------------------------------------------------------------
-        |
-        | Owner has every permission.
-        |
         */
 
         $this->syncPermissions(
@@ -608,12 +587,6 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | ADMIN Permissions
         |--------------------------------------------------------------------------
-        |
-        | Administrator also receives all application permissions.
-        |
-        | RoleHierarchyService remains responsible for preventing an ADMIN
-        | from changing, disabling or taking over an OWNER account.
-        |
         */
 
         $this->syncPermissions(
@@ -637,9 +610,6 @@ class RolePermissionSeeder extends Seeder
 
             permissionCodes: [
 
-                /*
-                 * Dashboard
-                 */
                 'dashboard.view',
 
                 /*
@@ -771,6 +741,28 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | CASHIER Permissions
         |--------------------------------------------------------------------------
+        |
+        | In this restaurant the same local staff member performs:
+        |
+        | - Cashier duties
+        | - POS duties
+        | - Waiter duties
+        |
+        | Supplier Payment access is intentionally limited to:
+        |
+        | suppliers.view
+        | purchases.view
+        | purchases.pay
+        |
+        | The CASHIER does NOT receive:
+        |
+        | suppliers.manage
+        | purchases.create
+        | purchases.manage
+        |
+        | Therefore supplier and purchase master-data administration
+        | remains with Owner/Admin/Manager.
+        |
         */
 
         $this->syncPermissions(
@@ -784,7 +776,7 @@ class RolePermissionSeeder extends Seeder
                 'dashboard.view',
 
                 /*
-                 * Tables
+                 * Tables / Waiter Work
                  */
                 'tables.view',
                 'tables.transfer',
@@ -829,6 +821,17 @@ class RolePermissionSeeder extends Seeder
 
                 'cash_drawer.open',
                 'cash_drawer.movement',
+
+                /*
+                 * Supplier Payment Read Access
+                 */
+                'suppliers.view',
+
+                /*
+                 * Purchases / Supplier Payments
+                 */
+                'purchases.view',
+                'purchases.pay',
 
                 /*
                  * Business Day
@@ -876,10 +879,6 @@ class RolePermissionSeeder extends Seeder
         array $permissionCodes,
         Collection $permissionMap
     ): void {
-        /*
-         * Clear the current permissions for
-         * this role before rebuilding them.
-         */
         DB::table('role_permission')
             ->where(
                 'role_id',
@@ -887,17 +886,23 @@ class RolePermissionSeeder extends Seeder
             )
             ->delete();
 
-        $now = now();
+        $now =
+            now();
 
-        $rows = [];
+        $rows =
+            [];
 
         foreach (
-            $permissionCodes as $permissionCode
+            $permissionCodes
+            as $permissionCode
         ) {
             $permissionId =
-                $permissionMap[$permissionCode] ?? null;
+                $permissionMap[$permissionCode]
+                ?? null;
 
-            if (! $permissionId) {
+            if (
+                ! $permissionId
+            ) {
                 continue;
             }
 
@@ -906,7 +911,8 @@ class RolePermissionSeeder extends Seeder
                 $roleId,
 
                 'permission_id' =>
-                (int) $permissionId,
+                (int)
+                $permissionId,
 
                 'created_at' =>
                 $now,
@@ -916,7 +922,9 @@ class RolePermissionSeeder extends Seeder
             ];
         }
 
-        if ($rows !== []) {
+        if (
+            $rows !== []
+        ) {
             DB::table(
                 'role_permission'
             )->insert(

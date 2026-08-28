@@ -37,6 +37,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import SupplierPaymentsPage
+  from "./supplierPayments/SupplierPaymentsPage";
+
 import IngredientsPage
   from './ingredients/IngredientsPage';
 
@@ -243,11 +246,7 @@ export default function App() {
               <Route
                 path="/supplier-payments"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="PURCHASING"
-                    title="Supplier Payments"
-                    description="Review supplier balances and record partial or multiple payments."
-                  />
+                  <SupplierPaymentsPage />
                 }
               />
 

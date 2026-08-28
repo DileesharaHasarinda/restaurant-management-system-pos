@@ -2,60 +2,24 @@ import {
     Navigate,
     Outlet,
     useLocation,
-} from 'react-router-dom';
+} from "react-router-dom";
 
 import {
     useAuth,
-} from './useAuth';
+} from "./useAuth";
 
-/*
-|--------------------------------------------------------------------------
-| Allowed Operations Roles
-|--------------------------------------------------------------------------
-|
-| Cashier users use the Electron Cashier POS.
-|
-| Operations Web is available to:
-|
-| OWNER
-| ADMIN
-| MANAGER
-| WAITER
-|--------------------------------------------------------------------------
-*/
+import type {
+    SystemRoleCode,
+} from "../types/auth";
 
-const OPERATIONS_ROLES = [
-    'OWNER',
-    'ADMIN',
-    'MANAGER',
-    'WAITER',
-] as const;
-
-/*
-|--------------------------------------------------------------------------
-| Role Check
-|--------------------------------------------------------------------------
-*/
-
-function isOperationsRole(
-    roleCode:
-        string,
-): boolean {
-    return OPERATIONS_ROLES.some(
-        (
-            allowedRole,
-        ) =>
-            allowedRole
-            ===
-            roleCode,
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Protected Route
-|--------------------------------------------------------------------------
-*/
+const ALLOWED_OPERATIONS_ROLES:
+    readonly SystemRoleCode[] = [
+        "OWNER",
+        "ADMIN",
+        "MANAGER",
+        "WAITER",
+        "CASHIER",
+    ];
 
 export default function ProtectedRoute() {
     const {
@@ -67,12 +31,6 @@ export default function ProtectedRoute() {
     const location =
         useLocation();
 
-    /*
-    |--------------------------------------------------------------------------
-    | Loading
-    |--------------------------------------------------------------------------
-    */
-
     if (
         loading
     ) {
@@ -83,19 +41,9 @@ export default function ProtectedRoute() {
                 <strong>
                     Loading Operations
                 </strong>
-
-                <span>
-                    Restoring your secure session...
-                </span>
             </main>
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Not Authenticated
-    |--------------------------------------------------------------------------
-    */
 
     if (
         !user
@@ -112,21 +60,15 @@ export default function ProtectedRoute() {
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Check Role
-    |--------------------------------------------------------------------------
-    */
-
     const roleCode =
-        user.role
-            ?.code
-        ??
-        '';
+        user.role?.code
+        ?? null;
 
     if (
-        !isOperationsRole(
-            roleCode,
+        !roleCode
+        ||
+        !ALLOWED_OPERATIONS_ROLES.includes(
+            roleCode
         )
     ) {
         return (
@@ -136,12 +78,6 @@ export default function ProtectedRoute() {
             />
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Authorized
-    |--------------------------------------------------------------------------
-    */
 
     return (
         <Outlet />

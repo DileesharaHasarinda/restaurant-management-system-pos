@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Exceptions\SupplierPaymentException;
+use App\Models\BusinessDay;
+use App\Models\CashDrawerMovement;
+use App\Models\CashierShift;
 use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
@@ -26,13 +29,15 @@ final class SupplierPaymentService
         $requestHash =
             $this->requestHash(
                 purchase: $purchase,
-
                 data: $data
             );
 
         /*
-         * Fast-path idempotency check.
-         */
+        |--------------------------------------------------------------------------
+        | Fast Idempotency Check
+        |--------------------------------------------------------------------------
+        */
+
         $existing =
             SupplierPaymentBatch::query()
             ->where(
@@ -57,8 +62,11 @@ final class SupplierPaymentService
                     $requestHash
                 ): SupplierPaymentBatch {
                     /*
-                     * Lock purchase first.
-                     */
+                    |--------------------------------------------------------------------------
+                    | Purchase Lock
+                    |--------------------------------------------------------------------------
+                    */
+
                     /** @var Purchase $lockedPurchase */
                     $lockedPurchase =
                         Purchase::query()
@@ -68,9 +76,11 @@ final class SupplierPaymentService
                         );
 
                     /*
-                     * Re-check idempotency within
-                     * transaction.
-                     */
+                    |--------------------------------------------------------------------------
+                    | Transaction Idempotency Check
+                    |--------------------------------------------------------------------------
+                    */
+
                     $existingBatch =
                         SupplierPaymentBatch::query()
                         ->where(
@@ -86,6 +96,12 @@ final class SupplierPaymentService
                                 $requestHash
                             );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Purchase Validation
+                    |--------------------------------------------------------------------------
+                    */
 
                     if (
                         ! $lockedPurchase
@@ -115,23 +131,32 @@ final class SupplierPaymentService
                         throw new SupplierPaymentException(
                             message: 'This purchase is already fully paid.',
 
-                            errorCode: 'PURCHASE_ALREADY_PAID'
+                            errorCode: 'PURCHASE_ALREADY_PAID',
+
+                            status: 409
                         );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Payment Totals
+                    |--------------------------------------------------------------------------
+                    */
 
                     $payments =
                         $data['payments'];
 
                     $totalAmount =
                         round(
-                            collect($payments)
-                                ->sum(
-                                    fn(
-                                        array $payment
-                                    ): float =>
-                                    (float)
-                                    $payment['amount']
-                                ),
+                            collect(
+                                $payments
+                            )->sum(
+                                fn(
+                                    array $payment
+                                ): float =>
+                                (float)
+                                $payment['amount']
+                            ),
                             2
                         );
 
@@ -146,12 +171,13 @@ final class SupplierPaymentService
                     }
 
                     /*
-                     * Never accept an overpayment
-                     * against a purchase.
+                     * Overpayments against a purchase
+                     * are never allowed.
                      */
                     if (
                         $totalAmount
-                        > $currentBalanceDue
+                        >
+                        $currentBalanceDue
                     ) {
                         throw new SupplierPaymentException(
                             message: sprintf(
@@ -165,6 +191,137 @@ final class SupplierPaymentService
                             status: 422
                         );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Open Business Day
+                    |--------------------------------------------------------------------------
+                    |
+                    | A supplier payment is a financial transaction
+                    | occurring now. It therefore belongs to the
+                    | currently open business day, not necessarily
+                    | the business day on which the purchase itself
+                    | was completed.
+                    |
+                    */
+
+                    /** @var BusinessDay|null $businessDay */
+                    $businessDay =
+                        BusinessDay::query()
+                        ->where(
+                            'status',
+                            BusinessDay::STATUS_OPEN
+                        )
+                        ->orderByDesc(
+                            'opened_at'
+                        )
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $businessDay) {
+                        throw new SupplierPaymentException(
+                            message: 'An open business day is required before a supplier payment can be recorded.',
+
+                            errorCode: 'BUSINESS_DAY_NOT_OPEN',
+
+                            status: 409
+                        );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Cash Requirement
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $hasCash =
+                        collect(
+                            $payments
+                        )->contains(
+                            fn(
+                                array $payment
+                            ): bool =>
+                            $payment['payment_method']
+                            ===
+                            SupplierPayment::METHOD_CASH
+                        );
+
+                    $cashAmount =
+                        round(
+                            collect(
+                                $payments
+                            )
+                                ->filter(
+                                    fn(
+                                        array $payment
+                                    ): bool =>
+                                    $payment['payment_method']
+                                    ===
+                                    SupplierPayment::METHOD_CASH
+                                )
+                                ->sum(
+                                    fn(
+                                        array $payment
+                                    ): float =>
+                                    (float)
+                                    $payment['amount']
+                                ),
+                            2
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Cashier Shift
+                    |--------------------------------------------------------------------------
+                    |
+                    | Only CASH needs a physical cashier drawer.
+                    |
+                    */
+
+                    $shift =
+                        $this
+                            ->resolveAndLockShift(
+                                actor: $actor,
+
+                                businessDay:
+                                $businessDay,
+
+                                cashRequired:
+                                $hasCash
+                            );
+
+                    /*
+                     * Prevent the supplier payment from
+                     * making expected physical cash negative.
+                     */
+                    if (
+                        $cashAmount > 0
+                        &&
+                        $shift
+                        &&
+                        $cashAmount
+                        >
+                        round(
+                            (float)
+                            $shift->expected_cash,
+                            2
+                        )
+                        + 0.001
+                    ) {
+                        throw new SupplierPaymentException(
+                            message: 'The cash supplier payment exceeds the expected cash currently available in this drawer.',
+
+                            errorCode: 'CASH_OUT_EXCEEDS_EXPECTED_CASH',
+
+                            status: 409
+                        );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Supplier Lock
+                    |--------------------------------------------------------------------------
+                    */
 
                     /** @var Supplier $supplier */
                     $supplier =
@@ -184,21 +341,31 @@ final class SupplierPaymentService
                         );
 
                     /*
-                     * This should normally never fail.
-                     * If it does, supplier totals and
-                     * purchase balances have diverged.
+                     * Normally this should never fail.
+                     *
+                     * If it does, the supplier balance
+                     * and purchase balances have diverged.
                      */
                     if (
                         $supplierBalance
                         + 0.01
-                        < $totalAmount
+                        <
+                        $totalAmount
                     ) {
                         throw new SupplierPaymentException(
                             message: 'Supplier outstanding balance is inconsistent with the purchase balance. Payment was not recorded.',
 
-                            errorCode: 'SUPPLIER_BALANCE_INCONSISTENT'
+                            errorCode: 'SUPPLIER_BALANCE_INCONSISTENT',
+
+                            status: 409
                         );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Payment Batch
+                    |--------------------------------------------------------------------------
+                    */
 
                     $batchNumber =
                         'SPAY-' .
@@ -214,7 +381,9 @@ final class SupplierPaymentService
                             $batchNumber,
 
                             'idempotency_key' =>
-                            $data['idempotency_key'],
+                            $data[
+                                'idempotency_key'
+                            ],
 
                             'request_hash' =>
                             $requestHash,
@@ -223,10 +392,13 @@ final class SupplierPaymentService
                             $supplier->id,
 
                             'purchase_id' =>
-                            $lockedPurchase->id,
+                            $lockedPurchase
+                                ->id,
 
                             'payment_date' =>
-                            $data['payment_date'],
+                            $data[
+                                'payment_date'
+                            ],
 
                             'total_amount' =>
                             $totalAmount,
@@ -239,6 +411,12 @@ final class SupplierPaymentService
                             $actor->id,
                         ]);
 
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Individual Payment Lines
+                    |--------------------------------------------------------------------------
+                    */
+
                     foreach (
                         $payments as $index => $payment
                     ) {
@@ -248,6 +426,13 @@ final class SupplierPaymentService
                                 $batchNumber,
                                 $index + 1
                             );
+
+                        $isCash =
+                            $payment[
+                                'payment_method'
+                            ]
+                            ===
+                            SupplierPayment::METHOD_CASH;
 
                         SupplierPayment::query()
                             ->create([
@@ -261,28 +446,65 @@ final class SupplierPaymentService
                                 $lockedPurchase
                                     ->id,
 
+                                /*
+                                 * Required by the
+                                 * existing production
+                                 * database schema.
+                                 */
+                                'business_day_id' =>
+                                $businessDay->id,
+
+                                /*
+                                 * CASH is tied to the
+                                 * actor's physical drawer.
+                                 *
+                                 * Non-cash lines must not
+                                 * affect a cashier shift.
+                                 */
+                                'cashier_shift_id' =>
+                                $isCash
+                                    ? $shift?->id
+                                    : null,
+
                                 'payment_number' =>
                                 $lineNumber,
 
                                 'payment_date' =>
-                                $data['payment_date'],
+                                $data[
+                                    'payment_date'
+                                ],
 
                                 'amount' =>
                                 round(
                                     (float)
-                                    $payment['amount'],
+                                    $payment[
+                                        'amount'
+                                    ],
                                     2
                                 ),
 
                                 'payment_method' =>
-                                $payment['payment_method'],
+                                $payment[
+                                    'payment_method'
+                                ],
 
-                                'reference' =>
-                                $payment['reference']
+                                /*
+                                 * Public API:
+                                 * reference
+                                 *
+                                 * Database:
+                                 * reference_number
+                                 */
+                                'reference_number' =>
+                                $payment[
+                                    'reference'
+                                ]
                                     ?? null,
 
                                 'notes' =>
-                                $payment['notes']
+                                $payment[
+                                    'notes'
+                                ]
                                     ?? null,
 
                                 'created_by' =>
@@ -291,15 +513,18 @@ final class SupplierPaymentService
                     }
 
                     /*
-                     * Update purchase payment totals.
-                     */
+                    |--------------------------------------------------------------------------
+                    | Update Purchase
+                    |--------------------------------------------------------------------------
+                    */
+
                     $newPaidAmount =
                         round(
                             (float)
                             $lockedPurchase
                                 ->paid_amount
-                                +
-                                $totalAmount,
+                            +
+                            $totalAmount,
                             2
                         );
 
@@ -307,11 +532,12 @@ final class SupplierPaymentService
                         round(
                             max(
                                 0,
+
                                 (float)
                                 $lockedPurchase
                                     ->grand_total
-                                    -
-                                    $newPaidAmount
+                                -
+                                $newPaidAmount
                             ),
                             2
                         );
@@ -326,39 +552,83 @@ final class SupplierPaymentService
 
                     $lockedPurchase
                         ->payment_status =
-                        $this->paymentStatus(
-                            paidAmount: $newPaidAmount,
+                        $this
+                            ->paymentStatus(
+                                paidAmount:
+                                $newPaidAmount,
 
-                            grandTotal: (float)
-                            $lockedPurchase
-                                ->grand_total
-                        );
+                                grandTotal:
+                                (float)
+                                $lockedPurchase
+                                    ->grand_total
+                            );
 
                     $lockedPurchase->save();
 
                     /*
-                     * Supplier total outstanding
-                     * balance decreases by exactly
-                     * the payment total.
-                     */
+                    |--------------------------------------------------------------------------
+                    | Update Supplier Balance
+                    |--------------------------------------------------------------------------
+                    */
+
                     $supplier
                         ->current_balance =
                         round(
                             $supplierBalance
-                                -
-                                $totalAmount,
+                            -
+                            $totalAmount,
                             2
                         );
 
                     $supplier->save();
 
-                    $this->auditLogger
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Cash Drawer
+                    |--------------------------------------------------------------------------
+                    |
+                    | A split payment may contain both CASH
+                    | and non-cash methods.
+                    |
+                    | Only the CASH total leaves the physical
+                    | cashier drawer.
+                    |
+                    */
+
+                    if (
+                        $cashAmount > 0
+                        &&
+                        $shift
+                    ) {
+                        $this
+                            ->recordCashOut(
+                                shift: $shift,
+
+                                batch: $batch,
+
+                                amount:
+                                $cashAmount,
+
+                                actor: $actor
+                            );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Audit
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $this
+                        ->auditLogger
                         ->record(
                             action: 'SUPPLIER_PAYMENT_RECORDED',
 
-                            entityType: 'supplier_payment_batch',
+                            entityType:
+                            'supplier_payment_batch',
 
-                            entityId: $batch->id,
+                            entityId:
+                            $batch->id,
 
                             newValues: [
                                 'batch_number' =>
@@ -371,8 +641,17 @@ final class SupplierPaymentService
                                 $lockedPurchase
                                     ->id,
 
+                                'business_day_id' =>
+                                $businessDay->id,
+
+                                'cashier_shift_id' =>
+                                $shift?->id,
+
                                 'amount' =>
                                 $totalAmount,
+
+                                'cash_amount' =>
+                                $cashAmount,
 
                                 'purchase_paid_amount' =>
                                 $newPaidAmount,
@@ -397,27 +676,32 @@ final class SupplierPaymentService
                                     ->all(),
                             ],
 
-                            userId: $actor->id
+                            userId:
+                            $actor->id
                         );
 
-                    return $this->loadBatch(
-                        $batch
-                    );
+                    return $this
+                        ->loadBatch(
+                            $batch
+                        );
                 }
             );
         } catch (
             QueryException $exception
         ) {
             /*
-             * Handles two identical requests
-             * arriving concurrently and racing
-             * against the unique idempotency key.
+             * Handles two identical requests arriving
+             * concurrently and racing against the
+             * unique idempotency key.
              */
+
             $existing =
                 SupplierPaymentBatch::query()
                 ->where(
                     'idempotency_key',
-                    $data['idempotency_key']
+                    $data[
+                        'idempotency_key'
+                    ]
                 )
                 ->first();
 
@@ -433,6 +717,12 @@ final class SupplierPaymentService
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Status
+    |--------------------------------------------------------------------------
+    */
+
     private function paymentStatus(
         float $paidAmount,
         float $grandTotal
@@ -444,13 +734,235 @@ final class SupplierPaymentService
         if (
             $paidAmount
             + 0.001
-            >= $grandTotal
+            >=
+            $grandTotal
         ) {
             return Purchase::PAYMENT_STATUS_PAID;
         }
 
         return Purchase::PAYMENT_STATUS_PARTIALLY_PAID;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cashier Shift
+    |--------------------------------------------------------------------------
+    */
+
+    private function resolveAndLockShift(
+        User $actor,
+        BusinessDay $businessDay,
+        bool $cashRequired
+    ): ?CashierShift {
+        if (! $cashRequired) {
+            return null;
+        }
+
+        $shiftId =
+            CashierShift::query()
+            ->where(
+                'business_day_id',
+                $businessDay->id
+            )
+            ->where(
+                'cashier_id',
+                $actor->id
+            )
+            ->where(
+                'status',
+                CashierShift::STATUS_OPEN
+            )
+            ->orderByDesc(
+                'opened_at'
+            )
+            ->value(
+                'id'
+            );
+
+        if (! $shiftId) {
+            throw new SupplierPaymentException(
+                message: 'An open cashier shift is required before recording a cash supplier payment.',
+
+                errorCode: 'CASHIER_SHIFT_REQUIRED',
+
+                status: 409
+            );
+        }
+
+        /** @var CashierShift|null $shift */
+        $shift =
+            CashierShift::query()
+            ->lockForUpdate()
+            ->find(
+                $shiftId
+            );
+
+        if (! $shift) {
+            throw new SupplierPaymentException(
+                message: 'The cashier shift could not be found.',
+
+                errorCode: 'CASHIER_SHIFT_NOT_FOUND',
+
+                status: 422
+            );
+        }
+
+        if (
+            $shift->status
+            !==
+            CashierShift::STATUS_OPEN
+        ) {
+            throw new SupplierPaymentException(
+                message: 'The cashier shift is not open.',
+
+                errorCode: 'CASHIER_SHIFT_NOT_OPEN',
+
+                status: 409
+            );
+        }
+
+        if (
+            (int)
+            $shift->business_day_id
+            !==
+            (int)
+            $businessDay->id
+        ) {
+            throw new SupplierPaymentException(
+                message: 'The cashier shift belongs to a different business day.',
+
+                errorCode: 'CASHIER_SHIFT_BUSINESS_DAY_MISMATCH',
+
+                status: 422
+            );
+        }
+
+        /*
+         * Never allow one user to change another
+         * cashier's expected physical drawer cash.
+         */
+        if (
+            (int)
+            $shift->cashier_id
+            !==
+            (int)
+            $actor->id
+        ) {
+            throw new SupplierPaymentException(
+                message: 'You cannot record a cash supplier payment against another cashier\'s shift.',
+
+                errorCode: 'CASHIER_SHIFT_NOT_OWNED',
+
+                status: 403
+            );
+        }
+
+        return $shift;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cash Drawer Out
+    |--------------------------------------------------------------------------
+    */
+
+    private function recordCashOut(
+        CashierShift $shift,
+        SupplierPaymentBatch $batch,
+        float $amount,
+        User $actor
+    ): CashDrawerMovement {
+        $amount =
+            round(
+                $amount,
+                2
+            );
+
+        if ($amount <= 0) {
+            throw new SupplierPaymentException(
+                message: 'Cash drawer amount must be greater than zero.',
+
+                errorCode: 'INVALID_CASH_DRAWER_AMOUNT',
+
+                status: 422
+            );
+        }
+
+        $currentExpected =
+            round(
+                (float)
+                $shift->expected_cash,
+                2
+            );
+
+        if (
+            $amount
+            >
+            $currentExpected
+            + 0.001
+        ) {
+            throw new SupplierPaymentException(
+                message: 'The cash supplier payment exceeds the expected cash currently available in this drawer.',
+
+                errorCode: 'CASH_OUT_EXCEEDS_EXPECTED_CASH',
+
+                status: 409
+            );
+        }
+
+        $movement =
+            CashDrawerMovement::query()
+            ->create([
+                'cashier_shift_id' =>
+                $shift->id,
+
+                'movement_type' =>
+                CashDrawerMovement::TYPE_CASH_OUT,
+
+                'amount' =>
+                $amount,
+
+                'reference_type' =>
+                'supplier_payment_batch',
+
+                'reference_id' =>
+                $batch->id,
+
+                'reason' =>
+                mb_substr(
+                    sprintf(
+                        'Cash supplier payment %s.',
+                        $batch->batch_number
+                    ),
+                    0,
+                    255
+                ),
+
+                'created_by' =>
+                $actor->id,
+
+                'occurred_at' =>
+                now(),
+            ]);
+
+        $shift->expected_cash =
+            round(
+                $currentExpected
+                -
+                $amount,
+                2
+            );
+
+        $shift->save();
+
+        return $movement;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Idempotency Hash
+    |--------------------------------------------------------------------------
+    */
 
     private function requestHash(
         Purchase $purchase,
@@ -465,23 +977,31 @@ final class SupplierPaymentService
                     array $payment
                 ): array => [
                     'payment_method' =>
-                    $payment['payment_method'],
+                    $payment[
+                        'payment_method'
+                    ],
 
                     'amount' =>
                     number_format(
                         (float)
-                        $payment['amount'],
+                        $payment[
+                            'amount'
+                        ],
                         2,
                         '.',
                         ''
                     ),
 
                     'reference' =>
-                    $payment['reference']
+                    $payment[
+                        'reference'
+                    ]
                         ?? null,
 
                     'notes' =>
-                    $payment['notes']
+                    $payment[
+                        'notes'
+                    ]
                         ?? null,
                 ]
             )
@@ -490,13 +1010,16 @@ final class SupplierPaymentService
 
         return hash(
             'sha256',
+
             json_encode(
                 [
                     'purchase_id' =>
                     $purchase->id,
 
                     'payment_date' =>
-                    $data['payment_date'],
+                    $data[
+                        'payment_date'
+                    ],
 
                     'notes' =>
                     $data['notes']
@@ -505,10 +1028,17 @@ final class SupplierPaymentService
                     'payments' =>
                     $payments,
                 ],
+
                 JSON_THROW_ON_ERROR
             )
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Existing Idempotent Request
+    |--------------------------------------------------------------------------
+    */
 
     private function validateExistingBatch(
         SupplierPaymentBatch $batch,
@@ -529,10 +1059,17 @@ final class SupplierPaymentService
             );
         }
 
-        return $this->loadBatch(
-            $batch
-        );
+        return $this
+            ->loadBatch(
+                $batch
+            );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Resource Relationships
+    |--------------------------------------------------------------------------
+    */
 
     private function loadBatch(
         SupplierPaymentBatch $batch
