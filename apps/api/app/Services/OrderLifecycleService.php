@@ -760,13 +760,15 @@ final class OrderLifecycleService
     public function cancel(
         Order $order,
         User $actor,
-        string $reason
+        string $reason,
+        array $auditMetadata = []
     ): array {
         return DatabaseTransaction::run(
             function () use (
                 $order,
                 $actor,
-                $reason
+                $reason,
+                $auditMetadata
             ): array {
                 $locked =
                     $this->lockOrder(
@@ -900,13 +902,30 @@ final class OrderLifecycleService
                     action: 'ORDER_CANCELLED',
                     from: $from,
                     to: Order::STATUS_CANCELLED,
-                    metadata: [
-                        'reason' =>
-                        $reason,
+                    metadata: array_merge(
+                        [
+                            'reason' =>
+                            $reason,
 
-                        'kitchen_item_ids' =>
-                        $sentKitchenItemIds,
-                    ]
+                            'kitchen_item_ids' =>
+                            $sentKitchenItemIds,
+
+                            /*
+                             * Phase 33:
+                             *
+                             * Cancellation never means:
+                             * - refund automatically
+                             * - inventory reversal automatically
+                             */
+                            'inventory_reversed' =>
+                            false,
+
+                            'financial_refund_created' =>
+                            false,
+                        ],
+
+                        $auditMetadata
+                    )
                 );
 
                 return $this->result(

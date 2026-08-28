@@ -273,6 +273,23 @@ class RolePermissionSeeder extends Seeder
             ],
 
             /*
+             * Phase 33:
+             *
+             * Sensitive cancellation permission.
+             *
+             * Cashier can initiate an ordinary cancellation using
+             * orders.cancel.
+             *
+             * Once the order has reached the kitchen, authorization
+             * requires a user with orders.cancel_after_kitchen.
+             */
+            [
+                'Orders Cancel After Kitchen',
+                'orders.cancel_after_kitchen',
+                'Orders',
+            ],
+
+            /*
              * Kitchen
              */
             [
@@ -308,9 +325,30 @@ class RolePermissionSeeder extends Seeder
                 'Billing',
             ],
 
+            /*
+             * Phase 33 - Refunds
+             */
+            [
+                'Refunds View',
+                'refunds.view',
+                'Billing',
+            ],
+
             [
                 'Refunds Create',
                 'refunds.create',
+                'Billing',
+            ],
+
+            /*
+             * A cashier may initiate a refund using refunds.create.
+             *
+             * Completion of the sensitive refund operation requires
+             * manager authorization with refunds.authorize.
+             */
+            [
+                'Refunds Authorize',
+                'refunds.authorize',
                 'Billing',
             ],
 
@@ -365,6 +403,29 @@ class RolePermissionSeeder extends Seeder
             [
                 'Inventory Adjust',
                 'inventory.adjust',
+                'Inventory',
+            ],
+
+            /*
+             * Phase 33 - Cancellation Stock Correction
+             *
+             * request:
+             * Allows a POS operator / cashier to initiate the stock
+             * correction workflow.
+             *
+             * cancellation_reversal:
+             * Allows an authorized manager to approve and execute
+             * the actual CANCELLATION_REVERSAL stock movement.
+             */
+            [
+                'Inventory Cancellation Reversal Request',
+                'inventory.cancellation_reversal.request',
+                'Inventory',
+            ],
+
+            [
+                'Inventory Cancellation Reversal',
+                'inventory.cancellation_reversal',
                 'Inventory',
             ],
 
@@ -577,6 +638,14 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | OWNER Permissions
         |--------------------------------------------------------------------------
+        |
+        | Owner receives every registered permission, including:
+        |
+        | - orders.cancel_after_kitchen
+        | - refunds.authorize
+        | - inventory.cancellation_reversal.request
+        | - inventory.cancellation_reversal
+        |
         */
 
         $this->syncPermissions(
@@ -593,6 +662,9 @@ class RolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         | ADMIN Permissions
         |--------------------------------------------------------------------------
+        |
+        | Administrator receives every registered permission.
+        |
         */
 
         $this->syncPermissions(
@@ -616,6 +688,9 @@ class RolePermissionSeeder extends Seeder
 
             permissionCodes: [
 
+                /*
+                 * Dashboard
+                 */
                 'dashboard.view',
 
                 /*
@@ -657,6 +732,12 @@ class RolePermissionSeeder extends Seeder
                 'orders.cancel',
 
                 /*
+                 * Phase 33:
+                 * Manager may authorize cancellation after kitchen.
+                 */
+                'orders.cancel_after_kitchen',
+
+                /*
                  * Kitchen
                  */
                 'kitchen.reprint',
@@ -669,7 +750,13 @@ class RolePermissionSeeder extends Seeder
                 'invoices.void',
 
                 'payments.create',
+
+                /*
+                 * Phase 33 - Refunds
+                 */
+                'refunds.view',
                 'refunds.create',
+                'refunds.authorize',
 
                 /*
                  * Cash
@@ -687,6 +774,14 @@ class RolePermissionSeeder extends Seeder
                 'inventory.view',
                 'inventory.manage',
                 'inventory.adjust',
+
+                /*
+                 * Phase 33 - Stock Correction
+                 *
+                 * Manager can both initiate and authorize the operation.
+                 */
+                'inventory.cancellation_reversal.request',
+                'inventory.cancellation_reversal',
 
                 /*
                  * Recipes
@@ -755,20 +850,36 @@ class RolePermissionSeeder extends Seeder
         | - POS duties
         | - Waiter duties
         |
+        | Sensitive Phase 33 operations are intentionally split into
+        | request/initiation and authorization permissions.
+        |
+        | CASHIER CAN:
+        |
+        | - orders.cancel
+        | - refunds.view
+        | - refunds.create
+        | - inventory.cancellation_reversal.request
+        |
+        | CASHIER CANNOT:
+        |
+        | - orders.cancel_after_kitchen
+        | - refunds.authorize
+        | - inventory.cancellation_reversal
+        |
+        | Those sensitive permissions remain with
+        | Owner / Admin / Manager.
+        |
         | Supplier Payment access is intentionally limited to:
         |
-        | suppliers.view
-        | purchases.view
-        | purchases.pay
+        | - suppliers.view
+        | - purchases.view
+        | - purchases.pay
         |
         | The CASHIER does NOT receive:
         |
-        | suppliers.manage
-        | purchases.create
-        | purchases.manage
-        |
-        | Therefore supplier and purchase master-data administration
-        | remains with Owner/Admin/Manager.
+        | - suppliers.manage
+        | - purchases.create
+        | - purchases.manage
         |
         */
 
@@ -806,6 +917,15 @@ class RolePermissionSeeder extends Seeder
                 'orders.cancel',
 
                 /*
+                 * Important:
+                 *
+                 * Do NOT give:
+                 * orders.cancel_after_kitchen
+                 *
+                 * Cashier enters manager credentials for that action.
+                 */
+
+                /*
                  * Kitchen
                  */
                 'kitchen.reprint',
@@ -817,6 +937,13 @@ class RolePermissionSeeder extends Seeder
                 'invoices.create',
 
                 'payments.create',
+
+                /*
+                 * Phase 33 - Refund initiation.
+                 *
+                 * Do NOT give refunds.authorize.
+                 */
+                'refunds.view',
                 'refunds.create',
 
                 /*
@@ -830,6 +957,18 @@ class RolePermissionSeeder extends Seeder
                 'cash_drawer.movement',
 
                 /*
+                 * Phase 33 - Stock Correction Request
+                 *
+                 * This allows the cashier to reach the endpoint.
+                 * Manager credentials are still required by the service
+                 * before the actual CANCELLATION_REVERSAL is performed.
+                 *
+                 * Do NOT give:
+                 * inventory.cancellation_reversal
+                 */
+                'inventory.cancellation_reversal.request',
+
+                /*
                  * Supplier Payment Read Access
                  */
                 'suppliers.view',
@@ -841,15 +980,15 @@ class RolePermissionSeeder extends Seeder
                 'purchases.pay',
 
                 /*
-                * Expenses
-                */
+                 * Expenses
+                 */
                 'expenses.view',
                 'expenses.create',
                 'expenses.manage',
 
                 /*
- * Business Day
- */
+                 * Business Day
+                 */
                 'business_day.view',
                 'business_day.open',
                 'business_day.close',

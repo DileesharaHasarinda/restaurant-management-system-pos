@@ -11,6 +11,9 @@ class Refund extends Model
     'COMPLETED';
 
     protected $fillable = [
+        'client_request_id',
+        'request_hash',
+
         'refund_number',
 
         'invoice_id',
@@ -27,8 +30,15 @@ class Refund extends Model
         'reason',
         'details',
 
+        'initiated_by',
+        'authorized_by',
         'processed_by',
+
         'refunded_at',
+    ];
+
+    protected $hidden = [
+        'request_hash',
     ];
 
     protected function casts(): array
@@ -70,6 +80,22 @@ class Refund extends Model
     {
         return $this->belongsTo(
             CashierShift::class
+        );
+    }
+
+    public function initiatedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'initiated_by'
+        );
+    }
+
+    public function authorizedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'authorized_by'
         );
     }
 

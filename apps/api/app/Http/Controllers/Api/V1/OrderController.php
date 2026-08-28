@@ -8,6 +8,8 @@ use App\Http\Requests\Api\V1\Orders\CancelOrderRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrdersRequest;
 use App\Http\Requests\Api\V1\Orders\OrderTransitionRequest;
 use App\Http\Requests\Api\V1\Orders\RejectOrderRequest;
+use App\Exceptions\ManagerAuthorizationException;
+use App\Services\OrderCancellationService;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\User;
@@ -19,7 +21,8 @@ use Throwable;
 class OrderController extends Controller
 {
     public function __construct(
-        private readonly OrderLifecycleService $lifecycle
+        private readonly OrderLifecycleService $lifecycle,
+        private readonly OrderCancellationService $cancellationService
     ) {}
 
     public function index(
@@ -317,19 +320,79 @@ class OrderController extends Controller
         CancelOrderRequest $request,
         Order $order
     ): JsonResponse {
-        return $this->perform(
-            request: $request,
+        /** @var User $user */
+        $user =
+            $request->user();
 
-            operation: fn(User $user) =>
-            $this->lifecycle
+        try {
+            $result =
+                $this
+                ->cancellationService
                 ->cancel(
                     order: $order,
-                    actor: $user,
-                    reason: $request
-                        ->validated()['reason']
-                ),
 
-            successMessage: 'Order cancelled successfully.'
+                    initiator: $user,
+
+                    data: $request->validated()
+                );
+        } catch (
+            ManagerAuthorizationException $exception
+        ) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+
+                code: $exception->errorCode,
+
+                errors: $exception->errors,
+
+                status: $exception->status
+            );
+        } catch (
+            OrderLifecycleException $exception
+        ) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+
+                code: $exception->errorCode,
+
+                status: $exception->status
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+
+            return ApiResponse::error(
+                message: 'The order cancellation could not be completed.',
+
+                code: 'ORDER_CANCELLATION_FAILED',
+
+                status: 500
+            );
+        }
+
+        return ApiResponse::success(
+            data: (
+                new OrderResource(
+                    $result['order']
+                )
+            )->resolve(
+                $request
+            ),
+
+            message: $result['changed']
+                ? 'Order cancelled successfully.'
+                : 'The order is already cancelled.',
+
+            meta: [
+                'changed' =>
+                $result['changed'],
+
+                'affected_item_ids' =>
+                $result['affected_item_ids'],
+            ]
         );
     }
 

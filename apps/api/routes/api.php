@@ -26,9 +26,11 @@ use App\Http\Controllers\Api\V1\PublicTableQrController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
+use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
+use App\Http\Controllers\Api\V1\StockCancellationReversalController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\SupplierPaymentController;
 use App\Http\Controllers\Api\V1\TableController;
@@ -1300,6 +1302,90 @@ Route::middleware(
             )
             ->name(
                 'v1.invoices.payments.index'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 33 - Cancellations, Refunds & Corrections
+        |--------------------------------------------------------------------------
+        |
+        | Financial refunds are intentionally separate from:
+        |
+        | - order cancellation
+        | - inventory cancellation reversal
+        | - wastage
+        |
+        | After-kitchen order cancellation is protected inside the
+        | cancellation service by manager authorization.
+        |
+        */
+
+        Route::get(
+            '/invoices/{invoice}/refunds',
+            [
+                RefundController::class,
+                'index',
+            ]
+        )
+            ->whereNumber(
+                'invoice'
+            )
+            ->middleware(
+                'permission:refunds.view'
+            )
+            ->name(
+                'v1.invoices.refunds.index'
+            );
+
+        Route::post(
+            '/invoices/{invoice}/refunds',
+            [
+                RefundController::class,
+                'store',
+            ]
+        )
+            ->whereNumber(
+                'invoice'
+            )
+            ->middleware(
+                'permission:refunds.create'
+            )
+            ->name(
+                'v1.invoices.refunds.store'
+            );
+
+        Route::get(
+            '/refunds/{refund}',
+            [
+                RefundController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'refund'
+            )
+            ->middleware(
+                'permission:refunds.view'
+            )
+            ->name(
+                'v1.refunds.show'
+            );
+
+        Route::post(
+            '/stock-movements/{stockMovement}/cancellation-reversal',
+            [
+                StockCancellationReversalController::class,
+                'store',
+            ]
+        )
+            ->whereNumber(
+                'stockMovement'
+            )
+            ->middleware(
+                'permission:inventory.cancellation_reversal.request'
+            )
+            ->name(
+                'v1.stock-movements.cancellation-reversal'
             );
 
         /*
