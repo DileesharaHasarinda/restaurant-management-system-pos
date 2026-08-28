@@ -1,0 +1,898 @@
+.business-day-page {
+  width: 100%;
+  min-width: 0;
+  padding: 28px;
+  box-sizing: border-box;
+  color: #17202a;
+}
+
+.business-day-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.business-day-header h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.business-day-header p {
+  max-width: 780px;
+  margin: 0;
+  color: #68727d;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.business-day-eyebrow,
+.business-day-section__header > div > span,
+.business-day-final-action > div > span,
+.business-day-panel__header > div > span,
+.business-day-modal__header > div > span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #7a8793;
+}
+
+.business-day-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.business-day-button {
+  min-height: 42px;
+  padding: 10px 17px;
+  border: 0;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+
+.business-day-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.business-day-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.business-day-button--secondary {
+  color: #26323d;
+  background: #fff;
+  border: 1px solid #dfe5ea;
+  box-shadow: 0 4px 14px rgba(20, 32, 43, 0.05);
+}
+
+.business-day-button--danger {
+  color: #fff;
+  background: #b42318;
+  box-shadow: 0 8px 20px rgba(180, 35, 24, 0.2);
+}
+
+.business-day-button--large {
+  min-width: 210px;
+  min-height: 48px;
+}
+
+.business-day-alert {
+  padding: 13px 15px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.business-day-alert--success {
+  color: #166534;
+  background: #ecfdf3;
+  border: 1px solid #bbf7d0;
+}
+
+.business-day-alert--error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.business-day-status-card {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 1.2fr)
+    1px
+    minmax(100px, 0.7fr)
+    1px
+    minmax(140px, 1fr)
+    1px
+    minmax(170px, 1fr);
+  gap: 22px;
+  align-items: center;
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e7eb;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafb 100%);
+  box-shadow: 0 8px 28px rgba(26, 40, 52, 0.05);
+}
+
+.business-day-status-card > div:not(.business-day-status-divider) {
+  min-width: 0;
+}
+
+.business-day-status-card span,
+.business-day-identity-card span {
+  display: block;
+  margin-bottom: 5px;
+  color: #7a8793;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+
+.business-day-status-card strong,
+.business-day-identity-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.business-day-status-card__primary strong {
+  font-size: 18px;
+}
+
+.business-day-status-divider {
+  width: 1px;
+  height: 32px;
+  background: #e4e8ec;
+}
+
+.business-day-status-open {
+  color: #157347;
+}
+
+.business-day-section {
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e7eb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(26, 40, 52, 0.045);
+}
+
+.business-day-section__header,
+.business-day-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.business-day-section__header {
+  margin-bottom: 20px;
+}
+
+.business-day-section__header h2,
+.business-day-panel__header h2,
+.business-day-panel__header h3 {
+  margin: 5px 0 0;
+  letter-spacing: -0.02em;
+}
+
+.business-day-section__header h2 {
+  font-size: 21px;
+}
+
+.business-day-section__header p {
+  max-width: 700px;
+  margin: 7px 0 0;
+  color: #737e88;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.business-day-readiness {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.business-day-readiness--ready {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.business-day-readiness--blocked {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.business-day-blockers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.business-day-blocker {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid;
+}
+
+.business-day-blocker--clear {
+  background: #f6fef9;
+  border-color: #d1fadf;
+}
+
+.business-day-blocker--blocked {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.business-day-blocker__icon {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.business-day-blocker--clear .business-day-blocker__icon {
+  color: #fff;
+  background: #16834b;
+}
+
+.business-day-blocker--blocked .business-day-blocker__icon {
+  color: #fff;
+  background: #c2410c;
+}
+
+.business-day-blocker__content {
+  min-width: 0;
+  width: 100%;
+}
+
+.business-day-blocker__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.business-day-blocker__heading strong {
+  font-size: 13px;
+}
+
+.business-day-blocker__heading span {
+  color: #66717b;
+  font-size: 10px;
+  font-weight: 750;
+  text-align: right;
+}
+
+.business-day-blocker p {
+  margin: 6px 0 0;
+  color: #707b85;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.business-day-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.business-day-kpis article {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e5e9ed;
+  border-radius: 14px;
+  background: #fafbfc;
+}
+
+.business-day-kpis span {
+  display: block;
+  color: #6f7a84;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.business-day-kpis strong {
+  display: block;
+  margin-top: 7px;
+  font-size: clamp(18px, 2vw, 24px);
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.business-day-kpis small {
+  display: block;
+  margin-top: 5px;
+  color: #8a949d;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.business-day-kpi-profit {
+  background: linear-gradient(140deg, #f0fdf4, #f8fffa) !important;
+  border-color: #d1fae5 !important;
+}
+
+.business-day-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.business-day-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.business-day-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.business-day-panel {
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid #e4e9ed;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.business-day-panel--profit {
+  background: linear-gradient(145deg, #ffffff, #fbfefc);
+}
+
+.business-day-panel--cash {
+  background: linear-gradient(145deg, #ffffff, #fbfcff);
+}
+
+.business-day-panel__header {
+  margin-bottom: 14px;
+}
+
+.business-day-panel__header h3,
+.business-day-panel__header h2 {
+  font-size: 16px;
+}
+
+.business-day-summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.business-day-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf0f2;
+  font-size: 12px;
+}
+
+.business-day-summary-row:last-child {
+  border-bottom: 0;
+}
+
+.business-day-summary-row span {
+  color: #66717a;
+}
+
+.business-day-summary-row strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.business-day-summary-row--strong {
+  margin-top: 4px;
+  padding-top: 13px;
+  font-size: 13px;
+}
+
+.business-day-summary-row--strong strong {
+  font-size: 15px;
+}
+
+.business-day-summary-row--negative strong {
+  color: #a5281b;
+}
+
+.business-day-panel__note {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #edf0f2;
+  color: #889199;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.business-day-net-profit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 16px;
+  margin-top: 14px;
+  border-radius: 12px;
+  color: #0f5132;
+  background: #ecfdf3;
+  border: 1px solid #bbf7d0;
+}
+
+.business-day-net-profit span {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.business-day-net-profit strong {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.business-day-reconciliation-badge {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+}
+
+.business-day-reconciliation-badge--balanced {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.business-day-reconciliation-badge--shortage {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.business-day-reconciliation-badge--excess {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.business-day-final-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid #eadbd8;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fffafa 0%, #fff 100%);
+  box-shadow: 0 8px 28px rgba(50, 20, 18, 0.045);
+}
+
+.business-day-final-action h2 {
+  margin: 5px 0 6px;
+  font-size: 19px;
+}
+
+.business-day-final-action p {
+  max-width: 720px;
+  margin: 0;
+  color: #7c7775;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.business-day-permission-note {
+  max-width: 320px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  color: #6b7280;
+  background: #f5f6f7;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.business-day-authority-note {
+  margin-top: 17px;
+  color: #8a949d;
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.business-day-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.52);
+  backdrop-filter: blur(4px);
+}
+
+.business-day-modal {
+  width: min(650px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
+}
+
+.business-day-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 22px 17px;
+  border-bottom: 1px solid #eceff1;
+}
+
+.business-day-modal__header h2 {
+  margin: 5px 0 7px;
+  font-size: 22px;
+  letter-spacing: -0.025em;
+}
+
+.business-day-modal__header p {
+  margin: 0;
+  color: #717b84;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.business-day-modal__close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 0;
+  border-radius: 9px;
+  color: #59636c;
+  background: #f4f5f6;
+  font-size: 21px;
+  cursor: pointer;
+}
+
+.business-day-modal__warning {
+  margin: 18px 22px 0;
+  padding: 13px 14px;
+  border-radius: 11px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.business-day-modal__warning strong {
+  display: block;
+  font-size: 12px;
+}
+
+.business-day-modal__warning p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.business-day-modal__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 22px 0;
+}
+
+.business-day-modal__summary > div {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f8f9;
+}
+
+.business-day-modal__summary span {
+  display: block;
+  margin-bottom: 5px;
+  color: #727d87;
+  font-size: 10px;
+}
+
+.business-day-modal__summary strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.business-day-modal__field {
+  display: block;
+  margin: 17px 22px 0;
+}
+
+.business-day-modal__field > span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.business-day-modal__field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 110px;
+  padding: 11px 12px;
+  box-sizing: border-box;
+  border: 1px solid #dce2e6;
+  border-radius: 10px;
+  outline: 0;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.business-day-modal__field textarea:focus {
+  border-color: #9eaab4;
+  box-shadow: 0 0 0 3px rgba(62, 83, 101, 0.08);
+}
+
+.business-day-modal__field small {
+  display: block;
+  margin-top: 5px;
+  color: #89929a;
+  font-size: 9px;
+  text-align: right;
+}
+
+.business-day-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 22px 22px;
+}
+
+.business-day-loading,
+.business-day-empty {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1px solid #e2e7eb;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.business-day-loading strong {
+  margin-top: 14px;
+}
+
+.business-day-loading span,
+.business-day-empty p {
+  max-width: 520px;
+  margin-top: 6px;
+  color: #78828b;
+  font-size: 12px;
+}
+
+.business-day-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #e4e8eb;
+  border-top-color: #53616d;
+  border-radius: 50%;
+  animation: business-day-spin 700ms linear infinite;
+}
+
+@keyframes business-day-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.business-day-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 13px;
+  border-radius: 15px;
+  color: #68757f;
+  background: #f1f3f5;
+  font-size: 24px;
+}
+
+.business-day-empty h2 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.business-day-closed-banner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 21px 22px;
+  margin-bottom: 18px;
+  border: 1px solid #bbf7d0;
+  border-radius: 17px;
+  color: #14532d;
+  background: linear-gradient(135deg, #f0fdf4, #f8fffa);
+}
+
+.business-day-closed-banner__icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border-radius: 999px;
+  color: #fff;
+  background: #16834b;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.business-day-closed-banner span {
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.business-day-closed-banner h2 {
+  margin: 3px 0;
+  font-size: 24px;
+  letter-spacing: 0.03em;
+}
+
+.business-day-closed-banner p {
+  margin: 0;
+  color: #48745a;
+  font-size: 11px;
+}
+
+.business-day-closed-banner__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.business-day-closed-banner__meta strong {
+  font-size: 12px;
+}
+
+.business-day-identity-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  padding: 17px 20px;
+  margin-bottom: 18px;
+  border: 1px solid #e1e6ea;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.business-day-notes-card {
+  margin-top: 16px;
+  padding: 17px 19px;
+  border: 1px solid #e3e7ea;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.business-day-notes-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: #77818a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.business-day-notes-card p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #444f58;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1150px) {
+  .business-day-blockers,
+  .business-day-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .business-day-grid--three {
+    grid-template-columns: 1fr;
+  }
+
+  .business-day-status-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .business-day-status-divider {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .business-day-page {
+    padding: 18px;
+  }
+
+  .business-day-header,
+  .business-day-final-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .business-day-header__actions {
+    width: 100%;
+  }
+
+  .business-day-header__actions .business-day-button {
+    flex: 1;
+  }
+
+  .business-day-grid--two,
+  .business-day-identity-card {
+    grid-template-columns: 1fr;
+  }
+
+  .business-day-closed-banner {
+    grid-template-columns: auto 1fr;
+  }
+
+  .business-day-closed-banner__meta {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 580px) {
+  .business-day-blockers,
+  .business-day-kpis,
+  .business-day-status-card,
+  .business-day-modal__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .business-day-header__actions,
+  .business-day-modal__footer {
+    flex-direction: column;
+  }
+
+  .business-day-header__actions .business-day-button,
+  .business-day-modal__footer .business-day-button {
+    width: 100%;
+  }
+
+  .business-day-section {
+    padding: 17px;
+  }
+
+  .business-day-section__header {
+    flex-direction: column;
+  }
+}

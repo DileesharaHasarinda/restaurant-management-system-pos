@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\BusinessDayClosingController;
 use App\Http\Controllers\Api\V1\CashDrawerController;
 use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
@@ -1461,6 +1462,91 @@ Route::middleware(
             )
             ->name(
                 'v1.cashier-shifts.manual-open'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 32 - Restaurant Day Closing
+        |--------------------------------------------------------------------------
+        |
+        | Manager / owner reviews the current restaurant business day,
+        | resolves all operational blockers, and closes the day.
+        |
+        | Laravel is authoritative for:
+        |
+        | - open table validation
+        | - active order validation
+        | - unpaid invoice validation
+        | - open cashier shift validation
+        | - final financial snapshot
+        | - business day CLOSED state
+        |
+        */
+
+        Route::get(
+            '/business-days/current',
+            [
+                BusinessDayClosingController::class,
+                'current',
+            ]
+        )
+            ->middleware(
+                'permission:business_day.view'
+            )
+            ->name(
+                'v1.business-days.current'
+            );
+
+        Route::get(
+            '/business-days/{businessDay}/closing-preview',
+            [
+                BusinessDayClosingController::class,
+                'preview',
+            ]
+        )
+            ->whereNumber(
+                'businessDay'
+            )
+            ->middleware(
+                'permission:business_day.view'
+            )
+            ->name(
+                'v1.business-days.closing-preview'
+            );
+
+        Route::post(
+            '/business-days/{businessDay}/close',
+            [
+                BusinessDayClosingController::class,
+                'close',
+            ]
+        )
+            ->whereNumber(
+                'businessDay'
+            )
+            ->middleware(
+                'permission:business_day.close'
+            )
+            ->name(
+                'v1.business-days.close'
+            );
+
+        Route::get(
+            '/business-day-closings/{businessDayClosing}',
+            [
+                BusinessDayClosingController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'businessDayClosing'
+            )
+            ->middleware(
+                'permission:business_day.view'
+            )
+            ->name(
+                'v1.business-day-closings.show'
             );
 
         /*

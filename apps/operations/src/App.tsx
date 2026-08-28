@@ -40,6 +40,9 @@ import PurchasesPage from "./purchases/PurchasesPage";
 import StockAdjustmentsPage
   from "./stockAdjustments/StockAdjustmentsPage";
 
+import BusinessDayPage
+  from "./businessDay/BusinessDayPage";
+
 import ExpensesPage
   from "./expenses/ExpensesPage";
 
@@ -260,11 +263,7 @@ export default function App() {
               <Route
                 path="/business-day"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="FINANCE"
-                    title="Business Day"
-                    description="Review restaurant day status and controlled day closing."
-                  />
+                  <BusinessDayPage />
                 }
               />
 
