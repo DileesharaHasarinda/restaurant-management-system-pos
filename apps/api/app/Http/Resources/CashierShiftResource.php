@@ -20,8 +20,48 @@ class CashierShiftResource extends JsonResource
             'business_day_id' =>
             $this->business_day_id,
 
+            /*
+            |--------------------------------------------------------------------------
+            | Cashier
+            |--------------------------------------------------------------------------
+            */
+
             'cashier_id' =>
             $this->cashier_id,
+
+            'cashier' =>
+            $this->cashier
+                ? [
+                    'id' =>
+                    $this
+                        ->cashier
+                        ->id,
+
+                    'name' =>
+                    $this
+                        ->cashier
+                        ->name,
+                ]
+                : null,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Terminal
+            |--------------------------------------------------------------------------
+            |
+            | Snapshot of the authenticated Sanctum
+            | device/token that opened the physical shift.
+            |
+            */
+
+            'terminal_name' =>
+            $this->terminal_name,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Cash
+            |--------------------------------------------------------------------------
+            */
 
             'opening_cash' =>
             (float)
@@ -43,6 +83,12 @@ class CashierShiftResource extends JsonResource
                 $this->cash_difference
                 : null,
 
+            /*
+            |--------------------------------------------------------------------------
+            | Status / Time
+            |--------------------------------------------------------------------------
+            */
+
             'status' =>
             $this->status,
 
@@ -54,8 +100,35 @@ class CashierShiftResource extends JsonResource
             $this->closed_at
                 ?->toISOString(),
 
+            /*
+            |--------------------------------------------------------------------------
+            | Closing User
+            |--------------------------------------------------------------------------
+            */
+
             'closed_by' =>
             $this->closed_by,
+
+            'closed_by_user' =>
+            $this->closedBy
+                ? [
+                    'id' =>
+                    $this
+                        ->closedBy
+                        ->id,
+
+                    'name' =>
+                    $this
+                        ->closedBy
+                        ->name,
+                ]
+                : null,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Notes
+            |--------------------------------------------------------------------------
+            */
 
             'opening_notes' =>
             $this->opening_notes,

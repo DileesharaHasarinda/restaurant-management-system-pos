@@ -26,6 +26,8 @@ class CashierShift extends Model
         'business_day_id',
         'cashier_id',
 
+        'terminal_name',
+
         'open_shift_key',
 
         'opening_float',

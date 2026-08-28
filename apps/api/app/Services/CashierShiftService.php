@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\DatabaseTransaction;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 
 final class CashierShiftService
 {
@@ -62,7 +63,6 @@ final class CashierShiftService
     ): array {
         return $this->result(
             shift: $shift
-                ->fresh()
         );
     }
 
@@ -77,8 +77,10 @@ final class CashierShiftService
         array $data
     ): array {
         $clientRequestId =
-            (string)
-            $data['client_request_id'];
+            trim(
+                (string)
+                $data['client_request_id']
+            );
 
         $openingCash =
             round(
@@ -94,13 +96,34 @@ final class CashierShiftService
                     null
             );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Authenticated POS Terminal
+        |--------------------------------------------------------------------------
+        |
+        | Login device_name is stored as the Sanctum token name.
+        |
+        | The frontend does not send a terminal name when opening
+        | or closing the shift.
+        |
+        | Laravel derives it from the authenticated session.
+        |
+        */
+
+        $terminalName =
+            $this->terminalName(
+                $actor
+            );
+
         $requestHash =
             $this->openRequestHash(
                 actor: $actor,
 
                 openingCash: $openingCash,
 
-                openingNotes: $openingNotes
+                openingNotes: $openingNotes,
+
+                terminalName: $terminalName
             );
 
         /*
@@ -143,6 +166,7 @@ final class CashierShiftService
                     $clientRequestId,
                     $openingCash,
                     $openingNotes,
+                    $terminalName,
                     $requestHash
                 ): array {
                     /*
@@ -271,6 +295,13 @@ final class CashierShiftService
                             'cashier_id' =>
                             $actor->id,
 
+                            /*
+                             * Secure snapshot of the POS/device
+                             * that opened this physical shift.
+                             */
+                            'terminal_name' =>
+                            $terminalName,
+
                             'open_shift_key' =>
                             'CASHIER:' .
                                 $actor->id,
@@ -279,16 +310,16 @@ final class CashierShiftService
                             $openingCash,
 
                             /*
-                                 * IMPORTANT:
-                                 *
-                                 * Expected cash begins at the
-                                 * opening float.
-                                 *
-                                 * OPENING_FLOAT movement below
-                                 * is ledger history only.
-                                 *
-                                 * Do NOT add opening float twice.
-                                 */
+                             * IMPORTANT:
+                             *
+                             * Expected cash begins at the
+                             * opening float.
+                             *
+                             * OPENING_FLOAT movement below
+                             * is ledger history only.
+                             *
+                             * Do NOT add opening float twice.
+                             */
                             'expected_cash' =>
                             $openingCash,
 
@@ -376,6 +407,9 @@ final class CashierShiftService
                             'cashier_id' =>
                             $actor->id,
 
+                            'terminal_name' =>
+                            $terminalName,
+
                             'opening_cash' =>
                             $openingCash,
 
@@ -389,6 +423,9 @@ final class CashierShiftService
                         metadata: [
                             'client_request_id' =>
                             $clientRequestId,
+
+                            'terminal_name' =>
+                            $terminalName,
                         ],
 
                         userId: $actor->id
@@ -522,8 +559,10 @@ final class CashierShiftService
         array $data
     ): array {
         $clientRequestId =
-            (string)
-            $data['client_request_id'];
+            trim(
+                (string)
+                $data['client_request_id']
+            );
 
         $actualCash =
             round(
@@ -537,6 +576,20 @@ final class CashierShiftService
                 $data['closing_notes']
                     ??
                     null
+            );
+
+        /*
+         * Current authenticated terminal.
+         *
+         * This is primarily a fallback for a shift that
+         * was already open before terminal_name existed.
+         *
+         * Existing shift terminal identity is never
+         * overwritten.
+         */
+        $closingTerminalName =
+            $this->terminalName(
+                $actor
             );
 
         $requestHash =
@@ -592,7 +645,8 @@ final class CashierShiftService
                 $clientRequestId,
                 $actualCash,
                 $closingNotes,
-                $requestHash
+                $requestHash,
+                $closingTerminalName
             ): array {
                 /** @var CashierShift|null $locked */
                 $locked =
@@ -713,6 +767,36 @@ final class CashierShiftService
                         2
                     );
 
+                /*
+                |--------------------------------------------------------------------------
+                | Terminal Snapshot
+                |--------------------------------------------------------------------------
+                |
+                | New shifts receive their terminal when opened.
+                |
+                | This fallback supports shifts that were already
+                | OPEN when terminal_name was deployed.
+                |
+                | Never overwrite a terminal that was already
+                | associated with the shift.
+                |
+                */
+
+                if (
+                    blank(
+                        $locked->terminal_name
+                    )
+                ) {
+                    $locked->terminal_name =
+                        $closingTerminalName;
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Close Shift
+                |--------------------------------------------------------------------------
+                */
+
                 $locked->actual_cash =
                     $actualCash;
 
@@ -722,9 +806,16 @@ final class CashierShiftService
                 $locked->status =
                     CashierShift::STATUS_CLOSED;
 
+                /*
+                 * Authoritative server closing time.
+                 */
                 $locked->closed_at =
                     now();
 
+                /*
+                 * Authenticated user who closed
+                 * the physical shift.
+                 */
                 $locked->closed_by =
                     $actor->id;
 
@@ -744,6 +835,12 @@ final class CashierShiftService
                     null;
 
                 $locked->save();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Audit
+                |--------------------------------------------------------------------------
+                */
 
                 $this->auditLogger->record(
                     action: 'CASHIER_SHIFT_CLOSED',
@@ -772,11 +869,25 @@ final class CashierShiftService
 
                         'cash_difference' =>
                         $difference,
+
+                        'terminal_name' =>
+                        $locked->terminal_name,
+
+                        'closed_by' =>
+                        $actor->id,
+
+                        'closed_at' =>
+                        $locked
+                            ->closed_at
+                            ?->toISOString(),
                     ],
 
                     metadata: [
                         'client_request_id' =>
                         $clientRequestId,
+
+                        'terminal_name' =>
+                        $locked->terminal_name,
 
                         'cash_summary' =>
                         $summary,
@@ -1339,8 +1450,18 @@ final class CashierShiftService
     private function result(
         CashierShift $shift
     ): array {
+        /*
+         * Load user relationships because
+         * CashierShiftResource exposes:
+         *
+         * cashier
+         * closed_by_user
+         */
         $shift =
-            $shift->fresh();
+            $shift->fresh([
+                'cashier',
+                'closedBy',
+            ]);
 
         return [
             'shift' =>
@@ -1362,7 +1483,8 @@ final class CashierShiftService
     private function openRequestHash(
         User $actor,
         float $openingCash,
-        ?string $openingNotes
+        ?string $openingNotes,
+        string $terminalName
     ): string {
         return hash(
             'sha256',
@@ -1370,6 +1492,14 @@ final class CashierShiftService
                 [
                     'cashier_id' =>
                     $actor->id,
+
+                    /*
+                     * Terminal is included so the same
+                     * idempotency UUID cannot be reused
+                     * from another authenticated POS.
+                     */
+                    'terminal_name' =>
+                    $terminalName,
 
                     'opening_cash' =>
                     number_format(
@@ -1556,10 +1686,12 @@ final class CashierShiftService
     {
         return sprintf(
             'CS-%s-%s',
+
             now()
                 ->format(
                     'Ymd'
                 ),
+
             Str::upper(
                 (string)
                 Str::ulid()
@@ -1567,10 +1699,18 @@ final class CashierShiftService
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Nullable String
+    |--------------------------------------------------------------------------
+    */
+
     private function nullableString(
         mixed $value
     ): ?string {
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
@@ -1583,5 +1723,62 @@ final class CashierShiftService
         return $value !== ''
             ? $value
             : null;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authenticated Terminal
+    |--------------------------------------------------------------------------
+    |
+    | LoginRequest requires device_name.
+    |
+    | AuthController stores device_name as the Sanctum
+    | personal access token name:
+    |
+    | $user->createToken($deviceName, ...)
+    |
+    | Therefore the token itself is the trusted terminal
+    | identity for the current authenticated POS session.
+    |
+    */
+
+    private function terminalName(
+        User $actor
+    ): string {
+        $token =
+            $actor
+            ->currentAccessToken();
+
+        if (
+            $token
+            instanceof
+            PersonalAccessToken
+        ) {
+            $name =
+                trim(
+                    (string)
+                    $token->name
+                );
+
+            if (
+                $name !== ''
+            ) {
+                return mb_substr(
+                    $name,
+                    0,
+                    100
+                );
+            }
+        }
+
+        /*
+         * Sanctum::actingAs() normally uses a
+         * TransientToken in automated tests.
+         *
+         * This fallback keeps feature tests and
+         * authenticated non-Sanctum-token contexts
+         * deterministic.
+         */
+        return 'Authenticated POS Session';
     }
 }

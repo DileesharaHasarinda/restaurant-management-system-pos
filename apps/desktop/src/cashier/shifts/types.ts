@@ -1,3 +1,9 @@
+export interface CashierShiftUser {
+  id: number;
+
+  name: string;
+}
+
 export interface CashierShift {
   id: number;
 
@@ -6,6 +12,10 @@ export interface CashierShift {
   business_day_id: number;
 
   cashier_id: number;
+
+  cashier: CashierShiftUser | null;
+
+  terminal_name: string | null;
 
   opening_cash: number;
 
@@ -22,6 +32,8 @@ export interface CashierShift {
   closed_at: string | null;
 
   closed_by: number | null;
+
+  closed_by_user: CashierShiftUser | null;
 
   opening_notes: string | null;
 
