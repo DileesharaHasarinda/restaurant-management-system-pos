@@ -4,6 +4,9 @@ import CashierShiftModule
 import BusinessDayModule
     from './cashier/businessDay/BusinessDayModule';
 
+import CorrectionsModule
+    from './cashier/corrections/CorrectionsModule';
+
 import CashDrawerModule
     from './cashier/drawer/CashDrawerModule';
 
@@ -87,6 +90,7 @@ type PosModule =
     | 'current-order'
     | 'payment'
     | 'history'
+    | 'corrections'
     | 'drawer'
     | 'shift'
     | 'business-day'
@@ -711,6 +715,17 @@ const moduleItems:
 
         {
             key:
+                'corrections',
+
+            label:
+                'Corrections',
+
+            short:
+                'CR',
+        },
+
+        {
+            key:
                 'drawer',
 
             label:
@@ -1238,22 +1253,56 @@ export default function CashierWorkspace(
     |--------------------------------------------------------------------------
     */
 
+    const canSeeCorrections =
+        useMemo(
+            () =>
+                [
+                    'orders.cancel',
+                    'refunds.view',
+                    'refunds.create',
+                    'inventory.cancellation_reversal.request',
+                    'inventory.cancellation_reversal',
+                ].some(
+                    (permission) =>
+                        user.permissions.includes(
+                            permission,
+                        ),
+                ),
+            [
+                user.permissions,
+            ],
+        );
+
     const visibleModuleItems =
         useMemo(
             () =>
                 moduleItems.filter(
                     (
                         item,
-                    ) =>
-                        item.key
-                        !==
-                        'business-day'
-                        ||
-                        user.permissions.includes(
-                            'business_day.view',
-                        ),
+                    ) => {
+                        if (
+                            item.key
+                            ===
+                            'business-day'
+                        ) {
+                            return user.permissions.includes(
+                                'business_day.view',
+                            );
+                        }
+
+                        if (
+                            item.key
+                            ===
+                            'corrections'
+                        ) {
+                            return canSeeCorrections;
+                        }
+
+                        return true;
+                    },
                 ),
             [
+                canSeeCorrections,
                 user.permissions,
             ],
         );
@@ -1511,6 +1560,57 @@ export default function CashierWorkspace(
                 'current-order',
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Selected Order After Correction
+    |--------------------------------------------------------------------------
+    |
+    | Phase 33 cancellation changes order state and table/session blockers.
+    | Keep the workspace list data and the selected detail synchronized.
+    |
+    */
+
+    const refreshSelectedOrderAfterCorrection =
+        useCallback(
+            async (): Promise<void> => {
+                await Promise.all([
+                    loadOrders(),
+                    loadTables(),
+                ]);
+
+                if (
+                    !selectedOrder
+                ) {
+                    return;
+                }
+
+                try {
+                    const response =
+                        await api.get<ApiOrderResponse>(
+                            `/orders/${selectedOrder.id}`,
+                        );
+
+                    setSelectedOrder(
+                        normalizeOrder(
+                            response.data,
+                        ),
+                    );
+                } catch (
+                exception
+                ) {
+                    handleError(
+                        exception,
+                    );
+                }
+            },
+            [
+                handleError,
+                loadOrders,
+                loadTables,
+                selectedOrder,
+            ],
+        );
 
     /*
     |--------------------------------------------------------------------------
@@ -2113,6 +2213,30 @@ export default function CashierWorkspace(
                             }
                             onOpenBilling={
                                 openPayment
+                            }
+                        />
+                    );
+
+                /*
+                |--------------------------------------------------------------------------
+                | Phase 33 - Cancellations / Refunds / Corrections
+                |--------------------------------------------------------------------------
+                */
+
+                case 'corrections':
+                    return (
+                        <CorrectionsModule
+                            order={
+                                selectedOrder
+                            }
+                            permissions={
+                                user.permissions
+                            }
+                            onSessionExpired={
+                                onSessionExpired
+                            }
+                            onOrderChanged={
+                                refreshSelectedOrderAfterCorrection
                             }
                         />
                     );
