@@ -1,50 +1,20 @@
-import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useState,
-    type ReactNode,
-} from 'react';
-
-import {
-    ApiError,
-} from '../../api';
-
-import {
-    closeBusinessDay,
-    getBusinessDayClosing,
-    getBusinessDayPreview,
-    getCurrentBusinessDay,
-    openBusinessDay,
-} from './businessDayService';
-
-import type {
-    BusinessDayClosing,
-    BusinessDayPaymentBreakdown,
-    BusinessDayPreview,
-} from './types';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, } from 'react';
+import { useStaffRealtimeRefresh, } from '../../realtime/realtimeBus';
+import { ApiError, } from '../../api';
+import { closeBusinessDay, getBusinessDayClosing, getBusinessDayPreview, getCurrentBusinessDay, openBusinessDay, } from './businessDayService';
+import type { BusinessDayClosing, BusinessDayPaymentBreakdown, BusinessDayPreview, } from './types';
 import './BusinessDayModule.css';
 
 interface BusinessDayModuleProps {
-    permissions:
-    string[];
-
-    onSessionExpired?:
-    () => void;
+    permissions: string[];
+    onSessionExpired?: () => void;
 }
 
-type BusinessDaySection =
-    | 'overview'
-    | 'checks'
-    | 'financials'
-    | 'cash';
+type BusinessDaySection = 'overview' | 'checks' | 'financials' | 'cash';
 
-const LAST_CLOSING_KEY =
-    'restaurant-pos-last-business-day-closing-id';
+const LAST_CLOSING_KEY = 'restaurant-pos-last-business-day-closing-id';
 
-const EMPTY_PAYMENTS:
-    BusinessDayPaymentBreakdown = {
+const EMPTY_PAYMENTS: BusinessDayPaymentBreakdown = {
     cash: 0,
     card: 0,
     qr: 0,
@@ -52,139 +22,84 @@ const EMPTY_PAYMENTS:
     other: 0,
 };
 
-const moneyFormatter =
-    new Intl.NumberFormat(
-        'en-LK',
-        {
-            style:
-                'currency',
+const moneyFormatter = new Intl.NumberFormat('en-LK', {
+    style: 'currency',
+    currency: 'LKR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
 
-            currency:
-                'LKR',
+const dateFormatter = new Intl.DateTimeFormat('en-LK', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+});
 
-            minimumFractionDigits:
-                2,
+const dateTimeFormatter = new Intl.DateTimeFormat('en-LK', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+});
 
-            maximumFractionDigits:
-                2,
-        },
+function formatMoney(value: number | null | undefined): string {
+    const amount = Number(
+        value
+        ??
+        0
     );
-
-const dateFormatter =
-    new Intl.DateTimeFormat(
-        'en-LK',
-        {
-            year:
-                'numeric',
-
-            month:
-                'short',
-
-            day:
-                '2-digit',
-        },
-    );
-
-const dateTimeFormatter =
-    new Intl.DateTimeFormat(
-        'en-LK',
-        {
-            year:
-                'numeric',
-
-            month:
-                'short',
-
-            day:
-                '2-digit',
-
-            hour:
-                '2-digit',
-
-            minute:
-                '2-digit',
-        },
-    );
-
-function formatMoney(
-    value:
-        number
-        | null
-        | undefined,
-): string {
-    const amount =
-        Number(
-            value
-            ??
-            0,
-        );
 
     return moneyFormatter.format(
-        Number.isFinite(
-            amount,
-        )
+        Number.isFinite(amount)
             ? amount
-            : 0,
+            : 0
     );
 }
 
-function formatDate(
-    value:
-        string
-        | null
-        | undefined,
-): string {
-    if (
-        !value
-    ) {
+function formatDate(value: string | null | undefined): string {
+    if (!value) {
         return '—';
     }
 
     const parsed =
         new Date(
-            `${value}T00:00:00`,
+            `${value}T00:00:00`
         );
 
     if (
         Number.isNaN(
-            parsed.getTime(),
+            parsed.getTime()
         )
     ) {
         return value;
     }
 
     return dateFormatter.format(
-        parsed,
+        parsed
     );
 }
 
-function formatDateTime(
-    value:
-        string
-        | null
-        | undefined,
-): string {
-    if (
-        !value
-    ) {
+function formatDateTime(value: string | null | undefined): string {
+    if (!value) {
         return '—';
     }
 
     const parsed =
         new Date(
-            value,
+            value
         );
 
     if (
         Number.isNaN(
-            parsed.getTime(),
+            parsed.getTime()
         )
     ) {
         return value;
     }
 
     return dateTimeFormatter.format(
-        parsed,
+        parsed
     );
 }
 
@@ -212,11 +127,11 @@ function makeUuid(): string {
     ) {
         const bytes =
             new Uint8Array(
-                16,
+                16
             );
 
         crypto.getRandomValues(
-            bytes,
+            bytes
         );
 
         bytes[6] =
@@ -237,8 +152,8 @@ function makeUuid(): string {
                         .toString(16)
                         .padStart(
                             2,
-                            '0',
-                        ),
+                            '0'
+                        )
             );
 
         return [
@@ -251,14 +166,11 @@ function makeUuid(): string {
     }
 
     throw new Error(
-        'This device cannot generate a secure request UUID.',
+        'This device cannot generate a secure request UUID.'
     );
 }
 
-function getErrorMessage(
-    exception:
-        unknown,
-): string {
+function getErrorMessage(exception: unknown): string {
     if (
         exception instanceof Error
         &&
@@ -277,17 +189,11 @@ function TouchKpiCard(
         hint,
         tone = 'neutral',
     }: {
-        label:
-        string;
-
-        value:
-        string;
-
-        hint?:
-        string;
-
+        label: string;
+        value: string;
+        hint?: string;
         tone?:
-        'neutral'
+        | 'neutral'
         | 'primary'
         | 'positive'
         | 'warning';
@@ -327,17 +233,10 @@ function SummaryRow(
         strong = false,
         negative = false,
     }: {
-        label:
-        string;
-
-        value:
-        string;
-
-        strong?:
-        boolean;
-
-        negative?:
-        boolean;
+        label: string;
+        value: string;
+        strong?: boolean;
+        negative?: boolean;
     },
 ) {
     return (
@@ -354,12 +253,8 @@ function SummaryRow(
                         ? 'negative'
                         : '',
                 ]
-                    .filter(
-                        Boolean,
-                    )
-                    .join(
-                        ' ',
-                    )
+                    .filter(Boolean)
+                    .join(' ')
             }
         >
             <span>
@@ -379,14 +274,9 @@ function BlockerCard(
         description,
         value,
     }: {
-        label:
-        string;
-
-        description:
-        string;
-
-        value:
-        number;
+        label: string;
+        description: string;
+        value: number;
     },
 ) {
     const clear =
@@ -438,17 +328,10 @@ function TouchTab(
         short,
         onClick,
     }: {
-        active:
-        boolean;
-
-        label:
-        string;
-
-        short:
-        string;
-
-        onClick:
-        () => void;
+        active: boolean;
+        label: string;
+        short: string;
+        onClick: () => void;
     },
 ) {
     return (
@@ -482,17 +365,17 @@ export default function BusinessDayModule(
 ) {
     const canView =
         permissions.includes(
-            'business_day.view',
+            'business_day.view'
         );
 
     const canOpen =
         permissions.includes(
-            'business_day.open',
+            'business_day.open'
         );
 
     const canClose =
         permissions.includes(
-            'business_day.close',
+            'business_day.close'
         );
 
     const [
@@ -500,7 +383,7 @@ export default function BusinessDayModule(
         setPreview,
     ] =
         useState<BusinessDayPreview | null>(
-            null,
+            null
         );
 
     const [
@@ -508,7 +391,7 @@ export default function BusinessDayModule(
         setHistoricalClosing,
     ] =
         useState<BusinessDayClosing | null>(
-            null,
+            null
         );
 
     const [
@@ -516,7 +399,7 @@ export default function BusinessDayModule(
         setSection,
     ] =
         useState<BusinessDaySection>(
-            'overview',
+            'overview'
         );
 
     const [
@@ -524,7 +407,7 @@ export default function BusinessDayModule(
         setLoading,
     ] =
         useState(
-            true,
+            true
         );
 
     const [
@@ -532,7 +415,7 @@ export default function BusinessDayModule(
         setRefreshing,
     ] =
         useState(
-            false,
+            false
         );
 
     const [
@@ -540,7 +423,7 @@ export default function BusinessDayModule(
         setOpening,
     ] =
         useState(
-            false,
+            false
         );
 
     const [
@@ -548,7 +431,7 @@ export default function BusinessDayModule(
         setShowOpenModal,
     ] =
         useState(
-            false,
+            false
         );
 
     const [
@@ -556,7 +439,7 @@ export default function BusinessDayModule(
         setOpeningNotes,
     ] =
         useState(
-            '',
+            ''
         );
 
     const [
@@ -564,7 +447,7 @@ export default function BusinessDayModule(
         setProcessingClose,
     ] =
         useState(
-            false,
+            false
         );
 
     const [
@@ -572,7 +455,7 @@ export default function BusinessDayModule(
         setShowCloseModal,
     ] =
         useState(
-            false,
+            false
         );
 
     const [
@@ -580,7 +463,7 @@ export default function BusinessDayModule(
         setClosingNotes,
     ] =
         useState(
-            '',
+            ''
         );
 
     const [
@@ -588,7 +471,7 @@ export default function BusinessDayModule(
         setCloseRequestId,
     ] =
         useState<string | null>(
-            null,
+            null
         );
 
     const [
@@ -596,7 +479,7 @@ export default function BusinessDayModule(
         setMessage,
     ] =
         useState(
-            '',
+            ''
         );
 
     const [
@@ -604,14 +487,25 @@ export default function BusinessDayModule(
         setError,
     ] =
         useState(
-            '',
+            ''
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Request Version
+    |--------------------------------------------------------------------------
+    */
+
+    const realtimeRequestVersionRef =
+        useRef(
+            0
         );
 
     const handleError =
         useCallback(
             (
                 exception:
-                    unknown,
+                    unknown
             ): void => {
                 if (
                     exception instanceof ApiError
@@ -627,28 +521,34 @@ export default function BusinessDayModule(
 
                 setError(
                     getErrorMessage(
-                        exception,
-                    ),
+                        exception
+                    )
                 );
             },
             [
                 onSessionExpired,
-            ],
+            ]
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stored Closing
+    |--------------------------------------------------------------------------
+    */
 
     const loadStoredClosing =
         useCallback(
             async (): Promise<void> => {
                 const stored =
                     sessionStorage.getItem(
-                        LAST_CLOSING_KEY,
+                        LAST_CLOSING_KEY
                     );
 
                 if (
                     !stored
                 ) {
                     setHistoricalClosing(
-                        null,
+                        null
                     );
 
                     return;
@@ -656,22 +556,22 @@ export default function BusinessDayModule(
 
                 const closingId =
                     Number(
-                        stored,
+                        stored
                     );
 
                 if (
                     !Number.isInteger(
-                        closingId,
+                        closingId
                     )
                     ||
                     closingId <= 0
                 ) {
                     sessionStorage.removeItem(
-                        LAST_CLOSING_KEY,
+                        LAST_CLOSING_KEY
                     );
 
                     setHistoricalClosing(
-                        null,
+                        null
                     );
 
                     return;
@@ -680,24 +580,30 @@ export default function BusinessDayModule(
                 try {
                     const closing =
                         await getBusinessDayClosing(
-                            closingId,
+                            closingId
                         );
 
                     setHistoricalClosing(
-                        closing,
+                        closing
                     );
                 } catch {
                     sessionStorage.removeItem(
-                        LAST_CLOSING_KEY,
+                        LAST_CLOSING_KEY
                     );
 
                     setHistoricalClosing(
-                        null,
+                        null
                     );
                 }
             },
-            [],
+            []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Load
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -706,7 +612,9 @@ export default function BusinessDayModule(
 
             void getCurrentBusinessDay()
                 .then(
-                    async result => {
+                    async (
+                        result
+                    ) => {
                         if (
                             cancelled
                         ) {
@@ -714,14 +622,14 @@ export default function BusinessDayModule(
                         }
 
                         setPreview(
-                            result,
+                            result
                         );
 
                         if (
                             result.business_day
                         ) {
                             setHistoricalClosing(
-                                null,
+                                null
                             );
 
                             return;
@@ -729,7 +637,7 @@ export default function BusinessDayModule(
 
                         const stored =
                             sessionStorage.getItem(
-                                LAST_CLOSING_KEY,
+                                LAST_CLOSING_KEY
                             );
 
                         if (
@@ -740,18 +648,18 @@ export default function BusinessDayModule(
 
                         const closingId =
                             Number(
-                                stored,
+                                stored
                             );
 
                         if (
                             !Number.isInteger(
-                                closingId,
+                                closingId
                             )
                             ||
                             closingId <= 0
                         ) {
                             sessionStorage.removeItem(
-                                LAST_CLOSING_KEY,
+                                LAST_CLOSING_KEY
                             );
 
                             return;
@@ -760,25 +668,27 @@ export default function BusinessDayModule(
                         try {
                             const closing =
                                 await getBusinessDayClosing(
-                                    closingId,
+                                    closingId
                                 );
 
                             if (
                                 !cancelled
                             ) {
                                 setHistoricalClosing(
-                                    closing,
+                                    closing
                                 );
                             }
                         } catch {
                             sessionStorage.removeItem(
-                                LAST_CLOSING_KEY,
+                                LAST_CLOSING_KEY
                             );
                         }
-                    },
+                    }
                 )
                 .catch(
-                    exception => {
+                    (
+                        exception
+                    ) => {
                         if (
                             cancelled
                         ) {
@@ -799,10 +709,10 @@ export default function BusinessDayModule(
 
                         setError(
                             getErrorMessage(
-                                exception,
-                            ),
+                                exception
+                            )
                         );
-                    },
+                    }
                 )
                 .finally(
                     () => {
@@ -810,10 +720,10 @@ export default function BusinessDayModule(
                             !cancelled
                         ) {
                             setLoading(
-                                false,
+                                false
                             );
                         }
-                    },
+                    }
                 );
 
             return () => {
@@ -823,8 +733,14 @@ export default function BusinessDayModule(
         },
         [
             onSessionExpired,
-        ],
+        ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Manual Refresh
+    |--------------------------------------------------------------------------
+    */
 
     const refresh =
         async (): Promise<void> => {
@@ -835,15 +751,15 @@ export default function BusinessDayModule(
             }
 
             setRefreshing(
-                true,
+                true
             );
 
             setError(
-                '',
+                ''
             );
 
             setMessage(
-                '',
+                ''
             );
 
             try {
@@ -856,15 +772,15 @@ export default function BusinessDayModule(
                 ) {
                     const result =
                         await getBusinessDayPreview(
-                            currentBusinessDay.id,
+                            currentBusinessDay.id
                         );
 
                     setPreview(
-                        result,
+                        result
                     );
 
                     setMessage(
-                        'Business day information refreshed.',
+                        'Business day information refreshed.'
                     );
 
                     return;
@@ -874,18 +790,18 @@ export default function BusinessDayModule(
                     await getCurrentBusinessDay();
 
                 setPreview(
-                    result,
+                    result
                 );
 
                 if (
                     result.business_day
                 ) {
                     setHistoricalClosing(
-                        null,
+                        null
                     );
 
                     setMessage(
-                        'Open business day loaded.',
+                        'Open business day loaded.'
                     );
 
                     return;
@@ -894,20 +810,336 @@ export default function BusinessDayModule(
                 await loadStoredClosing();
 
                 setMessage(
-                    'Business day information refreshed.',
+                    'Business day information refreshed.'
                 );
             } catch (
             exception
             ) {
                 handleError(
-                    exception,
+                    exception
                 );
             } finally {
                 setRefreshing(
-                    false,
+                    false
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Silent Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | CashierWorkspace owns the single Reverb/Echo connection.
+    |
+    | This module only receives invalidation signals from the internal
+    | realtime bus and always reloads authoritative state from Laravel.
+    |
+    | Realtime reconciliation never submits open/close actions and never
+    | activates the manual Refresh spinner.
+    |--------------------------------------------------------------------------
+    */
+
+    const reconcileRealtimeState =
+        useCallback(
+            async (): Promise<void> => {
+                const requestVersion =
+                    realtimeRequestVersionRef.current
+                    +
+                    1;
+
+                realtimeRequestVersionRef.current =
+                    requestVersion;
+
+                try {
+                    const result =
+                        await getCurrentBusinessDay();
+
+                    /*
+                     * Another newer realtime request already completed or is
+                     * in flight. Ignore this older response.
+                     */
+                    if (
+                        requestVersion
+                        !==
+                        realtimeRequestVersionRef.current
+                    ) {
+                        return;
+                    }
+
+                    setPreview(
+                        result
+                    );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Open Business Day
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        result.business_day
+                    ) {
+                        setHistoricalClosing(
+                            null
+                        );
+
+                        sessionStorage.removeItem(
+                            LAST_CLOSING_KEY
+                        );
+
+                        /*
+                         * If another terminal already opened the day while
+                         * this Start Day confirmation was waiting, that local
+                         * confirmation is obsolete.
+                         *
+                         * Do not interrupt our own in-flight POST.
+                         */
+                        if (
+                            showOpenModal
+                            &&
+                            !opening
+                        ) {
+                            setShowOpenModal(
+                                false
+                            );
+
+                            setOpeningNotes(
+                                ''
+                            );
+                        }
+
+                        return;
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Closed Business Day
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        result.closing
+                    ) {
+                        sessionStorage.setItem(
+                            LAST_CLOSING_KEY,
+                            String(
+                                result.closing.id
+                            )
+                        );
+
+                        setHistoricalClosing(
+                            result.closing
+                        );
+
+                        /*
+                         * Another terminal may have closed the day while the
+                         * cashier had a local closing confirmation visible.
+                         *
+                         * If our own POST is not currently processing, the
+                         * confirmation is no longer valid and can be closed.
+                         */
+                        if (
+                            showCloseModal
+                            &&
+                            !processingClose
+                        ) {
+                            setShowCloseModal(
+                                false
+                            );
+
+                            setClosingNotes(
+                                ''
+                            );
+
+                            setCloseRequestId(
+                                null
+                            );
+                        }
+
+                        return;
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Historical Closing Fallback
+                    |--------------------------------------------------------------------------
+                    */
+
+                    const stored =
+                        sessionStorage.getItem(
+                            LAST_CLOSING_KEY
+                        );
+
+                    if (
+                        !stored
+                    ) {
+                        setHistoricalClosing(
+                            null
+                        );
+
+                        if (
+                            showCloseModal
+                            &&
+                            !processingClose
+                        ) {
+                            setShowCloseModal(
+                                false
+                            );
+
+                            setClosingNotes(
+                                ''
+                            );
+
+                            setCloseRequestId(
+                                null
+                            );
+                        }
+
+                        return;
+                    }
+
+                    const closingId =
+                        Number(
+                            stored
+                        );
+
+                    if (
+                        !Number.isInteger(
+                            closingId
+                        )
+                        ||
+                        closingId <= 0
+                    ) {
+                        sessionStorage.removeItem(
+                            LAST_CLOSING_KEY
+                        );
+
+                        setHistoricalClosing(
+                            null
+                        );
+
+                        return;
+                    }
+
+                    const closing =
+                        await getBusinessDayClosing(
+                            closingId
+                        );
+
+                    if (
+                        requestVersion
+                        !==
+                        realtimeRequestVersionRef.current
+                    ) {
+                        return;
+                    }
+
+                    setHistoricalClosing(
+                        closing
+                    );
+
+                    if (
+                        showCloseModal
+                        &&
+                        !processingClose
+                    ) {
+                        setShowCloseModal(
+                            false
+                        );
+
+                        setClosingNotes(
+                            ''
+                        );
+
+                        setCloseRequestId(
+                            null
+                        );
+                    }
+                } catch (
+                exception
+                ) {
+                    if (
+                        requestVersion
+                        !==
+                        realtimeRequestVersionRef.current
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status
+                        ===
+                        401
+                    ) {
+                        onSessionExpired?.();
+
+                        return;
+                    }
+
+                    /*
+                     * Realtime failure must never break the cashier's current
+                     * workflow. A later event, reconnect, or manual Refresh
+                     * can reconcile the state again.
+                     */
+                    console.warn(
+                        'Realtime business-day reconciliation failed.',
+                        exception
+                    );
+                }
+            },
+            [
+                onSessionExpired,
+                opening,
+                processingClose,
+                showCloseModal,
+                showOpenModal,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Domains
+    |--------------------------------------------------------------------------
+    |
+    | Business Day blockers and totals depend on several domains:
+    |
+    | business_day      - open / close state
+    | orders            - order counts and status
+    | tables            - active table sessions
+    | billing           - invoices / payments / refunds
+    | cash              - shifts / drawer movements
+    | expenses          - expenses
+    | wastage           - wastage cost
+    | purchases         - purchases
+    | supplier_payments - supplier payment totals
+    |
+    | useStaffRealtimeRefresh also reconciles after a Reverb reconnect.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            'business_day',
+            'orders',
+            'tables',
+            'billing',
+            'cash',
+            'expenses',
+            'wastage',
+            'purchases',
+            'supplier_payments',
+        ],
+        reconcileRealtimeState
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Business Day
+    |--------------------------------------------------------------------------
+    */
 
     const openBusinessDayConfirmation =
         (): void => {
@@ -920,19 +1152,19 @@ export default function BusinessDayModule(
             }
 
             setOpeningNotes(
-                '',
+                ''
             );
 
             setError(
-                '',
+                ''
             );
 
             setMessage(
-                '',
+                ''
             );
 
             setShowOpenModal(
-                true,
+                true
             );
         };
 
@@ -945,11 +1177,11 @@ export default function BusinessDayModule(
             }
 
             setShowOpenModal(
-                false,
+                false
             );
 
             setOpeningNotes(
-                '',
+                ''
             );
         };
 
@@ -969,22 +1201,22 @@ export default function BusinessDayModule(
                 2000
             ) {
                 setError(
-                    'Opening notes cannot exceed 2,000 characters.',
+                    'Opening notes cannot exceed 2,000 characters.'
                 );
 
                 return;
             }
 
             setOpening(
-                true,
+                true
             );
 
             setError(
-                '',
+                ''
             );
 
             setMessage(
-                '',
+                ''
             );
 
             try {
@@ -997,50 +1229,63 @@ export default function BusinessDayModule(
                             null,
                     });
 
+                /*
+                 * Invalidate any older realtime GET that started before this
+                 * mutation completed.
+                 */
+                realtimeRequestVersionRef.current +=
+                    1;
+
                 const current =
                     await getCurrentBusinessDay();
 
                 setPreview(
-                    current,
+                    current
                 );
 
                 setHistoricalClosing(
-                    null,
+                    null
                 );
 
                 sessionStorage.removeItem(
-                    LAST_CLOSING_KEY,
+                    LAST_CLOSING_KEY
                 );
 
                 setSection(
-                    'overview',
+                    'overview'
                 );
 
                 setShowOpenModal(
-                    false,
+                    false
                 );
 
                 setOpeningNotes(
-                    '',
+                    ''
                 );
 
                 setMessage(
                     result.created
                         ? 'Restaurant business day opened successfully.'
-                        : 'The current open business day was loaded.',
+                        : 'The current open business day was loaded.'
                 );
             } catch (
             exception
             ) {
                 handleError(
-                    exception,
+                    exception
                 );
             } finally {
                 setOpening(
-                    false,
+                    false
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Close Business Day
+    |--------------------------------------------------------------------------
+    */
 
     const openCloseConfirmation =
         (): void => {
@@ -1060,23 +1305,23 @@ export default function BusinessDayModule(
             }
 
             setClosingNotes(
-                '',
+                ''
             );
 
             setCloseRequestId(
-                makeUuid(),
+                makeUuid()
             );
 
             setError(
-                '',
+                ''
             );
 
             setMessage(
-                '',
+                ''
             );
 
             setShowCloseModal(
-                true,
+                true
             );
         };
 
@@ -1089,15 +1334,15 @@ export default function BusinessDayModule(
             }
 
             setShowCloseModal(
-                false,
+                false
             );
 
             setClosingNotes(
-                '',
+                ''
             );
 
             setCloseRequestId(
-                null,
+                null
             );
         };
 
@@ -1123,12 +1368,15 @@ export default function BusinessDayModule(
                 2000
             ) {
                 setError(
-                    'Closing notes cannot exceed 2,000 characters.',
+                    'Closing notes cannot exceed 2,000 characters.'
                 );
 
                 return;
             }
 
+            /*
+             * Keep the same UUID for retries.
+             */
             const requestId =
                 closeRequestId
                 ??
@@ -1138,20 +1386,20 @@ export default function BusinessDayModule(
                 !closeRequestId
             ) {
                 setCloseRequestId(
-                    requestId,
+                    requestId
                 );
             }
 
             setProcessingClose(
-                true,
+                true
             );
 
             setError(
-                '',
+                ''
             );
 
             setMessage(
-                '',
+                ''
             );
 
             try {
@@ -1167,20 +1415,27 @@ export default function BusinessDayModule(
                                     .trim()
                                 ||
                                 null,
-                        },
+                        }
                     );
+
+                /*
+                 * Invalidate realtime requests started while the close POST
+                 * was still pending.
+                 */
+                realtimeRequestVersionRef.current +=
+                    1;
 
                 sessionStorage.setItem(
                     LAST_CLOSING_KEY,
                     String(
                         result
                             .closing
-                            .id,
-                    ),
+                            .id
+                    )
                 );
 
                 setHistoricalClosing(
-                    result.closing,
+                    result.closing
                 );
 
                 setPreview({
@@ -1198,51 +1453,64 @@ export default function BusinessDayModule(
                 });
 
                 setSection(
-                    'overview',
+                    'overview'
                 );
 
                 setShowCloseModal(
-                    false,
+                    false
                 );
 
                 setClosingNotes(
-                    '',
+                    ''
                 );
 
                 setCloseRequestId(
-                    null,
+                    null
                 );
 
                 setMessage(
                     result.closed
                         ? 'Restaurant business day closed successfully.'
-                        : 'The existing business day closing was loaded.',
+                        : 'The existing business day closing was loaded.'
                 );
             } catch (
             exception
             ) {
                 handleError(
-                    exception,
+                    exception
                 );
 
+                /*
+                 * Preserve closeRequestId.
+                 *
+                 * The next retry must use the same idempotency UUID.
+                 */
                 try {
                     const refreshed =
                         await getBusinessDayPreview(
-                            businessDay.id,
+                            businessDay.id
                         );
 
                     setPreview(
-                        refreshed,
+                        refreshed
                     );
                 } catch {
-                    /* Preserve the original close error. */
+                    /*
+                     * Preserve the original close error.
+                     */
                 }
             } finally {
                 setProcessingClose(
-                    false,
+                    false
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reconciliation Status
+    |--------------------------------------------------------------------------
+    */
 
     const reconciliation =
         useMemo(
@@ -1292,8 +1560,14 @@ export default function BusinessDayModule(
             [
                 historicalClosing,
                 preview,
-            ],
+            ]
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Modal
+    |--------------------------------------------------------------------------
+    */
 
     const renderOpenModal =
         (): ReactNode => {
@@ -1381,14 +1655,17 @@ export default function BusinessDayModule(
                                         setOpeningNotes(
                                             event
                                                 .target
-                                                .value,
+                                                .value
                                         );
                                     }
                                 }
                             />
 
                             <small>
-                                {openingNotes.length}/2000
+                                {
+                                    openingNotes.length
+                                }
+                                /2000
                             </small>
                         </label>
 
@@ -1429,6 +1706,12 @@ export default function BusinessDayModule(
                 </div>
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Close Modal
+    |--------------------------------------------------------------------------
+    */
 
     const renderCloseModal =
         (): ReactNode => {
@@ -1473,9 +1756,11 @@ export default function BusinessDayModule(
                                 </h2>
 
                                 <p>
-                                    {formatDate(
-                                        businessDay.business_date,
-                                    )}
+                                    {
+                                        formatDate(
+                                            businessDay.business_date
+                                        )
+                                    }
                                 </p>
                             </div>
 
@@ -1515,7 +1800,7 @@ export default function BusinessDayModule(
                                 label="Net Sales"
                                 value={
                                     formatMoney(
-                                        summary.sales.net_sales,
+                                        summary.sales.net_sales
                                     )
                                 }
                                 tone="primary"
@@ -1525,7 +1810,7 @@ export default function BusinessDayModule(
                                 label="Net Profit"
                                 value={
                                     formatMoney(
-                                        summary.estimated_net_profit,
+                                        summary.estimated_net_profit
                                     )
                                 }
                                 tone="positive"
@@ -1535,11 +1820,13 @@ export default function BusinessDayModule(
                                 label="Cash Difference"
                                 value={
                                     formatMoney(
-                                        summary.cash_difference,
+                                        summary.cash_difference
                                     )
                                 }
                                 tone={
-                                    summary.cash_difference === 0
+                                    summary.cash_difference
+                                        ===
+                                        0
                                         ? 'positive'
                                         : 'warning'
                                 }
@@ -1570,14 +1857,17 @@ export default function BusinessDayModule(
                                         setClosingNotes(
                                             event
                                                 .target
-                                                .value,
+                                                .value
                                         );
                                     }
                                 }
                             />
 
                             <small>
-                                {closingNotes.length}/2000
+                                {
+                                    closingNotes.length
+                                }
+                                /2000
                             </small>
                         </label>
 
@@ -1619,6 +1909,12 @@ export default function BusinessDayModule(
             );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Permission
+    |--------------------------------------------------------------------------
+    */
+
     if (
         !canView
     ) {
@@ -1640,6 +1936,12 @@ export default function BusinessDayModule(
             </section>
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Loading
+    |--------------------------------------------------------------------------
+    */
 
     if (
         loading
@@ -1681,7 +1983,7 @@ export default function BusinessDayModule(
 
     /*
     |--------------------------------------------------------------------------
-    | Closed Day - Touch Summary
+    | Closed Day
     |--------------------------------------------------------------------------
     */
 
@@ -1760,21 +2062,24 @@ export default function BusinessDayModule(
                                     ??
                                     snapshot
                                         ?.business_day
-                                        ?.business_date,
+                                        ?.business_date
                                 )
                             }
                         </strong>
 
                         <small>
-                            Closed by {
+                            Closed by{' '}
+                            {
                                 historicalClosing
                                     .closed_by
                                     ?.name
                                 ??
                                 '—'
-                            } · {
+                            }
+                            {' · '}
+                            {
                                 formatDateTime(
-                                    historicalClosing.closed_at,
+                                    historicalClosing.closed_at
                                 )
                             }
                         </small>
@@ -1786,7 +2091,7 @@ export default function BusinessDayModule(
                         label="Net Sales"
                         value={
                             formatMoney(
-                                historicalClosing.total_sales,
+                                historicalClosing.total_sales
                             )
                         }
                         tone="primary"
@@ -1796,7 +2101,7 @@ export default function BusinessDayModule(
                         label="Gross Profit"
                         value={
                             formatMoney(
-                                historicalClosing.gross_profit,
+                                historicalClosing.gross_profit
                             )
                         }
                         tone="positive"
@@ -1806,7 +2111,7 @@ export default function BusinessDayModule(
                         label="Net Profit"
                         value={
                             formatMoney(
-                                historicalClosing.estimated_net_profit,
+                                historicalClosing.estimated_net_profit
                             )
                         }
                         tone="positive"
@@ -1816,11 +2121,13 @@ export default function BusinessDayModule(
                         label="Cash Difference"
                         value={
                             formatMoney(
-                                historicalClosing.cash_difference,
+                                historicalClosing.cash_difference
                             )
                         }
                         tone={
-                            historicalClosing.cash_difference === 0
+                            historicalClosing.cash_difference
+                                ===
+                                0
                                 ? 'positive'
                                 : 'warning'
                         }
@@ -1851,7 +2158,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(payments.cash)}
+                                    {
+                                        formatMoney(
+                                            payments.cash
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -1861,7 +2172,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(payments.card)}
+                                    {
+                                        formatMoney(
+                                            payments.card
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -1871,7 +2186,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(payments.qr)}
+                                    {
+                                        formatMoney(
+                                            payments.qr
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -1881,7 +2200,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(payments.bank_transfer)}
+                                    {
+                                        formatMoney(
+                                            payments.bank_transfer
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -1891,7 +2214,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(payments.other)}
+                                    {
+                                        formatMoney(
+                                            payments.other
+                                        )
+                                    }
                                 </strong>
                             </div>
                         </div>
@@ -1914,7 +2241,9 @@ export default function BusinessDayModule(
                                     `bd-reconciliation ${reconciliation.className}`
                                 }
                             >
-                                {reconciliation.label}
+                                {
+                                    reconciliation.label
+                                }
                             </span>
                         </div>
 
@@ -1922,7 +2251,7 @@ export default function BusinessDayModule(
                             label="Expected Cash"
                             value={
                                 formatMoney(
-                                    historicalClosing.expected_cash,
+                                    historicalClosing.expected_cash
                                 )
                             }
                         />
@@ -1931,7 +2260,7 @@ export default function BusinessDayModule(
                             label="Actual Cash"
                             value={
                                 formatMoney(
-                                    historicalClosing.actual_cash,
+                                    historicalClosing.actual_cash
                                 )
                             }
                         />
@@ -1940,12 +2269,14 @@ export default function BusinessDayModule(
                             label="Difference"
                             value={
                                 formatMoney(
-                                    historicalClosing.cash_difference,
+                                    historicalClosing.cash_difference
                                 )
                             }
                             strong
                             negative={
-                                historicalClosing.cash_difference < 0
+                                historicalClosing.cash_difference
+                                <
+                                0
                             }
                         />
                     </section>
@@ -1960,7 +2291,9 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <p>
-                                    {historicalClosing.closing_notes}
+                                    {
+                                        historicalClosing.closing_notes
+                                    }
                                 </p>
                             </section>
                         )
@@ -2017,7 +2350,9 @@ export default function BusinessDayModule(
                     }
                 </div>
 
-                {renderOpenModal()}
+                {
+                    renderOpenModal()
+                }
             </section>
         );
     }
@@ -2152,10 +2487,18 @@ export default function BusinessDayModule(
                     </button>
                 </div>
 
-                {renderOpenModal()}
+                {
+                    renderOpenModal()
+                }
             </section>
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Business Day State
+    |--------------------------------------------------------------------------
+    */
 
     const netPayments =
         summary
@@ -2176,6 +2519,12 @@ export default function BusinessDayModule(
     const orderHint =
         `${summary.orders?.cancelled ?? 0} cancelled · ${summary.orders?.rejected ?? 0} rejected`;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Overview
+    |--------------------------------------------------------------------------
+    */
+
     const renderOverview =
         (): ReactNode => (
             <div className="bd-touch-section-content">
@@ -2184,9 +2533,10 @@ export default function BusinessDayModule(
                         label="Completed Orders"
                         value={
                             String(
-                                summary.orders?.completed
+                                summary.orders
+                                    ?.completed
                                 ??
-                                0,
+                                0
                             )
                         }
                         hint={
@@ -2199,7 +2549,7 @@ export default function BusinessDayModule(
                         label="Net Sales"
                         value={
                             formatMoney(
-                                summary.sales.net_sales,
+                                summary.sales.net_sales
                             )
                         }
                         tone="primary"
@@ -2209,7 +2559,7 @@ export default function BusinessDayModule(
                         label="Gross Profit"
                         value={
                             formatMoney(
-                                summary.gross_profit,
+                                summary.gross_profit
                             )
                         }
                         tone="positive"
@@ -2219,7 +2569,7 @@ export default function BusinessDayModule(
                         label="Estimated Net Profit"
                         value={
                             formatMoney(
-                                summary.estimated_net_profit,
+                                summary.estimated_net_profit
                             )
                         }
                         tone="positive"
@@ -2251,7 +2601,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatDate(businessDay.business_date)}
+                                    {
+                                        formatDate(
+                                            businessDay.business_date
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2261,7 +2615,13 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {businessDay.opened_by?.name ?? '—'}
+                                    {
+                                        businessDay
+                                            .opened_by
+                                            ?.name
+                                        ??
+                                        '—'
+                                    }
                                 </strong>
                             </div>
 
@@ -2271,7 +2631,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatDateTime(businessDay.opened_at)}
+                                    {
+                                        formatDateTime(
+                                            businessDay.opened_at
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2328,7 +2692,7 @@ export default function BusinessDayModule(
                             onClick={
                                 () => {
                                     setSection(
-                                        'checks',
+                                        'checks'
                                     );
                                 }
                             }
@@ -2339,6 +2703,12 @@ export default function BusinessDayModule(
                 </div>
             </div>
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Close Checks
+    |--------------------------------------------------------------------------
+    */
 
     const renderChecks =
         (): ReactNode => (
@@ -2466,6 +2836,12 @@ export default function BusinessDayModule(
             </div>
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Financials
+    |--------------------------------------------------------------------------
+    */
+
     const renderFinancials =
         (): ReactNode => (
             <div className="bd-touch-section-content">
@@ -2487,7 +2863,7 @@ export default function BusinessDayModule(
                             label="Subtotal"
                             value={
                                 formatMoney(
-                                    summary.sales.subtotal,
+                                    summary.sales.subtotal
                                 )
                             }
                         />
@@ -2496,7 +2872,7 @@ export default function BusinessDayModule(
                             label="Discounts"
                             value={
                                 formatMoney(
-                                    summary.sales.discounts,
+                                    summary.sales.discounts
                                 )
                             }
                             negative
@@ -2506,7 +2882,7 @@ export default function BusinessDayModule(
                             label="Tax"
                             value={
                                 formatMoney(
-                                    summary.sales.tax,
+                                    summary.sales.tax
                                 )
                             }
                         />
@@ -2515,7 +2891,7 @@ export default function BusinessDayModule(
                             label="Service Charge"
                             value={
                                 formatMoney(
-                                    summary.sales.service_charge,
+                                    summary.sales.service_charge
                                 )
                             }
                         />
@@ -2524,7 +2900,7 @@ export default function BusinessDayModule(
                             label="Gross Sales"
                             value={
                                 formatMoney(
-                                    summary.sales.gross_invoice_sales,
+                                    summary.sales.gross_invoice_sales
                                 )
                             }
                         />
@@ -2533,7 +2909,7 @@ export default function BusinessDayModule(
                             label="Refunds"
                             value={
                                 formatMoney(
-                                    summary.sales.refunds,
+                                    summary.sales.refunds
                                 )
                             }
                             negative
@@ -2543,7 +2919,7 @@ export default function BusinessDayModule(
                             label="Net Sales"
                             value={
                                 formatMoney(
-                                    summary.sales.net_sales,
+                                    summary.sales.net_sales
                                 )
                             }
                             strong
@@ -2567,7 +2943,7 @@ export default function BusinessDayModule(
                             label="Net Sales"
                             value={
                                 formatMoney(
-                                    summary.sales.net_sales,
+                                    summary.sales.net_sales
                                 )
                             }
                         />
@@ -2576,7 +2952,7 @@ export default function BusinessDayModule(
                             label="COGS"
                             value={
                                 formatMoney(
-                                    summary.cogs,
+                                    summary.cogs
                                 )
                             }
                             negative
@@ -2586,7 +2962,7 @@ export default function BusinessDayModule(
                             label="Gross Profit"
                             value={
                                 formatMoney(
-                                    summary.gross_profit,
+                                    summary.gross_profit
                                 )
                             }
                             strong
@@ -2596,7 +2972,7 @@ export default function BusinessDayModule(
                             label="Expenses"
                             value={
                                 formatMoney(
-                                    summary.expenses,
+                                    summary.expenses
                                 )
                             }
                             negative
@@ -2606,7 +2982,7 @@ export default function BusinessDayModule(
                             label="Wastage"
                             value={
                                 formatMoney(
-                                    summary.wastage,
+                                    summary.wastage
                                 )
                             }
                             negative
@@ -2620,7 +2996,7 @@ export default function BusinessDayModule(
                             <strong>
                                 {
                                     formatMoney(
-                                        summary.estimated_net_profit,
+                                        summary.estimated_net_profit
                                     )
                                 }
                             </strong>
@@ -2646,7 +3022,7 @@ export default function BusinessDayModule(
                             label="Purchases"
                             value={
                                 formatMoney(
-                                    summary.purchases,
+                                    summary.purchases
                                 )
                             }
                         />
@@ -2655,7 +3031,7 @@ export default function BusinessDayModule(
                             label="Supplier Payments"
                             value={
                                 formatMoney(
-                                    summary.supplier_payments,
+                                    summary.supplier_payments
                                 )
                             }
                         />
@@ -2664,7 +3040,7 @@ export default function BusinessDayModule(
                             label="Expenses"
                             value={
                                 formatMoney(
-                                    summary.expenses,
+                                    summary.expenses
                                 )
                             }
                         />
@@ -2673,7 +3049,7 @@ export default function BusinessDayModule(
                             label="Wastage"
                             value={
                                 formatMoney(
-                                    summary.wastage,
+                                    summary.wastage
                                 )
                             }
                         />
@@ -2685,6 +3061,12 @@ export default function BusinessDayModule(
                 </section>
             </div>
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cash
+    |--------------------------------------------------------------------------
+    */
 
     const renderCash =
         (): ReactNode => (
@@ -2710,7 +3092,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(netPayments.cash)}
+                                    {
+                                        formatMoney(
+                                            netPayments.cash
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2720,7 +3106,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(netPayments.card)}
+                                    {
+                                        formatMoney(
+                                            netPayments.card
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2730,7 +3120,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(netPayments.qr)}
+                                    {
+                                        formatMoney(
+                                            netPayments.qr
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2740,7 +3134,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(netPayments.bank_transfer)}
+                                    {
+                                        formatMoney(
+                                            netPayments.bank_transfer
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2750,7 +3148,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(netPayments.other)}
+                                    {
+                                        formatMoney(
+                                            netPayments.other
+                                        )
+                                    }
                                 </strong>
                             </div>
                         </div>
@@ -2773,7 +3175,9 @@ export default function BusinessDayModule(
                                     `bd-reconciliation ${reconciliation.className}`
                                 }
                             >
-                                {reconciliation.label}
+                                {
+                                    reconciliation.label
+                                }
                             </span>
                         </div>
 
@@ -2784,7 +3188,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(summary.expected_cash)}
+                                    {
+                                        formatMoney(
+                                            summary.expected_cash
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2794,7 +3202,11 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(summary.actual_cash)}
+                                    {
+                                        formatMoney(
+                                            summary.actual_cash
+                                        )
+                                    }
                                 </strong>
                             </div>
 
@@ -2812,13 +3224,19 @@ export default function BusinessDayModule(
                                 </span>
 
                                 <strong>
-                                    {formatMoney(summary.cash_difference)}
+                                    {
+                                        formatMoney(
+                                            summary.cash_difference
+                                        )
+                                    }
                                 </strong>
                             </div>
                         </div>
 
                         {
-                            blockers.open_cashier_shifts > 0
+                            blockers.open_cashier_shifts
+                                >
+                                0
                                 ? (
                                     <div className="bd-touch-warning-box">
                                         <strong>
@@ -2837,6 +3255,12 @@ export default function BusinessDayModule(
             </div>
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Day Render
+    |--------------------------------------------------------------------------
+    */
+
     return (
         <section className="business-day-module bd-touch-screen">
             <header className="bd-touch-header">
@@ -2850,7 +3274,19 @@ export default function BusinessDayModule(
                     </h1>
 
                     <p>
-                        {formatDate(businessDay.business_date)} · Opened by {businessDay.opened_by?.name ?? '—'}
+                        {
+                            formatDate(
+                                businessDay.business_date
+                            )
+                        }
+                        {' · Opened by '}
+                        {
+                            businessDay
+                                .opened_by
+                                ?.name
+                            ??
+                            '—'
+                        }
                     </p>
                 </div>
 
@@ -2880,17 +3316,22 @@ export default function BusinessDayModule(
                     : null
             }
 
-            <nav className="bd-touch-tabs" aria-label="Business day sections">
+            <nav
+                className="bd-touch-tabs"
+                aria-label="Business day sections"
+            >
                 <TouchTab
                     short="OV"
                     label="Overview"
                     active={
-                        section === 'overview'
+                        section
+                        ===
+                        'overview'
                     }
                     onClick={
                         () => {
                             setSection(
-                                'overview',
+                                'overview'
                             );
                         }
                     }
@@ -2901,17 +3342,19 @@ export default function BusinessDayModule(
                         blockers.can_close
                             ? '✓'
                             : String(
-                                activeBlockerCount,
+                                activeBlockerCount
                             )
                     }
                     label="Close Checks"
                     active={
-                        section === 'checks'
+                        section
+                        ===
+                        'checks'
                     }
                     onClick={
                         () => {
                             setSection(
-                                'checks',
+                                'checks'
                             );
                         }
                     }
@@ -2921,12 +3364,14 @@ export default function BusinessDayModule(
                     short="Rs"
                     label="Financials"
                     active={
-                        section === 'financials'
+                        section
+                        ===
+                        'financials'
                     }
                     onClick={
                         () => {
                             setSection(
-                                'financials',
+                                'financials'
                             );
                         }
                     }
@@ -2936,12 +3381,14 @@ export default function BusinessDayModule(
                     short="CA"
                     label="Cash"
                     active={
-                        section === 'cash'
+                        section
+                        ===
+                        'cash'
                     }
                     onClick={
                         () => {
                             setSection(
-                                'cash',
+                                'cash'
                             );
                         }
                     }
@@ -2949,25 +3396,33 @@ export default function BusinessDayModule(
             </nav>
 
             {
-                section === 'overview'
+                section
+                    ===
+                    'overview'
                     ? renderOverview()
                     : null
             }
 
             {
-                section === 'checks'
+                section
+                    ===
+                    'checks'
                     ? renderChecks()
                     : null
             }
 
             {
-                section === 'financials'
+                section
+                    ===
+                    'financials'
                     ? renderFinancials()
                     : null
             }
 
             {
-                section === 'cash'
+                section
+                    ===
+                    'cash'
                     ? renderCash()
                     : null
             }
@@ -3040,7 +3495,9 @@ export default function BusinessDayModule(
                 }
             </div>
 
-            {renderCloseModal()}
+            {
+                renderCloseModal()
+            }
         </section>
     );
 }

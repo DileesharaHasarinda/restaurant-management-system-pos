@@ -17,6 +17,10 @@ import {
 } from './helpers';
 
 import type {
+    RealtimeConnectionState,
+} from '../../realtime/staffRealtime';
+
+import type {
     OrderTransitionAction,
 } from './types';
 
@@ -35,6 +39,9 @@ interface IncomingOrdersModuleProps {
 
     loading?:
     boolean;
+
+    realtimeState?:
+    RealtimeConnectionState;
 
     onView:
     (
@@ -108,10 +115,66 @@ const FILTERS:
         },
     ];
 
+const incomingRealtimeStatus =
+    (
+        state:
+            RealtimeConnectionState,
+    ): {
+        label:
+        string;
+
+        className:
+        string;
+    } => {
+        switch (
+        state
+        ) {
+            case 'connected':
+                return {
+                    label:
+                        'LIVE',
+
+                    className:
+                        'is-live',
+                };
+
+            case 'initialized':
+            case 'connecting':
+                return {
+                    label:
+                        'CONNECTING',
+
+                    className:
+                        'is-connecting',
+                };
+
+            case 'unavailable':
+                return {
+                    label:
+                        'RECONNECTING',
+
+                    className:
+                        'is-connecting',
+                };
+
+            case 'failed':
+            case 'disconnected':
+            default:
+                return {
+                    label:
+                        'OFFLINE',
+
+                    className:
+                        'is-offline',
+                };
+        }
+    };
+
 export default function IncomingOrdersModule(
     {
         orders,
         loading = false,
+        realtimeState = 'initialized',
         onView,
         onTransition,
         onOpenPayment,
@@ -131,6 +194,11 @@ export default function IncomingOrdersModule(
     ] =
         useState(
             '',
+        );
+
+    const realtimeStatus =
+        incomingRealtimeStatus(
+            realtimeState,
         );
 
     /*
@@ -327,10 +395,19 @@ export default function IncomingOrdersModule(
                     </p>
                 </div>
 
-                <div className="incoming-live-status">
+                <div
+                    className={
+                        `incoming-live-status ${realtimeStatus.className}`
+                    }
+                    title={
+                        `Reverb connection: ${realtimeState}`
+                    }
+                >
                     <span />
 
-                    LIVE
+                    {
+                        realtimeStatus.label
+                    }
                 </div>
             </header>
 

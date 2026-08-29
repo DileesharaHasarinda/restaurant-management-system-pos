@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -74,11 +78,13 @@ const money =
 */
 
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
-        && error.message
+        &&
+        error.message
     ) {
         return error.message;
     }
@@ -87,7 +93,8 @@ function errorMessage(
 }
 
 function formatDate(
-    value: string | null
+    value:
+        string | null
 ): string {
     if (
         !value
@@ -142,6 +149,12 @@ export default function SuppliersPage() {
             "suppliers.manage"
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Suppliers
+    |--------------------------------------------------------------------------
+    */
+
     const [
         suppliers,
         setSuppliers,
@@ -151,6 +164,12 @@ export default function SuppliersPage() {
         >(
             []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination
+    |--------------------------------------------------------------------------
+    */
 
     const [
         pagination,
@@ -167,6 +186,12 @@ export default function SuppliersPage() {
         useState(
             1
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search / Filters
+    |--------------------------------------------------------------------------
+    */
 
     const [
         searchDraft,
@@ -195,6 +220,12 @@ export default function SuppliersPage() {
         >(
             null
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Loading / State
+    |--------------------------------------------------------------------------
+    */
 
     const [
         loading,
@@ -263,11 +294,22 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     | Data Loading
     |--------------------------------------------------------------------------
+    |
+    | silent = true:
+    |
+    | Used by realtime reconciliation.
+    |
+    | It keeps the existing supplier page visible and avoids interfering
+    | with the normal loading state while Laravel REST is queried again.
+    |--------------------------------------------------------------------------
     */
 
     const loadSuppliers =
         useCallback(
-            async () => {
+            async (
+                silent:
+                    boolean = false
+            ): Promise<void> => {
                 try {
                     const result =
                         await getSuppliers({
@@ -292,15 +334,30 @@ export default function SuppliersPage() {
                 } catch (
                 caught
                 ) {
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime supplier data.",
+                            caught
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             caught
                         )
                     );
                 } finally {
-                    setLoading(
-                        false
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false
+                        );
+                    }
                 }
             },
             [
@@ -311,10 +368,15 @@ export default function SuppliersPage() {
         );
 
     /*
-     * Deferred invocation keeps Oxlint's
-     * set-state-in-effect rule clean while still
-     * synchronizing this page with the API.
-     */
+    |--------------------------------------------------------------------------
+    | Initial / Filter Loading
+    |--------------------------------------------------------------------------
+    |
+    | Deferred invocation keeps Oxlint's set-state-in-effect rule clean while
+    | still synchronizing this page with the API.
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
@@ -346,7 +408,9 @@ export default function SuppliersPage() {
         useMemo(
             () =>
                 suppliers.filter(
-                    (supplier) =>
+                    (
+                        supplier
+                    ) =>
                         supplier.is_active
                 ).length,
             [
@@ -356,7 +420,8 @@ export default function SuppliersPage() {
 
     const inactiveOnPage =
         suppliers.length
-        - activeOnPage;
+        -
+        activeOnPage;
 
     const visibleOutstanding =
         useMemo(
@@ -367,7 +432,8 @@ export default function SuppliersPage() {
                         supplier
                     ) =>
                         total
-                        + supplier.current_balance,
+                        +
+                        supplier.current_balance,
                     0
                 ),
             [
@@ -377,14 +443,15 @@ export default function SuppliersPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Search / Filters
+    | Search
     |--------------------------------------------------------------------------
     */
 
     const submitSearch =
         (
-            event: FormEvent
-        ) => {
+            event:
+                FormEvent
+        ): void => {
             event.preventDefault();
 
             const value =
@@ -404,9 +471,12 @@ export default function SuppliersPage() {
 
             if (
                 value
-                === search
-                && page
-                === 1
+                ===
+                search
+                &&
+                page
+                ===
+                1
             ) {
                 void loadSuppliers();
 
@@ -422,8 +492,14 @@ export default function SuppliersPage() {
             );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Clear Search
+    |--------------------------------------------------------------------------
+    */
+
     const clearSearch =
-        () => {
+        (): void => {
             setError(
                 ""
             );
@@ -442,9 +518,12 @@ export default function SuppliersPage() {
 
             if (
                 search
-                === ""
-                && page
-                === 1
+                ===
+                ""
+                &&
+                page
+                ===
+                1
             ) {
                 void loadSuppliers();
 
@@ -460,10 +539,17 @@ export default function SuppliersPage() {
             );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Active Filter
+    |--------------------------------------------------------------------------
+    */
+
     const changeActiveFilter =
         (
-            value: boolean | null
-        ) => {
+            value:
+                boolean | null
+        ): void => {
             setError(
                 ""
             );
@@ -478,9 +564,12 @@ export default function SuppliersPage() {
 
             if (
                 value
-                === activeFilter
-                && page
-                === 1
+                ===
+                activeFilter
+                &&
+                page
+                ===
+                1
             ) {
                 void loadSuppliers();
 
@@ -498,12 +587,12 @@ export default function SuppliersPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Refresh
+    | Manual Refresh
     |--------------------------------------------------------------------------
     */
 
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
@@ -529,7 +618,7 @@ export default function SuppliersPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Save
+    | Save Supplier
     |--------------------------------------------------------------------------
     */
 
@@ -537,7 +626,7 @@ export default function SuppliersPage() {
         async (
             submission:
                 SupplierEditorSubmission
-        ) => {
+        ): Promise<void> => {
             setError(
                 ""
             );
@@ -548,16 +637,24 @@ export default function SuppliersPage() {
 
             if (
                 editingSupplier
-                === undefined
+                ===
+                undefined
             ) {
                 throw new Error(
                     "No supplier editor is currently open."
                 );
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Create
+            |--------------------------------------------------------------------------
+            */
+
             if (
                 editingSupplier
-                === null
+                ===
+                null
             ) {
                 const created =
                     await createSupplier({
@@ -593,11 +690,13 @@ export default function SuppliersPage() {
                 );
 
                 /*
-                 * Newly created suppliers should be easy
-                 * to locate. Return to the first page.
+                 * Newly created suppliers should be easy to locate.
+                 * Return to the first page.
                  */
                 if (
-                    page !== 1
+                    page
+                    !==
+                    1
                 ) {
                     setPage(
                         1
@@ -608,6 +707,12 @@ export default function SuppliersPage() {
 
                 return;
             }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update
+            |--------------------------------------------------------------------------
+            */
 
             const updated =
                 await updateSupplier(
@@ -647,18 +752,21 @@ export default function SuppliersPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Status
+    | Supplier Status
     |--------------------------------------------------------------------------
     */
 
     const toggleStatus =
         async (
-            supplier: Supplier
-        ) => {
+            supplier:
+                Supplier
+        ): Promise<void> => {
             if (
                 !canManage
-                || busySupplierId
-                !== null
+                ||
+                busySupplierId
+                !==
+                null
             ) {
                 return;
             }
@@ -731,10 +839,13 @@ export default function SuppliersPage() {
     */
 
     const previousPage =
-        () => {
+        (): void => {
             if (
-                page <= 1
-                || loading
+                page
+                <=
+                1
+                ||
+                loading
             ) {
                 return;
             }
@@ -750,17 +861,20 @@ export default function SuppliersPage() {
                     Math.max(
                         1,
                         current
-                        - 1
+                        -
+                        1
                     )
             );
         };
 
     const nextPage =
-        () => {
+        (): void => {
             if (
                 page
-                >= pagination.last_page
-                || loading
+                >=
+                pagination.last_page
+                ||
+                loading
             ) {
                 return;
             }
@@ -774,9 +888,59 @@ export default function SuppliersPage() {
                     current
                 ) =>
                     current
-                    + 1
+                    +
+                    1
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Supplier data can change through multiple business workflows:
+    |
+    | suppliers
+    |   - supplier created
+    |   - supplier edited
+    |   - supplier activated/deactivated
+    |
+    | purchases
+    |   - a completed purchase increases supplier outstanding balance
+    |
+    | supplier_payments
+    |   - supplier payments reduce outstanding balance
+    |
+    | Reverb is used only as an invalidation signal. Laravel remains the
+    | authoritative source for supplier balances and supplier master data.
+    |
+    | The refresh is silent:
+    |
+    | - no page reload
+    | - no loading flash
+    | - no Refresh button spinner
+    | - filters stay in place
+    | - pagination stays in place
+    | - an open SupplierFormModal is not replaced
+    |
+    | Not replacing editingSupplier is intentional because automatically
+    | replacing it could destroy unsaved supplier details being entered by
+    | the manager.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "suppliers",
+            "purchases",
+            "supplier_payments",
+        ],
+        async () => {
+            await loadSuppliers(
+                true
+            );
+        }
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -786,6 +950,12 @@ export default function SuppliersPage() {
 
     return (
         <div className="suppliers-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="suppliers-page-header">
                 <div>
                     <div className="suppliers-eyebrow">
@@ -811,7 +981,9 @@ export default function SuppliersPage() {
                             () =>
                                 void refresh()
                         }
-                        disabled={refreshing}
+                        disabled={
+                            refreshing
+                        }
                     >
                         {
                             refreshing
@@ -840,23 +1012,45 @@ export default function SuppliersPage() {
                 </div>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="suppliers-alert suppliers-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 message
                 && (
                     <div className="suppliers-alert suppliers-alert-success">
-                        {message}
+                        {
+                            message
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Read-only Information
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 !canManage
@@ -864,10 +1058,20 @@ export default function SuppliersPage() {
                     <div className="suppliers-alert suppliers-alert-info">
                         Your account has read-only supplier access. Creating, editing,
                         activating and deactivating suppliers requires
-                        <strong> suppliers.manage</strong>.
+                        <strong>
+                            {" "}
+                            suppliers.manage
+                        </strong>
+                        .
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
 
             <section className="suppliers-summary-grid">
                 <article className="suppliers-summary-card">
@@ -937,16 +1141,34 @@ export default function SuppliersPage() {
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Main Panel
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="suppliers-panel">
                 <div className="suppliers-panel-header">
+                    {/*
+                    |--------------------------------------------------------------------------
+                    | Search
+                    |--------------------------------------------------------------------------
+                    */}
+
                     <form
                         className="suppliers-search"
-                        onSubmit={submitSearch}
+                        onSubmit={
+                            submitSearch
+                        }
                     >
                         <input
                             type="search"
-                            value={searchDraft}
-                            maxLength={150}
+                            value={
+                                searchDraft
+                            }
+                            maxLength={
+                                150
+                            }
                             placeholder="Search name, phone or email..."
                             onChange={
                                 (
@@ -971,7 +1193,9 @@ export default function SuppliersPage() {
                                 <button
                                     type="button"
                                     className="suppliers-button suppliers-button-secondary"
-                                    onClick={clearSearch}
+                                    onClick={
+                                        clearSearch
+                                    }
                                 >
                                     Clear
                                 </button>
@@ -979,12 +1203,19 @@ export default function SuppliersPage() {
                         }
                     </form>
 
+                    {/*
+                    |--------------------------------------------------------------------------
+                    | Status Filters
+                    |--------------------------------------------------------------------------
+                    */}
+
                     <div className="suppliers-filter-group">
                         <button
                             type="button"
                             className={
                                 activeFilter
-                                    === null
+                                    ===
+                                    null
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
@@ -1002,7 +1233,8 @@ export default function SuppliersPage() {
                             type="button"
                             className={
                                 activeFilter
-                                    === true
+                                    ===
+                                    true
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
@@ -1020,7 +1252,8 @@ export default function SuppliersPage() {
                             type="button"
                             className={
                                 activeFilter
-                                    === false
+                                    ===
+                                    false
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
@@ -1036,6 +1269,12 @@ export default function SuppliersPage() {
                     </div>
                 </div>
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Supplier Records
+                |--------------------------------------------------------------------------
+                */}
+
                 {
                     loading
                         ? (
@@ -1044,7 +1283,8 @@ export default function SuppliersPage() {
                             </div>
                         )
                         : suppliers.length
-                            === 0
+                            ===
+                            0
                             ? (
                                 <div className="suppliers-empty">
                                     <strong>
@@ -1103,8 +1343,16 @@ export default function SuppliersPage() {
                                                         supplier
                                                     ) => (
                                                         <tr
-                                                            key={supplier.id}
+                                                            key={
+                                                                supplier.id
+                                                            }
                                                         >
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Supplier
+                                                            |--------------------------------------------------------------------------
+                                                            */}
+
                                                             <td>
                                                                 <div className="suppliers-name-cell">
                                                                     <strong>
@@ -1123,7 +1371,9 @@ export default function SuppliersPage() {
                                                                         supplier.notes
                                                                         && (
                                                                             <small
-                                                                                title={supplier.notes}
+                                                                                title={
+                                                                                    supplier.notes
+                                                                                }
                                                                             >
                                                                                 {
                                                                                     supplier.notes
@@ -1134,13 +1384,21 @@ export default function SuppliersPage() {
                                                                 </div>
                                                             </td>
 
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Contact
+                                                            |--------------------------------------------------------------------------
+                                                            */}
+
                                                             <td>
                                                                 <div className="suppliers-contact-cell">
                                                                     {
                                                                         supplier.phone
                                                                             ? (
                                                                                 <a
-                                                                                    href={`tel:${supplier.phone}`}
+                                                                                    href={
+                                                                                        `tel:${supplier.phone}`
+                                                                                    }
                                                                                 >
                                                                                     {
                                                                                         supplier.phone
@@ -1158,7 +1416,9 @@ export default function SuppliersPage() {
                                                                         supplier.email
                                                                             ? (
                                                                                 <a
-                                                                                    href={`mailto:${supplier.email}`}
+                                                                                    href={
+                                                                                        `mailto:${supplier.email}`
+                                                                                    }
                                                                                 >
                                                                                     {
                                                                                         supplier.email
@@ -1174,20 +1434,34 @@ export default function SuppliersPage() {
                                                                 </div>
                                                             </td>
 
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Address
+                                                            |--------------------------------------------------------------------------
+                                                            */}
+
                                                             <td>
                                                                 <span className="suppliers-address">
                                                                     {
                                                                         supplier.address
-                                                                        || "—"
+                                                                        ||
+                                                                        "—"
                                                                     }
                                                                 </span>
                                                             </td>
+
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Outstanding Balance
+                                                            |--------------------------------------------------------------------------
+                                                            */}
 
                                                             <td>
                                                                 <strong
                                                                     className={
                                                                         supplier.current_balance
-                                                                            > 0
+                                                                            >
+                                                                            0
                                                                             ? "suppliers-balance suppliers-balance-due"
                                                                             : "suppliers-balance"
                                                                     }
@@ -1201,7 +1475,8 @@ export default function SuppliersPage() {
 
                                                                 {
                                                                     supplier.current_balance
-                                                                    > 0
+                                                                    >
+                                                                    0
                                                                     && (
                                                                         <small className="suppliers-due-label">
                                                                             Outstanding
@@ -1209,6 +1484,12 @@ export default function SuppliersPage() {
                                                                     )
                                                                 }
                                                             </td>
+
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Status
+                                                            |--------------------------------------------------------------------------
+                                                            */}
 
                                                             <td>
                                                                 <span
@@ -1226,6 +1507,12 @@ export default function SuppliersPage() {
                                                                 </span>
                                                             </td>
 
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Updated
+                                                            |--------------------------------------------------------------------------
+                                                            */}
+
                                                             <td>
                                                                 {
                                                                     formatDate(
@@ -1233,6 +1520,12 @@ export default function SuppliersPage() {
                                                                     )
                                                                 }
                                                             </td>
+
+                                                            {/*
+                                                            |--------------------------------------------------------------------------
+                                                            | Actions
+                                                            |--------------------------------------------------------------------------
+                                                            */}
 
                                                             {
                                                                 canManage
@@ -1250,7 +1543,8 @@ export default function SuppliersPage() {
                                                                                 }
                                                                                 disabled={
                                                                                     busySupplierId
-                                                                                    !== null
+                                                                                    !==
+                                                                                    null
                                                                                 }
                                                                             >
                                                                                 Edit
@@ -1271,12 +1565,14 @@ export default function SuppliersPage() {
                                                                                 }
                                                                                 disabled={
                                                                                     busySupplierId
-                                                                                    !== null
+                                                                                    !==
+                                                                                    null
                                                                                 }
                                                                             >
                                                                                 {
                                                                                     busySupplierId
-                                                                                        === supplier.id
+                                                                                        ===
+                                                                                        supplier.id
                                                                                         ? "Updating..."
                                                                                         : supplier.is_active
                                                                                             ? "Deactivate"
@@ -1297,9 +1593,16 @@ export default function SuppliersPage() {
                             )
                 }
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Pagination
+                |--------------------------------------------------------------------------
+                */}
+
                 {
                     pagination.last_page
-                    > 1
+                    >
+                    1
                     && (
                         <div className="suppliers-pagination">
                             <span>
@@ -1313,11 +1616,15 @@ export default function SuppliersPage() {
                                 <button
                                     type="button"
                                     className="suppliers-button suppliers-button-secondary"
-                                    onClick={previousPage}
+                                    onClick={
+                                        previousPage
+                                    }
                                     disabled={
                                         loading
-                                        || pagination.current_page
-                                        <= 1
+                                        ||
+                                        pagination.current_page
+                                        <=
+                                        1
                                     }
                                 >
                                     Previous
@@ -1338,11 +1645,15 @@ export default function SuppliersPage() {
                                 <button
                                     type="button"
                                     className="suppliers-button suppliers-button-secondary"
-                                    onClick={nextPage}
+                                    onClick={
+                                        nextPage
+                                    }
                                     disabled={
                                         loading
-                                        || pagination.current_page
-                                        >= pagination.last_page
+                                        ||
+                                        pagination.current_page
+                                        >=
+                                        pagination.last_page
                                     }
                                 >
                                     Next
@@ -1353,19 +1664,35 @@ export default function SuppliersPage() {
                 }
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Supplier Form Modal
+            |--------------------------------------------------------------------------
+            |
+            | Realtime list updates intentionally do not replace this modal's
+            | supplier object. This prevents remote activity from wiping
+            | unsaved edits.
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 editingSupplier
-                !== undefined
+                !==
+                undefined
                 && (
                     <SupplierFormModal
-                        supplier={editingSupplier}
+                        supplier={
+                            editingSupplier
+                        }
                         onClose={
                             () =>
                                 setEditingSupplier(
                                     undefined
                                 )
                         }
-                        onSubmit={saveSupplier}
+                        onSubmit={
+                            saveSupplier
+                        }
                     />
                 )
             }

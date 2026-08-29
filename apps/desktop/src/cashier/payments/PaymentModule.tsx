@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../../realtime/realtimeBus";
+
+import {
     ApiError,
     api,
 } from "../../api";
@@ -566,6 +570,90 @@ export default function PaymentModule(
             },
             [],
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Billing Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | CashierWorkspace owns the single Reverb / Echo connection.
+    |
+    | Realtime events are only invalidation signals.
+    |
+    | IMPORTANT:
+    | - Never repeat payment POSTs.
+    | - Never automatically open the cash drawer.
+    | - Never automatically print a receipt.
+    | - Never call ensureInvoice() here because ensureInvoice() uses POST.
+    | - Never interfere while this POS is submitting its own payment.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "billing",
+            "orders",
+        ],
+        async () => {
+            /*
+             * Never interfere with this POS while its own financial
+             * transaction is currently being submitted.
+             */
+            if (
+                processing
+            ) {
+                return;
+            }
+
+            /*
+             * Once an invoice already exists locally, REST GETs can safely
+             * reconcile authoritative invoice and payment history state.
+             */
+            if (
+                invoice
+            ) {
+                try {
+                    await refreshBilling(
+                        invoice.id,
+                    );
+                } catch (
+                exception
+                ) {
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status === 401
+                    ) {
+                        onSessionExpired?.();
+
+                        return;
+                    }
+
+                    /*
+                     * Realtime refresh failure must not interrupt an active
+                     * cashier workflow. Manual refresh or the next realtime
+                     * event can reconcile again.
+                     */
+                    console.warn(
+                        "Realtime payment reconciliation failed.",
+                        exception,
+                    );
+                }
+            }
+
+            /*
+             * Do not call ensureInvoice() here.
+             *
+             * ensureInvoice() currently performs POST:
+             *
+             * POST /table-sessions/{id}/invoice
+             * or
+             * POST /orders/{id}/invoice
+             *
+             * Realtime must stay GET-only.
+             */
+        },
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -1416,11 +1504,6 @@ export default function PaymentModule(
                 |--------------------------------------------------------------------------
                 | Finalize Fully Paid Sale
                 |--------------------------------------------------------------------------
-                |
-                | Do this after Laravel has committed the payment and before
-                | receipt/drawer hardware. A printer failure must not leave a
-                | fully paid order incorrectly stuck in SERVED.
-                |--------------------------------------------------------------------------
                 */
 
                 const finalizationWarning =
@@ -1431,17 +1514,6 @@ export default function PaymentModule(
                 /*
                 |--------------------------------------------------------------------------
                 | Hardware Flow
-                |--------------------------------------------------------------------------
-                |
-                | Laravel SUCCESS
-                |      ↓
-                | Receipt Print
-                |      ↓
-                | Receipt SUCCESS
-                |      ↓
-                | Laravel should_open?
-                |      ↓
-                | Drawer Pulse
                 |--------------------------------------------------------------------------
                 */
 

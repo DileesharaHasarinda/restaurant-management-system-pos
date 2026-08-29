@@ -2,9 +2,14 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type FormEvent,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     Link,
@@ -453,6 +458,48 @@ export default function InventoryPage() {
 
     /*
     |--------------------------------------------------------------------------
+    | Realtime History References
+    |--------------------------------------------------------------------------
+    |
+    | These refs let an in-flight realtime reconciliation verify that the
+    | same ingredient/history page is still open before applying its result.
+    |--------------------------------------------------------------------------
+    */
+
+    const historyIngredientIdRef =
+        useRef<number | null>(
+            null
+        );
+
+    const historyPageRef =
+        useRef(
+            1
+        );
+
+    useEffect(
+        () => {
+            historyIngredientIdRef.current =
+                historyIngredient?.id
+                ??
+                null;
+        },
+        [
+            historyIngredient?.id,
+        ]
+    );
+
+    useEffect(
+        () => {
+            historyPageRef.current =
+                historyPage;
+        },
+        [
+            historyPage,
+        ]
+    );
+
+    /*
+    |--------------------------------------------------------------------------
     | Error Handling
     |--------------------------------------------------------------------------
     */
@@ -499,7 +546,9 @@ export default function InventoryPage() {
 
     const loadStock =
         useCallback(
-            async (): Promise<void> => {
+            async (): Promise<
+                InventoryIngredient[]
+            > => {
                 const [
                     current,
                     low,
@@ -534,6 +583,8 @@ export default function InventoryPage() {
                     valuation
                         .ingredient_count
                 );
+
+                return current;
             },
             []
         );
@@ -1108,6 +1159,149 @@ export default function InventoryPage() {
                 1
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is an invalidation signal only. Laravel REST remains the
+    | authoritative source for current stock, valuation and ledger data.
+    |
+    | Inventory events can be emitted by:
+    |
+    | - purchases being completed
+    | - kitchen sale consumption
+    | - wastage
+    | - stock adjustments
+    | - cancellation reversals
+    | - ingredient/unit changes
+    |
+    | The shared realtime hook debounces bursts before this callback runs.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "inventory",
+            "purchases",
+            "wastage",
+        ],
+        async () => {
+            try {
+                const [
+                    freshStock,
+                ] =
+                    await Promise.all([
+                        loadStock(),
+                        loadMovements(),
+                    ]);
+
+                const historyIngredientId =
+                    historyIngredientIdRef.current;
+
+                const currentHistoryPage =
+                    historyPageRef.current;
+
+                if (
+                    historyIngredientId
+                    ===
+                    null
+                ) {
+                    return;
+                }
+
+                /*
+                 * Keep the open history modal's ingredient summary current.
+                 */
+                const freshIngredient =
+                    freshStock.find(
+                        (
+                            ingredient
+                        ) =>
+                            ingredient.id
+                            ===
+                            historyIngredientId
+                    );
+
+                if (
+                    freshIngredient
+                    &&
+                    historyIngredientIdRef.current
+                    ===
+                    historyIngredientId
+                ) {
+                    setHistoryIngredient(
+                        (
+                            current
+                        ) => {
+                            if (
+                                !current
+                                ||
+                                current.id
+                                !==
+                                historyIngredientId
+                            ) {
+                                return current;
+                            }
+
+                            return freshIngredient;
+                        }
+                    );
+                }
+
+                /*
+                 * Reconcile the same page currently shown in the history
+                 * modal. Do not show a loading overlay for background sync.
+                 */
+                const historyResult =
+                    await getIngredientStockHistory(
+                        historyIngredientId,
+                        currentHistoryPage
+                    );
+
+                /*
+                 * Race protection:
+                 *
+                 * If the user closed the modal, opened another ingredient,
+                 * or changed history page while the request was in flight,
+                 * ignore this stale response.
+                 */
+                if (
+                    historyIngredientIdRef.current
+                    !==
+                    historyIngredientId
+                    ||
+                    historyPageRef.current
+                    !==
+                    currentHistoryPage
+                ) {
+                    return;
+                }
+
+                setHistoryMovements(
+                    historyResult.movements
+                );
+
+                setHistoryPagination(
+                    historyResult.pagination
+                );
+            } catch (
+            exception
+            ) {
+                /*
+                 * A realtime synchronization failure must never replace
+                 * usable inventory data with a fatal page error.
+                 *
+                 * A later event, reconnect or manual refresh can retry.
+                 */
+                console.error(
+                    "Unable to reconcile realtime inventory data.",
+                    exception
+                );
+            }
+        }
+    );
 
     /*
     |--------------------------------------------------------------------------

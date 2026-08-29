@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
+
+import {
     ApiError,
 } from "../lib/api";
 
@@ -376,35 +380,137 @@ export default function MenuManagementPage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Data
+    |--------------------------------------------------------------------------
+    */
+
+    /*
+|--------------------------------------------------------------------------
+| Initial Data
+|--------------------------------------------------------------------------
+|
+| Initial catalog/item reconciliation is deferred out of the synchronous
+| effect body.
+|
+| This keeps the effect compatible with React Compiler's
+| set-state-in-effect rule while still loading authoritative Laravel data
+| immediately after the component mounts or its item filters change.
+|--------------------------------------------------------------------------
+*/
+
     useEffect(
         () => {
-            const loadInitialData =
-                async (): Promise<void> => {
-                    try {
-                        await Promise.all([
+            let cancelled =
+                false;
+
+            const timeoutId =
+                window.setTimeout(
+                    () => {
+                        void Promise.all([
                             loadCatalogs(),
                             loadItems(),
-                        ]);
-                    } catch (
-                    exception
-                    ) {
-                        showError(
-                            exception
-                        );
-                    } finally {
-                        setLoading(
-                            false
-                        );
-                    }
-                };
+                        ])
+                            .catch(
+                                (
+                                    exception
+                                ) => {
+                                    if (
+                                        cancelled
+                                    ) {
+                                        return;
+                                    }
 
-            void loadInitialData();
+                                    showError(
+                                        exception
+                                    );
+                                }
+                            )
+                            .finally(
+                                () => {
+                                    if (
+                                        cancelled
+                                    ) {
+                                        return;
+                                    }
+
+                                    setLoading(
+                                        false
+                                    );
+                                }
+                            );
+                    },
+                    0
+                );
+
+            return () => {
+                cancelled =
+                    true;
+
+                window.clearTimeout(
+                    timeoutId
+                );
+            };
         },
         [
             loadCatalogs,
             loadItems,
             showError,
         ]
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb acts only as an invalidation signal.
+    |
+    | Fresh authoritative menu data is always retrieved from Laravel.
+    |
+    | This refreshes:
+    |
+    | - Menu items
+    | - Categories
+    | - Add-on groups
+    | - Add-ons
+    | - Prices
+    | - Availability
+    | - Active/inactive state
+    | - Website visibility
+    | - Customer QR visibility
+    | - Photos
+    | - Variants/add-on associations returned by the menu API
+    |
+    | It intentionally does NOT close/recreate an open editor modal. This
+    | protects unsaved changes currently being entered by a manager.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "menu",
+        ],
+        async () => {
+            try {
+                await Promise.all([
+                    loadCatalogs(),
+                    loadItems(),
+                ]);
+            } catch (
+            exception
+            ) {
+                /*
+                 * Realtime synchronization failure must not destroy the
+                 * current page. A later event or reconnect will retry.
+                 */
+                console.error(
+                    "Unable to reconcile realtime menu data.",
+                    exception
+                );
+            }
+        }
     );
 
     /*
@@ -1874,18 +1980,25 @@ function MenuItemCard(
         onEdit,
         onToggle,
     }: {
-        item: MenuItem;
+        item:
+        MenuItem;
 
-        canManage: boolean;
+        canManage:
+        boolean;
 
-        busy: boolean;
+        busy:
+        boolean;
 
-        onEdit: (
-            item: MenuItem
+        onEdit:
+        (
+            item:
+                MenuItem
         ) => void;
 
-        onToggle: (
-            item: MenuItem,
+        onToggle:
+        (
+            item:
+                MenuItem,
 
             field:
                 "is_active"
@@ -2113,14 +2226,19 @@ function CategoryModal(
         onClose,
         onSave,
     }: {
-        category: MenuCategory | null;
+        category:
+        MenuCategory | null;
 
-        busy: boolean;
+        busy:
+        boolean;
 
-        onClose: () => void;
+        onClose:
+        () => void;
 
-        onSave: (
-            payload: CreateCategoryPayload
+        onSave:
+        (
+            payload:
+                CreateCategoryPayload
         ) => Promise<void>;
     }
 ) {
@@ -2393,11 +2511,14 @@ function AddonGroupModal(
         onClose,
         onSave,
     }: {
-        busy: boolean;
+        busy:
+        boolean;
 
-        onClose: () => void;
+        onClose:
+        () => void;
 
-        onSave: (
+        onSave:
+        (
             payload:
                 CreateAddonGroupPayload
         ) => Promise<void>;
@@ -2556,7 +2677,11 @@ function AddonGroupModal(
                             busy
                         }
                     >
-                        Create Group
+                        {
+                            busy
+                                ? "Creating..."
+                                : "Create Group"
+                        }
                     </button>
                 </footer>
             </form>
@@ -2577,13 +2702,17 @@ function AddonModal(
         onClose,
         onSave,
     }: {
-        groups: MenuAddonGroup[];
+        groups:
+        MenuAddonGroup[];
 
-        busy: boolean;
+        busy:
+        boolean;
 
-        onClose: () => void;
+        onClose:
+        () => void;
 
-        onSave: (
+        onSave:
+        (
             payload:
                 CreateAddonPayload
         ) => Promise<void>;
@@ -2777,9 +2906,15 @@ function AddonModal(
                         className="primary"
                         disabled={
                             busy
+                            ||
+                            groupId <= 0
                         }
                     >
-                        Create Add-on
+                        {
+                            busy
+                                ? "Creating..."
+                                : "Create Add-on"
+                        }
                     </button>
                 </footer>
             </form>
@@ -2799,11 +2934,14 @@ function SummaryCard(
         value,
         note,
     }: {
-        label: string;
+        label:
+        string;
 
-        value: number;
+        value:
+        number;
 
-        note?: string;
+        note?:
+        string;
     }
 ) {
     return (
@@ -2841,11 +2979,14 @@ function Tab(
         active,
         onClick,
     }: {
-        label: string;
+        label:
+        string;
 
-        active: boolean;
+        active:
+        boolean;
 
-        onClick: () => void;
+        onClick:
+        () => void;
     }
 ) {
     return (
@@ -2873,11 +3014,14 @@ function StatusBadge(
         activeText,
         inactiveText,
     }: {
-        active: boolean;
+        active:
+        boolean;
 
-        activeText: string;
+        activeText:
+        string;
 
-        inactiveText: string;
+        inactiveText:
+        string;
     }
 ) {
     return (
@@ -2903,12 +3047,16 @@ function ToggleInput(
         checked,
         onChange,
     }: {
-        label: string;
+        label:
+        string;
 
-        checked: boolean;
+        checked:
+        boolean;
 
-        onChange: (
-            value: boolean
+        onChange:
+        (
+            value:
+                boolean
         ) => void;
     }
 ) {
@@ -2951,9 +3099,11 @@ function EmptyState(
         title,
         text,
     }: {
-        title: string;
+        title:
+        string;
 
-        text: string;
+        text:
+        string;
     }
 ) {
     return (

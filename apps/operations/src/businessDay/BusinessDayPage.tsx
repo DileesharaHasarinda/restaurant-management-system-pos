@@ -2,8 +2,13 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     useAuth,
@@ -466,6 +471,18 @@ export default function BusinessDayPage() {
         );
 
     /*
+     * Monotonic request version for current-state reconciliation.
+     *
+     * Realtime, initial load and reconnect reconciliation can overlap.
+     * Only the newest current-state response is allowed to replace the
+     * authoritative page snapshot.
+     */
+    const currentStateRequestRef =
+        useRef(
+            0
+        );
+
+    /*
     |--------------------------------------------------------------------------
     | Load Historical Closing
     |--------------------------------------------------------------------------
@@ -473,16 +490,35 @@ export default function BusinessDayPage() {
 
     const loadStoredClosing =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                requestVersion:
+                    number | null = null
+            ): Promise<void> => {
+                const isCurrent =
+                    (): boolean =>
+                        requestVersion
+                        ===
+                        null
+                        ||
+                        requestVersion
+                        ===
+                        currentStateRequestRef.current;
+
                 const stored =
                     sessionStorage.getItem(
                         LAST_CLOSING_STORAGE_KEY
                     );
 
-                if (!stored) {
-                    setHistoricalClosing(
-                        null
-                    );
+                if (
+                    !stored
+                ) {
+                    if (
+                        isCurrent()
+                    ) {
+                        setHistoricalClosing(
+                            null
+                        );
+                    }
 
                     return;
                 }
@@ -503,9 +539,13 @@ export default function BusinessDayPage() {
                         LAST_CLOSING_STORAGE_KEY
                     );
 
-                    setHistoricalClosing(
-                        null
-                    );
+                    if (
+                        isCurrent()
+                    ) {
+                        setHistoricalClosing(
+                            null
+                        );
+                    }
 
                     return;
                 }
@@ -515,6 +555,12 @@ export default function BusinessDayPage() {
                         await getBusinessDayClosing(
                             closingId
                         );
+
+                    if (
+                        !isCurrent()
+                    ) {
+                        return;
+                    }
 
                     setHistoricalClosing(
                         result
@@ -528,9 +574,13 @@ export default function BusinessDayPage() {
                         LAST_CLOSING_STORAGE_KEY
                     );
 
-                    setHistoricalClosing(
-                        null
-                    );
+                    if (
+                        isCurrent()
+                    ) {
+                        setHistoricalClosing(
+                            null
+                        );
+                    }
                 }
             },
             []
@@ -545,27 +595,48 @@ export default function BusinessDayPage() {
     const loadCurrent =
         useCallback(
             async (
-                background = false
+                background = false,
+                silent = false
             ): Promise<void> => {
+                const requestVersion =
+                    currentStateRequestRef.current
+                    +
+                    1;
+
+                currentStateRequestRef.current =
+                    requestVersion;
+
                 if (
-                    background
+                    !silent
                 ) {
-                    setRefreshing(
-                        true
-                    );
-                } else {
-                    setLoading(
-                        true
+                    if (
+                        background
+                    ) {
+                        setRefreshing(
+                            true
+                        );
+                    } else {
+                        setLoading(
+                            true
+                        );
+                    }
+
+                    setError(
+                        null
                     );
                 }
-
-                setError(
-                    null
-                );
 
                 try {
                     const result =
                         await getCurrentBusinessDay();
+
+                    if (
+                        requestVersion
+                        !==
+                        currentStateRequestRef.current
+                    ) {
+                        return;
+                    }
 
                     setPreview(
                         result
@@ -575,8 +646,8 @@ export default function BusinessDayPage() {
                         result.business_day
                     ) {
                         /*
-                         * A new OPEN day is authoritative.
-                         * Do not show an old cached closing.
+                         * A current OPEN day is authoritative.
+                         * Do not show an older closing snapshot.
                          */
                         setHistoricalClosing(
                             null
@@ -585,23 +656,71 @@ export default function BusinessDayPage() {
                         return;
                     }
 
-                    await loadStoredClosing();
+                    /*
+                     * When another workstation closes the day, the current
+                     * endpoint may already return that closing. Persist the
+                     * pointer locally so this Operations client can render the
+                     * immutable closing even though it did not initiate it.
+                     */
+                    if (
+                        result.closing
+                    ) {
+                        sessionStorage.setItem(
+                            LAST_CLOSING_STORAGE_KEY,
+                            String(
+                                result.closing.id
+                            )
+                        );
+
+                        setHistoricalClosing(
+                            result.closing
+                        );
+
+                        return;
+                    }
+
+                    await loadStoredClosing(
+                        requestVersion
+                    );
                 } catch (
                 loadError
                 ) {
+                    if (
+                        requestVersion
+                        !==
+                        currentStateRequestRef.current
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime business day state.",
+                            loadError
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             loadError
                         )
                     );
                 } finally {
-                    setLoading(
-                        false
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false
+                        );
 
-                    setRefreshing(
-                        false
-                    );
+                        setRefreshing(
+                            false
+                        );
+                    }
                 }
             },
             [
@@ -609,137 +728,41 @@ export default function BusinessDayPage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Load
+    |--------------------------------------------------------------------------
+    |
+    | Deferred invocation keeps effect/state linting clean and reuses the same
+    | authoritative reconciliation path used by realtime reconnects.
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
-            let cancelled =
-                false;
-
-            void getCurrentBusinessDay()
-                .then(
-                    async result => {
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setPreview(
-                            result
-                        );
-
-                        if (
-                            result.business_day
-                        ) {
-                            setHistoricalClosing(
-                                null
-                            );
-
-                            return;
-                        }
-
-                        const stored =
-                            sessionStorage.getItem(
-                                LAST_CLOSING_STORAGE_KEY
-                            );
-
-                        if (
-                            !stored
-                        ) {
-                            setHistoricalClosing(
-                                null
-                            );
-
-                            return;
-                        }
-
-                        const closingId =
-                            Number(
-                                stored
-                            );
-
-                        if (
-                            !Number.isInteger(
-                                closingId
-                            )
-                            ||
-                            closingId <= 0
-                        ) {
-                            sessionStorage.removeItem(
-                                LAST_CLOSING_STORAGE_KEY
-                            );
-
-                            setHistoricalClosing(
-                                null
-                            );
-
-                            return;
-                        }
-
-                        try {
-                            const closingResult =
-                                await getBusinessDayClosing(
-                                    closingId
-                                );
-
-                            if (
-                                cancelled
-                            ) {
-                                return;
-                            }
-
-                            setHistoricalClosing(
-                                closingResult
-                            );
-                        } catch {
-                            sessionStorage.removeItem(
-                                LAST_CLOSING_STORAGE_KEY
-                            );
-
-                            if (
-                                !cancelled
-                            ) {
-                                setHistoricalClosing(
-                                    null
-                                );
-                            }
-                        }
-                    }
-                )
-                .catch(
-                    loadError => {
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setError(
-                            errorMessage(
-                                loadError
-                            )
-                        );
-                    }
-                )
-                .finally(
+            const timeoutId =
+                window.setTimeout(
                     () => {
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setLoading(
-                            false
-                        );
-                    }
+                        void loadCurrent();
+                    },
+                    0
                 );
 
             return () => {
-                cancelled =
-                    true;
+                window.clearTimeout(
+                    timeoutId
+                );
+
+                /*
+                 * Invalidate a pending response if the page unmounts.
+                 */
+                currentStateRequestRef.current +=
+                    1;
             };
         },
-        []
+        [
+            loadCurrent,
+        ]
     );
 
     /*
@@ -933,6 +956,13 @@ export default function BusinessDayPage() {
                         }
                     );
 
+                /*
+                 * A close response is newer than any current-state request
+                 * that may have started before the close completed.
+                 */
+                currentStateRequestRef.current +=
+                    1;
+
                 sessionStorage.setItem(
                     LAST_CLOSING_STORAGE_KEY,
                     String(
@@ -1019,6 +1049,67 @@ export default function BusinessDayPage() {
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is an invalidation signal only. Laravel REST remains the
+    | authoritative source for blockers, sales, payments, profit, expenses,
+    | wastage, purchases, supplier payments and cash reconciliation.
+    |
+    | The business-day closing screen depends on several domains:
+    |
+    | business_day
+    |     OPEN/CLOSED state and immutable closing creation.
+    |
+    | tables / orders / billing
+    |     Pre-close blockers, completed orders, invoices, sales and refunds.
+    |
+    | cash
+    |     Open cashier-shift blocker, expected/actual cash and drawer state.
+    |
+    | expenses / wastage
+    |     Profitability and daily operating deductions.
+    |
+    | purchases / supplier_payments
+    |     Daily purchasing and supplier cash-flow figures.
+    |
+    | Realtime reconciliation is silent:
+    |
+    | - no page loading screen
+    | - no Refresh button spinner
+    | - no success toast
+    | - no browser reload
+    | - no close-modal remount
+    |
+    | If the close confirmation modal is open, closingNotes and the stable
+    | client_request_id remain untouched. Updated blockers/financial values
+    | are rendered behind/in the same modal, and Laravel performs final close
+    | validation when Confirm & Close Day is pressed.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "business_day",
+            "tables",
+            "orders",
+            "billing",
+            "cash",
+            "expenses",
+            "wastage",
+            "purchases",
+            "supplier_payments",
+        ],
+        async () => {
+            await loadCurrent(
+                false,
+                true
+            );
+        }
+    );
 
     /*
     |--------------------------------------------------------------------------

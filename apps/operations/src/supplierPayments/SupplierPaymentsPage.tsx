@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -41,6 +45,12 @@ import type {
 
 import "./SupplierPaymentsPage.css";
 
+/*
+|--------------------------------------------------------------------------
+| Constants
+|--------------------------------------------------------------------------
+*/
+
 const EMPTY_PAGINATION:
     SupplierPaymentPagination = {
     current_page:
@@ -56,23 +66,85 @@ const EMPTY_PAGINATION:
         1,
 };
 
-interface FilterState {
-    search: string;
+/*
+|--------------------------------------------------------------------------
+| Filter State
+|--------------------------------------------------------------------------
+*/
 
-    supplierId: string;
+interface FilterState {
+    search:
+    string;
+
+    supplierId:
+    string;
 
     paymentMethod:
-    "" | SupplierPaymentMethod;
+    ""
+    | SupplierPaymentMethod;
 
-    dateFrom: string;
+    dateFrom:
+    string;
 
-    dateTo: string;
+    dateTo:
+    string;
 }
 
+const EMPTY_FILTERS:
+    FilterState = {
+    search:
+        "",
+
+    supplierId:
+        "",
+
+    paymentMethod:
+        "",
+
+    dateFrom:
+        "",
+
+    dateTo:
+        "",
+};
+
+/*
+|--------------------------------------------------------------------------
+| Formatters
+|--------------------------------------------------------------------------
+*/
+
+const money =
+    new Intl.NumberFormat(
+        "en-LK",
+        {
+            style:
+                "currency",
+
+            currency:
+                "LKR",
+
+            minimumFractionDigits:
+                2,
+
+            maximumFractionDigits:
+                2,
+        }
+    );
+
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 function toPaymentMethodFilter(
-    value: string
+    value:
+        string
 ): FilterState["paymentMethod"] {
-    switch (value) {
+    switch (
+    value
+    ) {
         case "":
             return "";
 
@@ -96,48 +168,14 @@ function toPaymentMethodFilter(
     }
 }
 
-const EMPTY_FILTERS:
-    FilterState = {
-    search:
-        "",
-
-    supplierId:
-        "",
-
-    paymentMethod:
-        "",
-
-    dateFrom:
-        "",
-
-    dateTo:
-        "",
-};
-
-const money =
-    new Intl.NumberFormat(
-        "en-LK",
-        {
-            style:
-                "currency",
-
-            currency:
-                "LKR",
-
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
-        }
-    );
-
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
-        && error.message
+        &&
+        error.message
     ) {
         return error.message;
     }
@@ -146,13 +184,20 @@ function errorMessage(
 }
 
 function methodLabel(
-    method: string
+    method:
+        string
 ): string {
     return method.replaceAll(
         "_",
         " "
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
 export default function SupplierPaymentsPage() {
     const {
@@ -168,7 +213,14 @@ export default function SupplierPaymentsPage() {
 
     const allowCash =
         user?.role?.code
-        === "CASHIER";
+        ===
+        "CASHIER";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Batches
+    |--------------------------------------------------------------------------
+    */
 
     const [
         batches,
@@ -179,6 +231,12 @@ export default function SupplierPaymentsPage() {
         >(
             []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination
+    |--------------------------------------------------------------------------
+    */
 
     const [
         pagination,
@@ -196,6 +254,12 @@ export default function SupplierPaymentsPage() {
             1
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     const [
         filterDraft,
         setFilterDraft,
@@ -212,6 +276,12 @@ export default function SupplierPaymentsPage() {
             EMPTY_FILTERS
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Supplier Options
+    |--------------------------------------------------------------------------
+    */
+
     const [
         suppliers,
         setSuppliers,
@@ -220,6 +290,12 @@ export default function SupplierPaymentsPage() {
             []
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Outstanding Purchases
+    |--------------------------------------------------------------------------
+    */
+
     const [
         outstandingPurchases,
         setOutstandingPurchases,
@@ -227,6 +303,12 @@ export default function SupplierPaymentsPage() {
         useState<Purchase[]>(
             []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Modals
+    |--------------------------------------------------------------------------
+    */
 
     const [
         paymentModalOpen,
@@ -246,6 +328,12 @@ export default function SupplierPaymentsPage() {
         >(
             undefined
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Loading / State
+    |--------------------------------------------------------------------------
+    */
 
     const [
         loading,
@@ -297,9 +385,28 @@ export default function SupplierPaymentsPage() {
             ""
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Supplier Payments
+    |--------------------------------------------------------------------------
+    |
+    | silent = true is used by realtime reconciliation.
+    |
+    | Realtime refreshes must not:
+    |
+    | - show the normal page loading state
+    | - show the Refresh button spinner
+    | - reload the browser
+    | - interrupt an open payment workflow
+    |--------------------------------------------------------------------------
+    */
+
     const loadPayments =
         useCallback(
-            async () => {
+            async (
+                silent:
+                    boolean = false
+            ): Promise<void> => {
                 try {
                     const result =
                         await getSupplierPayments({
@@ -339,15 +446,30 @@ export default function SupplierPaymentsPage() {
                 } catch (
                 caught
                 ) {
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime supplier payment records.",
+                            caught
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             caught
                         )
                     );
                 } finally {
-                    setLoading(
-                        false
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false
+                        );
+                    }
                 }
             },
             [
@@ -355,6 +477,65 @@ export default function SupplierPaymentsPage() {
                 filters,
             ]
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Supplier Options
+    |--------------------------------------------------------------------------
+    */
+
+    const loadSupplierOptions =
+        useCallback(
+            async (): Promise<
+                Supplier[]
+            > => {
+                const records =
+                    await getSupplierPaymentSupplierOptions();
+
+                setSuppliers(
+                    records
+                );
+
+                return records;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Outstanding Purchases
+    |--------------------------------------------------------------------------
+    |
+    | Outstanding purchase balances can change when:
+    |
+    | - a purchase is completed
+    | - another supplier payment is recorded
+    | - a split payment changes the remaining balance
+    |--------------------------------------------------------------------------
+    */
+
+    const loadOutstandingPurchases =
+        useCallback(
+            async (): Promise<
+                Purchase[]
+            > => {
+                const purchases =
+                    await getOutstandingPurchases();
+
+                setOutstandingPurchases(
+                    purchases
+                );
+
+                return purchases;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial / Filter Payment Loading
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -376,26 +557,25 @@ export default function SupplierPaymentsPage() {
         ]
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Supplier Filter Options
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
                 window.setTimeout(
                     () => {
-                        void getSupplierPaymentSupplierOptions()
-                            .then(
-                                (
-                                    records
-                                ) =>
-                                    setSuppliers(
-                                        records
-                                    )
-                            )
+                        void loadSupplierOptions()
                             .catch(
                                 () => {
                                     /*
-                                     * Supplier filter is optional.
-                                     * The page remains usable even if
-                                     * this lookup is unavailable.
+                                     * Supplier filtering is optional.
+                                     *
+                                     * Payment history remains usable even
+                                     * if this lookup cannot be loaded.
                                      */
                                 }
                             );
@@ -408,8 +588,16 @@ export default function SupplierPaymentsPage() {
                     timeoutId
                 );
         },
-        []
+        [
+            loadSupplierOptions,
+        ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Summary
+    |--------------------------------------------------------------------------
+    */
 
     const visibleTotal =
         useMemo(
@@ -420,7 +608,8 @@ export default function SupplierPaymentsPage() {
                         batch
                     ) =>
                         total
-                        + batch.total_amount,
+                        +
+                        batch.total_amount,
                     0
                 ),
             [
@@ -437,15 +626,18 @@ export default function SupplierPaymentsPage() {
                         batch
                     ) =>
                         batchTotal
-                        + batch.payments.reduce(
+                        +
+                        batch.payments.reduce(
                             (
                                 paymentTotal,
                                 payment
                             ) =>
                                 payment.payment_method
-                                    === "CASH"
+                                    ===
+                                    "CASH"
                                     ? paymentTotal
-                                    + payment.amount
+                                    +
+                                    payment.amount
                                     : paymentTotal,
                             0
                         ),
@@ -458,10 +650,17 @@ export default function SupplierPaymentsPage() {
 
     const visibleNonCash =
         visibleTotal
-        - visibleCash;
+        -
+        visibleCash;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Payment Modal
+    |--------------------------------------------------------------------------
+    */
 
     const openPaymentModal =
-        async () => {
+        async (): Promise<void> => {
             if (
                 optionsLoading
             ) {
@@ -481,12 +680,7 @@ export default function SupplierPaymentsPage() {
             );
 
             try {
-                const purchases =
-                    await getOutstandingPurchases();
-
-                setOutstandingPurchases(
-                    purchases
-                );
+                await loadOutstandingPurchases();
 
                 setPaymentModalOpen(
                     true
@@ -506,11 +700,20 @@ export default function SupplierPaymentsPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Supplier Payment
+    |--------------------------------------------------------------------------
+    */
+
     const submitPayment =
         async (
-            purchaseId: number,
-            payload: SupplierPaymentPayload
-        ) => {
+            purchaseId:
+                number,
+
+            payload:
+                SupplierPaymentPayload
+        ): Promise<void> => {
             const batch =
                 await recordSupplierPayment(
                     purchaseId,
@@ -529,8 +732,13 @@ export default function SupplierPaymentsPage() {
                 `${batch.batch_number} recorded successfully.`
             );
 
+            /*
+             * A new payment batch belongs at the beginning of the history.
+             */
             if (
-                page !== 1
+                page
+                !==
+                1
             ) {
                 setLoading(
                     true
@@ -542,12 +750,36 @@ export default function SupplierPaymentsPage() {
             } else {
                 await loadPayments();
             }
+
+            /*
+             * Supplier payment affects supplier outstanding balances.
+             *
+             * Refresh supplier options because some APIs may return balance
+             * related supplier data used elsewhere by this page.
+             *
+             * The payment itself already succeeded, therefore this lookup
+             * failure must not turn the completed payment into a false error.
+             */
+            try {
+                await loadSupplierOptions();
+            } catch {
+                /*
+                 * Realtime/reconnect can reconcile later.
+                 */
+            }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | View Payment Batch
+    |--------------------------------------------------------------------------
+    */
 
     const viewBatch =
         async (
-            batch: SupplierPaymentBatch
-        ) => {
+            batch:
+                SupplierPaymentBatch
+        ): Promise<void> => {
             setBusyBatchId(
                 batch.id
             );
@@ -580,17 +812,94 @@ export default function SupplierPaymentsPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Selected Batch
+    |--------------------------------------------------------------------------
+    |
+    | If the details modal is open while another client changes supplier
+    | payment or purchase information, reload the authoritative batch.
+    |
+    | The functional setter protects against a race:
+    |
+    | - user closes modal
+    | - user opens another batch
+    | - earlier REST request completes afterwards
+    |
+    | In those cases the old request will not reopen or overwrite the modal.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedBatch =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedBatch
+                ) {
+                    return;
+                }
+
+                const batchId =
+                    selectedBatch.id;
+
+                try {
+                    const current =
+                        await getSupplierPaymentBatch(
+                            batchId
+                        );
+
+                    setSelectedBatch(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                batchId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime supplier payment details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedBatch,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     const submitFilters =
         (
-            event: FormEvent
-        ) => {
+            event:
+                FormEvent
+        ): void => {
             event.preventDefault();
 
             if (
                 filterDraft.dateFrom
-                && filterDraft.dateTo
-                && filterDraft.dateTo
-                < filterDraft.dateFrom
+                &&
+                filterDraft.dateTo
+                &&
+                filterDraft.dateTo
+                <
+                filterDraft.dateFrom
             ) {
                 setError(
                     "Date To cannot be earlier than Date From."
@@ -619,12 +928,19 @@ export default function SupplierPaymentsPage() {
                 ...filterDraft,
 
                 search:
-                    filterDraft.search.trim(),
+                    filterDraft.search
+                        .trim(),
             });
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Clear Filters
+    |--------------------------------------------------------------------------
+    */
+
     const clearFilters =
-        () => {
+        (): void => {
             setFilterDraft(
                 EMPTY_FILTERS
             );
@@ -650,8 +966,14 @@ export default function SupplierPaymentsPage() {
             );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Manual Refresh
+    |--------------------------------------------------------------------------
+    */
+
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
@@ -667,7 +989,38 @@ export default function SupplierPaymentsPage() {
             );
 
             try {
-                await loadPayments();
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadPayments(),
+                        loadSupplierOptions(),
+                        refreshSelectedBatch(),
+                    ];
+
+                /*
+                 * If the payment modal is currently open, also reconcile its
+                 * purchase/balance options.
+                 */
+                if (
+                    paymentModalOpen
+                ) {
+                    jobs.push(
+                        loadOutstandingPurchases()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                setError(
+                    errorMessage(
+                        caught
+                    )
+                );
             } finally {
                 setRefreshing(
                     false
@@ -675,8 +1028,114 @@ export default function SupplierPaymentsPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | This screen depends on three business domains.
+    |
+    | supplier_payments
+    | -----------------
+    | New supplier payment batches and payment records.
+    |
+    | purchases
+    | ---------
+    | Purchase balance_due/payment_status changes when supplier payments are
+    | recorded. Newly completed purchases can also become payable.
+    |
+    | suppliers
+    | ---------
+    | Supplier master information and authoritative outstanding balances.
+    |
+    | Reverb is used only as an invalidation signal. Laravel REST remains
+    | authoritative.
+    |
+    | Realtime refreshes:
+    |
+    | - payment history
+    | - payment summary values
+    | - supplier filter options
+    | - open payment batch details
+    | - outstanding purchase options if Record Payment is currently open
+    |
+    | Important:
+    |
+    | We do NOT close/remount SupplierPaymentModal. This preserves any
+    | payment method/amount/reference information already being entered.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "supplier_payments",
+            "purchases",
+            "suppliers",
+        ],
+        async () => {
+            try {
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadPayments(
+                            true
+                        ),
+
+                        loadSupplierOptions(),
+
+                        refreshSelectedBatch(),
+                    ];
+
+                /*
+                 * Keep the payable-purchase list authoritative while the
+                 * payment modal is open.
+                 *
+                 * This is especially important when another staff member
+                 * records a payment against the same supplier/purchase.
+                 */
+                if (
+                    paymentModalOpen
+                ) {
+                    jobs.push(
+                        loadOutstandingPurchases()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                /*
+                 * Realtime failure must not interrupt a payment form or
+                 * otherwise break this screen.
+                 *
+                 * A later event, reconnect or manual Refresh will reconcile.
+                 */
+                console.error(
+                    "Unable to reconcile realtime supplier payment data.",
+                    caught
+                );
+            }
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
     return (
         <div className="supplier-payments-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="supplier-payments-page-header">
                 <div>
                     <div className="supplier-payments-eyebrow">
@@ -698,7 +1157,9 @@ export default function SupplierPaymentsPage() {
                     <button
                         type="button"
                         className="supplier-payments-button supplier-payments-button-secondary"
-                        disabled={refreshing}
+                        disabled={
+                            refreshing
+                        }
                         onClick={
                             () =>
                                 void refresh()
@@ -717,7 +1178,9 @@ export default function SupplierPaymentsPage() {
                             <button
                                 type="button"
                                 className="supplier-payments-button supplier-payments-button-primary"
-                                disabled={optionsLoading}
+                                disabled={
+                                    optionsLoading
+                                }
                                 onClick={
                                     () =>
                                         void openPaymentModal()
@@ -734,23 +1197,45 @@ export default function SupplierPaymentsPage() {
                 </div>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="supplier-payments-alert supplier-payments-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 message
                 && (
                     <div className="supplier-payments-alert supplier-payments-alert-success">
-                        {message}
+                        {
+                            message
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
 
             <section className="supplier-payments-summary-grid">
                 <article>
@@ -824,10 +1309,24 @@ export default function SupplierPaymentsPage() {
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Payment History Panel
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="supplier-payments-panel">
+                {/*
+                |--------------------------------------------------------------------------
+                | Filters
+                |--------------------------------------------------------------------------
+                */}
+
                 <form
                     className="supplier-payments-filters"
-                    onSubmit={submitFilters}
+                    onSubmit={
+                        submitFilters
+                    }
                 >
                     <label className="supplier-payments-filter-field supplier-payments-filter-search">
                         <span>
@@ -836,8 +1335,12 @@ export default function SupplierPaymentsPage() {
 
                         <input
                             type="search"
-                            maxLength={150}
-                            value={filterDraft.search}
+                            maxLength={
+                                150
+                            }
+                            value={
+                                filterDraft.search
+                            }
                             placeholder="Batch, supplier, purchase or reference..."
                             onChange={
                                 (
@@ -863,7 +1366,9 @@ export default function SupplierPaymentsPage() {
                         </span>
 
                         <select
-                            value={filterDraft.supplierId}
+                            value={
+                                filterDraft.supplierId
+                            }
                             onChange={
                                 (
                                     event
@@ -890,8 +1395,12 @@ export default function SupplierPaymentsPage() {
                                         supplier
                                     ) => (
                                         <option
-                                            key={supplier.id}
-                                            value={supplier.id}
+                                            key={
+                                                supplier.id
+                                            }
+                                            value={
+                                                supplier.id
+                                            }
                                         >
                                             {
                                                 supplier.supplier_code
@@ -913,7 +1422,9 @@ export default function SupplierPaymentsPage() {
                         </span>
 
                         <select
-                            value={filterDraft.paymentMethod}
+                            value={
+                                filterDraft.paymentMethod
+                            }
                             onChange={
                                 (
                                     event
@@ -965,7 +1476,9 @@ export default function SupplierPaymentsPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateFrom}
+                            value={
+                                filterDraft.dateFrom
+                            }
                             onChange={
                                 (
                                     event
@@ -991,7 +1504,9 @@ export default function SupplierPaymentsPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateTo}
+                            value={
+                                filterDraft.dateTo
+                            }
                             onChange={
                                 (
                                     event
@@ -1021,12 +1536,20 @@ export default function SupplierPaymentsPage() {
                         <button
                             type="button"
                             className="supplier-payments-button supplier-payments-button-secondary"
-                            onClick={clearFilters}
+                            onClick={
+                                clearFilters
+                            }
                         >
                             Clear
                         </button>
                     </div>
                 </form>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Records
+                |--------------------------------------------------------------------------
+                */}
 
                 {
                     loading
@@ -1035,7 +1558,9 @@ export default function SupplierPaymentsPage() {
                                 Loading supplier payments...
                             </div>
                         )
-                        : batches.length === 0
+                        : batches.length
+                            ===
+                            0
                             ? (
                                 <div className="supplier-payments-empty">
                                     <strong>
@@ -1109,7 +1634,11 @@ export default function SupplierPaymentsPage() {
                                                             );
 
                                                         return (
-                                                            <tr key={batch.id}>
+                                                            <tr
+                                                                key={
+                                                                    batch.id
+                                                                }
+                                                            >
                                                                 <td>
                                                                     <strong>
                                                                         {
@@ -1121,23 +1650,30 @@ export default function SupplierPaymentsPage() {
                                                                 <td>
                                                                     {
                                                                         batch.payment_date
-                                                                        ?? "—"
+                                                                        ??
+                                                                        "—"
                                                                     }
                                                                 </td>
 
                                                                 <td>
                                                                     <strong>
                                                                         {
-                                                                            batch.supplier?.name
-                                                                            ?? "—"
+                                                                            batch
+                                                                                .supplier
+                                                                                ?.name
+                                                                            ??
+                                                                            "—"
                                                                         }
                                                                     </strong>
                                                                 </td>
 
                                                                 <td>
                                                                     {
-                                                                        batch.purchase?.purchase_number
-                                                                        ?? "—"
+                                                                        batch
+                                                                            .purchase
+                                                                            ?.purchase_number
+                                                                        ??
+                                                                        "—"
                                                                     }
                                                                 </td>
 
@@ -1149,7 +1685,9 @@ export default function SupplierPaymentsPage() {
                                                                                     method
                                                                                 ) => (
                                                                                     <span
-                                                                                        key={method}
+                                                                                        key={
+                                                                                            method
+                                                                                        }
                                                                                         className="supplier-payments-method-badge"
                                                                                     >
                                                                                         {
@@ -1186,8 +1724,11 @@ export default function SupplierPaymentsPage() {
 
                                                                 <td>
                                                                     {
-                                                                        batch.created_by?.name
-                                                                        ?? "—"
+                                                                        batch
+                                                                            .created_by
+                                                                            ?.name
+                                                                        ??
+                                                                        "—"
                                                                     }
                                                                 </td>
 
@@ -1197,7 +1738,8 @@ export default function SupplierPaymentsPage() {
                                                                         className="supplier-payments-small-button"
                                                                         disabled={
                                                                             busyBatchId
-                                                                            !== null
+                                                                            !==
+                                                                            null
                                                                         }
                                                                         onClick={
                                                                             () =>
@@ -1208,7 +1750,8 @@ export default function SupplierPaymentsPage() {
                                                                     >
                                                                         {
                                                                             busyBatchId
-                                                                                === batch.id
+                                                                                ===
+                                                                                batch.id
                                                                                 ? "Loading..."
                                                                                 : "View"
                                                                         }
@@ -1225,8 +1768,16 @@ export default function SupplierPaymentsPage() {
                             )
                 }
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Pagination
+                |--------------------------------------------------------------------------
+                */}
+
                 {
-                    pagination.last_page > 1
+                    pagination.last_page
+                    >
+                    1
                     && (
                         <div className="supplier-payments-pagination">
                             <span>
@@ -1242,7 +1793,10 @@ export default function SupplierPaymentsPage() {
                                     className="supplier-payments-button supplier-payments-button-secondary"
                                     disabled={
                                         loading
-                                        || pagination.current_page <= 1
+                                        ||
+                                        pagination.current_page
+                                        <=
+                                        1
                                     }
                                     onClick={
                                         () => {
@@ -1282,8 +1836,10 @@ export default function SupplierPaymentsPage() {
                                     className="supplier-payments-button supplier-payments-button-secondary"
                                     disabled={
                                         loading
-                                        || pagination.current_page
-                                        >= pagination.last_page
+                                        ||
+                                        pagination.current_page
+                                        >=
+                                        pagination.last_page
                                     }
                                     onClick={
                                         () => {
@@ -1295,7 +1851,9 @@ export default function SupplierPaymentsPage() {
                                                 (
                                                     current
                                                 ) =>
-                                                    current + 1
+                                                    current
+                                                    +
+                                                    1
                                             );
                                         }
                                     }
@@ -1308,6 +1866,19 @@ export default function SupplierPaymentsPage() {
                 }
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Record Supplier Payment Modal
+            |--------------------------------------------------------------------------
+            |
+            | Realtime updates refresh outstandingPurchases while this modal
+            | remains mounted. We deliberately do not close/remount it.
+            |
+            | Laravel must still validate the final outstanding balance when
+            | the payment is submitted because the backend is authoritative.
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 paymentModalOpen
                 && (
@@ -1319,10 +1890,15 @@ export default function SupplierPaymentsPage() {
                             allowCash
                         }
                         onClose={
-                            () =>
+                            () => {
                                 setPaymentModalOpen(
                                     false
-                                )
+                                );
+
+                                setOutstandingPurchases(
+                                    []
+                                );
+                            }
                         }
                         onSubmit={
                             submitPayment
@@ -1331,11 +1907,19 @@ export default function SupplierPaymentsPage() {
                 )
             }
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Payment Batch Details Modal
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 selectedBatch
                 && (
                     <SupplierPaymentDetailsModal
-                        batch={selectedBatch}
+                        batch={
+                            selectedBatch
+                        }
                         onClose={
                             () =>
                                 setSelectedBatch(

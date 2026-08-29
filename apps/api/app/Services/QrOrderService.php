@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\OrderRealtimeUpdated;
 use App\Exceptions\QrOrderException;
 use App\Exceptions\RecipeOperationException;
 use App\Models\Addon;
@@ -19,6 +20,7 @@ use App\Services\OrderLifecycleService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 final class QrOrderService
 {
@@ -131,40 +133,41 @@ final class QrOrderService
         */
 
         try {
-            return DB::transaction(
-                function () use (
-                    $data,
-                    $submissionHash,
-                    $table
-                ): array {
-                    /*
+            $result =
+                DB::transaction(
+                    function () use (
+                        $data,
+                        $submissionHash,
+                        $table
+                    ): array {
+                        /*
                     |--------------------------------------------------------------------------
                     | Duplicate Check Inside Transaction
                     |--------------------------------------------------------------------------
                     */
 
-                    $existingOrder =
-                        Order::query()
-                        ->where(
-                            'client_order_id',
-                            $data['client_order_id']
-                        )
-                        ->first();
+                        $existingOrder =
+                            Order::query()
+                            ->where(
+                                'client_order_id',
+                                $data['client_order_id']
+                            )
+                            ->first();
 
-                    if ($existingOrder) {
-                        return [
-                            'order' =>
-                            $this->validateExisting(
-                                $existingOrder,
-                                $submissionHash
-                            ),
+                        if ($existingOrder) {
+                            return [
+                                'order' =>
+                                $this->validateExisting(
+                                    $existingOrder,
+                                    $submissionHash
+                                ),
 
-                            'created' =>
-                            false,
-                        ];
-                    }
+                                'created' =>
+                                false,
+                            ];
+                        }
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Validate Cart + Authoritative Server Prices
                     |--------------------------------------------------------------------------
@@ -177,16 +180,16 @@ final class QrOrderService
                     |--------------------------------------------------------------------------
                     */
 
-                    $prepared =
-                        $this->prepareCart(
-                            $data['items']
+                        $prepared =
+                            $this->prepareCart(
+                                $data['items']
+                            );
+
+                        $this->validateCombinedStock(
+                            $prepared['requirements']
                         );
 
-                    $this->validateCombinedStock(
-                        $prepared['requirements']
-                    );
-
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Open / Reuse Table Session
                     |--------------------------------------------------------------------------
@@ -199,17 +202,17 @@ final class QrOrderService
                     |--------------------------------------------------------------------------
                     */
 
-                    $sessionResult =
-                        $this
-                        ->sessionService
-                        ->openFromQr(
-                            table: $table,
-                            guestCount: 1
-                        );
+                        $sessionResult =
+                            $this
+                            ->sessionService
+                            ->openFromQr(
+                                table: $table,
+                                guestCount: 1
+                            );
 
-                    /** @var TableSession $session */
-                    $session =
-                        $sessionResult['session'];
+                        /** @var TableSession $session */
+                        $session =
+                            $sessionResult['session'];
 
                     /*
                     |--------------------------------------------------------------------------
@@ -217,26 +220,26 @@ final class QrOrderService
                     |--------------------------------------------------------------------------
                     */
 
-                    /** @var TableSession $lockedSession */
-                    $lockedSession =
-                        TableSession::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $session->id
-                        );
+                        /** @var TableSession $lockedSession */
+                        $lockedSession =
+                            TableSession::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $session->id
+                            );
 
-                    if (
-                        $lockedSession->status
-                        !== TableSession::STATUS_OPEN
-                    ) {
-                        throw new QrOrderException(
-                            message: 'This table session is no longer open.',
+                        if (
+                            $lockedSession->status
+                            !== TableSession::STATUS_OPEN
+                        ) {
+                            throw new QrOrderException(
+                                message: 'This table session is no longer open.',
 
-                            errorCode: 'TABLE_SESSION_NOT_OPEN',
+                                errorCode: 'TABLE_SESSION_NOT_OPEN',
 
-                            status: 409
-                        );
-                    }
+                                status: 409
+                            );
+                        }
 
                     /*
                     |--------------------------------------------------------------------------
@@ -244,32 +247,32 @@ final class QrOrderService
                     |--------------------------------------------------------------------------
                     */
 
-                    /** @var RestaurantTable $lockedTable */
-                    $lockedTable =
-                        RestaurantTable::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $table->id
+                        /** @var RestaurantTable $lockedTable */
+                        $lockedTable =
+                            RestaurantTable::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $table->id
+                            );
+
+                        $this->validateTable(
+                            $lockedTable
                         );
 
-                    $this->validateTable(
-                        $lockedTable
-                    );
+                        if (
+                            (int) $lockedSession->table_id
+                            !== (int) $lockedTable->id
+                        ) {
+                            throw new QrOrderException(
+                                message: 'The table session does not match this QR code.',
 
-                    if (
-                        (int) $lockedSession->table_id
-                        !== (int) $lockedTable->id
-                    ) {
-                        throw new QrOrderException(
-                            message: 'The table session does not match this QR code.',
+                                errorCode: 'TABLE_SESSION_MISMATCH',
 
-                            errorCode: 'TABLE_SESSION_MISMATCH',
+                                status: 409
+                            );
+                        }
 
-                            status: 409
-                        );
-                    }
-
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Duplicate Check After Table/Session Lock
                     |--------------------------------------------------------------------------
@@ -279,230 +282,237 @@ final class QrOrderService
                     |--------------------------------------------------------------------------
                     */
 
-                    $existingOrder =
-                        Order::query()
-                        ->where(
-                            'client_order_id',
-                            $data['client_order_id']
-                        )
-                        ->first();
+                        $existingOrder =
+                            Order::query()
+                            ->where(
+                                'client_order_id',
+                                $data['client_order_id']
+                            )
+                            ->first();
 
-                    if ($existingOrder) {
-                        return [
-                            'order' =>
-                            $this->validateExisting(
-                                $existingOrder,
-                                $submissionHash
-                            ),
+                        if ($existingOrder) {
+                            return [
+                                'order' =>
+                                $this->validateExisting(
+                                    $existingOrder,
+                                    $submissionHash
+                                ),
 
-                            'created' =>
-                            false,
-                        ];
-                    }
+                                'created' =>
+                                false,
+                            ];
+                        }
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Sequence Inside Table Session
                     |--------------------------------------------------------------------------
                     */
 
-                    $sequence =
-                        (
-                            (int)
-                            Order::query()
-                                ->where(
-                                    'table_session_id',
-                                    $lockedSession->id
-                                )
-                                ->max(
-                                    'session_sequence'
-                                )
-                        )
-                        + 1;
+                        $sequence =
+                            (
+                                (int)
+                                Order::query()
+                                    ->where(
+                                        'table_session_id',
+                                        $lockedSession->id
+                                    )
+                                    ->max(
+                                        'session_sequence'
+                                    )
+                            )
+                            + 1;
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Create PENDING Order
                     |--------------------------------------------------------------------------
                     */
 
-                    $order =
-                        Order::query()
-                        ->create([
-                            /*
+                        $order =
+                            Order::query()
+                            ->create([
+                                /*
                              * Temporary unique value until
                              * the database order ID exists.
                              */
-                            'order_number' =>
-                            'TMP-' .
-                                Str::upper(
-                                    (string)
-                                    Str::ulid()
+                                'order_number' =>
+                                'TMP-' .
+                                    Str::upper(
+                                        (string)
+                                        Str::ulid()
+                                    ),
+
+                                'client_order_id' =>
+                                $data['client_order_id'],
+
+                                'submission_hash' =>
+                                $submissionHash,
+
+                                'public_status_token' =>
+                                Str::random(
+                                    64
                                 ),
 
-                            'client_order_id' =>
-                            $data['client_order_id'],
+                                'business_day_id' =>
+                                $lockedSession
+                                    ->business_day_id,
 
-                            'submission_hash' =>
-                            $submissionHash,
+                                'table_session_id' =>
+                                $lockedSession
+                                    ->id,
 
-                            'public_status_token' =>
-                            Str::random(
-                                64
-                            ),
+                                'table_id' =>
+                                $lockedTable
+                                    ->id,
 
-                            'business_day_id' =>
-                            $lockedSession
-                                ->business_day_id,
+                                'order_type' =>
+                                Order::TYPE_DINE_IN,
 
-                            'table_session_id' =>
-                            $lockedSession
-                                ->id,
+                                'order_source' =>
+                                Order::SOURCE_QR_CUSTOMER,
 
-                            'table_id' =>
-                            $lockedTable
-                                ->id,
+                                'session_sequence' =>
+                                $sequence,
 
-                            'order_type' =>
-                            Order::TYPE_DINE_IN,
+                                'table_name_snapshot' =>
+                                $lockedTable
+                                    ->name,
 
-                            'order_source' =>
-                            Order::SOURCE_QR_CUSTOMER,
+                                'customer_name' =>
+                                $data['customer_name']
+                                    ?? null,
 
-                            'session_sequence' =>
-                            $sequence,
+                                'customer_phone' =>
+                                $data['customer_phone']
+                                    ?? null,
 
-                            'table_name_snapshot' =>
-                            $lockedTable
-                                ->name,
-
-                            'customer_name' =>
-                            $data['customer_name']
-                                ?? null,
-
-                            'customer_phone' =>
-                            $data['customer_phone']
-                                ?? null,
-
-                            /*
+                                /*
                              * Customer QR orders always
                              * begin as PENDING.
                              */
-                            'status' =>
-                            Order::STATUS_PENDING,
+                                'status' =>
+                                Order::STATUS_PENDING,
 
-                            'subtotal' =>
-                            $prepared['subtotal'],
+                                'subtotal' =>
+                                $prepared['subtotal'],
 
-                            'discount_total' =>
-                            0,
+                                'discount_total' =>
+                                0,
 
-                            'tax_total' =>
-                            0,
+                                'tax_total' =>
+                                0,
 
-                            'service_charge_total' =>
-                            0,
+                                'service_charge_total' =>
+                                0,
 
-                            'grand_total' =>
-                            $prepared['subtotal'],
+                                'grand_total' =>
+                                $prepared['subtotal'],
 
-                            'estimated_cost_total' =>
-                            $prepared['estimated_cost_total'],
+                                'estimated_cost_total' =>
+                                $prepared['estimated_cost_total'],
 
-                            'customer_notes' =>
-                            $data['notes']
-                                ?? null,
+                                'customer_notes' =>
+                                $data['notes']
+                                    ?? null,
 
-                            'internal_notes' =>
-                            null,
+                                'internal_notes' =>
+                                null,
 
-                            /*
+                                /*
                              * Public QR customer has
                              * no authenticated user.
                              */
-                            'created_by' =>
-                            null,
-                        ]);
+                                'created_by' =>
+                                null,
+                            ]);
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Final Human-readable Order Number
                     |--------------------------------------------------------------------------
                     */
 
-                    $order->order_number =
-                        sprintf(
-                            'ORD-%s-%06d',
-                            now()->format(
-                                'ymd'
-                            ),
-                            $order->id
-                        );
+                        $order->order_number =
+                            sprintf(
+                                'ORD-%s-%06d',
+                                now()->format(
+                                    'ymd'
+                                ),
+                                $order->id
+                            );
 
-                    $order->save();
+                        $order->save();
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Save First Order Items
                     |--------------------------------------------------------------------------
                     */
 
-                    $this->createOrderItems(
-                        order: $order,
-                        lines: $prepared['lines']
-                    );
+                        $this->createOrderItems(
+                            order: $order,
+                            lines: $prepared['lines']
+                        );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Initial Status History
                     |--------------------------------------------------------------------------
                     */
 
-                    OrderStatusHistory::query()
-                        ->create([
-                            'order_id' =>
-                            $order->id,
+                        OrderStatusHistory::query()
+                            ->create([
+                                'order_id' =>
+                                $order->id,
 
-                            'from_status' =>
-                            null,
+                                'from_status' =>
+                                null,
 
-                            'to_status' =>
-                            Order::STATUS_PENDING,
+                                'to_status' =>
+                                Order::STATUS_PENDING,
 
-                            'changed_by' =>
-                            null,
+                                'changed_by' =>
+                                null,
 
-                            'notes' =>
-                            'Customer QR order submitted and is awaiting cashier approval.',
+                                'notes' =>
+                                'Customer QR order submitted and is awaiting cashier approval.',
 
-                            'changed_at' =>
-                            now(),
-                        ]);
+                                'changed_at' =>
+                                now(),
+                            ]);
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Table Activity
                     |--------------------------------------------------------------------------
                     */
 
-                    $lockedSession
-                        ->last_activity_at =
-                        now();
+                        $lockedSession
+                            ->last_activity_at =
+                            now();
 
-                    $lockedSession->save();
+                        $lockedSession->save();
 
-                    return [
-                        'order' =>
-                        $this->loadOrder(
-                            $order
-                        ),
+                        return [
+                            'order' =>
+                            $this->loadOrder(
+                                $order
+                            ),
 
-                        'created' =>
-                        true,
-                    ];
-                },
-                3
+                            'created' =>
+                            true,
+                        ];
+                    },
+                    3
+                );
+
+            $this->broadcastOrderRealtime(
+                result: $result,
+                action: 'CREATED'
             );
+
+            return $result;
         } catch (
             QueryException $exception
         ) {
@@ -641,85 +651,86 @@ final class QrOrderService
         }
 
         try {
-            return DB::transaction(
-                function () use (
-                    $order,
-                    $data,
-                    $submissionHash
-                ): array {
+            $result =
+                DB::transaction(
+                    function () use (
+                        $order,
+                        $data,
+                        $submissionHash
+                    ): array {
                     /*
                     |--------------------------------------------------------------------------
                     | Lock Existing Order
                     |--------------------------------------------------------------------------
                     */
 
-                    /** @var Order $lockedOrder */
-                    $lockedOrder =
-                        Order::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $order->id
-                        );
+                        /** @var Order $lockedOrder */
+                        $lockedOrder =
+                            Order::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $order->id
+                            );
 
-                    $lockedOrder->load([
-                        'tableSession',
-                        'restaurantTable',
-                    ]);
+                        $lockedOrder->load([
+                            'tableSession',
+                            'restaurantTable',
+                        ]);
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Validate Order Can Still Accept Additional Items
                     |--------------------------------------------------------------------------
                     */
 
-                    $this
-                        ->validateOrderForAdditionalItems(
-                            $lockedOrder
-                        );
+                        $this
+                            ->validateOrderForAdditionalItems(
+                                $lockedOrder
+                            );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Duplicate Check Inside Transaction
                     |--------------------------------------------------------------------------
                     */
 
-                    $existingSubmission =
-                        OrderAdditionSubmission::query()
-                        ->where(
-                            'client_submission_id',
-                            $data['client_submission_id']
-                        )
-                        ->first();
+                        $existingSubmission =
+                            OrderAdditionSubmission::query()
+                            ->where(
+                                'client_submission_id',
+                                $data['client_submission_id']
+                            )
+                            ->first();
 
-                    if ($existingSubmission) {
-                        return [
-                            'order' =>
-                            $this
-                                ->validateExistingAddition(
-                                    submission: $existingSubmission,
+                        if ($existingSubmission) {
+                            return [
+                                'order' =>
+                                $this
+                                    ->validateExistingAddition(
+                                        submission: $existingSubmission,
 
-                                    order: $lockedOrder,
+                                        order: $lockedOrder,
 
-                                    submissionHash: $submissionHash
-                                ),
+                                        submissionHash: $submissionHash
+                                    ),
 
-                            'created' =>
-                            false,
-                        ];
-                    }
+                                'created' =>
+                                false,
+                            ];
+                        }
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Validate Only The New Cart
                     |--------------------------------------------------------------------------
                     */
 
-                    $prepared =
-                        $this->prepareCart(
-                            $data['items']
-                        );
+                        $prepared =
+                            $this->prepareCart(
+                                $data['items']
+                            );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Check Stock For New Items
                     |--------------------------------------------------------------------------
@@ -730,43 +741,43 @@ final class QrOrderService
                     |
                     */
 
-                    $this
-                        ->validateCombinedStock(
-                            $prepared['requirements']
-                        );
+                        $this
+                            ->validateCombinedStock(
+                                $prepared['requirements']
+                            );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Record Idempotency Submission
                     |--------------------------------------------------------------------------
                     */
 
-                    OrderAdditionSubmission::query()
-                        ->create([
-                            'order_id' =>
-                            $lockedOrder
-                                ->id,
+                        OrderAdditionSubmission::query()
+                            ->create([
+                                'order_id' =>
+                                $lockedOrder
+                                    ->id,
 
-                            'client_submission_id' =>
-                            $data['client_submission_id'],
+                                'client_submission_id' =>
+                                $data['client_submission_id'],
 
-                            'submission_hash' =>
-                            $submissionHash,
-                        ]);
+                                'submission_hash' =>
+                                $submissionHash,
+                            ]);
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Append New Items To SAME Order
                     |--------------------------------------------------------------------------
                     */
 
-                    $this->createOrderItems(
-                        order: $lockedOrder,
+                        $this->createOrderItems(
+                            order: $lockedOrder,
 
-                        lines: $prepared['lines']
-                    );
+                            lines: $prepared['lines']
+                        );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Recalculate Cumulative Order Total
                     |--------------------------------------------------------------------------
@@ -779,12 +790,12 @@ final class QrOrderService
                     |
                     */
 
-                    $this
-                        ->recalculateOrderTotals(
-                            $lockedOrder
-                        );
+                        $this
+                            ->recalculateOrderTotals(
+                                $lockedOrder
+                            );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Phase 17 Lifecycle Re-entry
                     |--------------------------------------------------------------------------
@@ -793,50 +804,57 @@ final class QrOrderService
                     |
                     */
 
-                    $lockedOrder =
-                        app(
-                            OrderLifecycleService::class
-                        )
-                        ->reopenForAdditionalItems(
-                            order: $lockedOrder,
+                        $lockedOrder =
+                            app(
+                                OrderLifecycleService::class
+                            )
+                            ->reopenForAdditionalItems(
+                                order: $lockedOrder,
 
-                            actor: null,
+                                actor: null,
 
-                            source: Order::SOURCE_QR_CUSTOMER
-                        );
+                                source: Order::SOURCE_QR_CUSTOMER
+                            );
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Update Table Activity
                     |--------------------------------------------------------------------------
                     */
 
-                    if (
-                        $lockedOrder
-                        ->tableSession
-                    ) {
-                        $lockedOrder
-                            ->tableSession
-                            ->last_activity_at =
-                            now();
-
-                        $lockedOrder
-                            ->tableSession
-                            ->save();
-                    }
-
-                    return [
-                        'order' =>
-                        $this->loadOrder(
+                        if (
                             $lockedOrder
-                        ),
+                            ->tableSession
+                        ) {
+                            $lockedOrder
+                                ->tableSession
+                                ->last_activity_at =
+                                now();
 
-                        'created' =>
-                        true,
-                    ];
-                },
-                3
+                            $lockedOrder
+                                ->tableSession
+                                ->save();
+                        }
+
+                        return [
+                            'order' =>
+                            $this->loadOrder(
+                                $lockedOrder
+                            ),
+
+                            'created' =>
+                            true,
+                        ];
+                    },
+                    3
+                );
+
+            $this->broadcastOrderRealtime(
+                result: $result,
+                action: 'ITEMS_ADDED'
             );
+
+            return $result;
         } catch (
             QueryException $exception
         ) {
@@ -2205,6 +2223,47 @@ final class QrOrderService
             )
             ->values()
             ->all();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Real-Time Broadcast Helper
+    |--------------------------------------------------------------------------
+    |
+    | Broadcasts are dispatched only after the surrounding database
+    | transaction has committed successfully. Duplicate/idempotent retries
+    | return created=false and therefore do not emit duplicate events.
+    |--------------------------------------------------------------------------
+    */
+
+    private function broadcastOrderRealtime(
+        array $result,
+        string $action
+    ): void {
+        if (
+            ! ($result['created'] ?? false)
+            || ! (($result['order'] ?? null) instanceof Order)
+        ) {
+            return;
+        }
+
+        try {
+            OrderRealtimeUpdated::dispatch(
+                $result['order'],
+                $action
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            /*
+             * Realtime is a delivery optimization.
+             * A committed order must remain successful even if the
+             * queue/broadcast transport is temporarily unavailable.
+             */
+            report(
+                $exception
+            );
+        }
     }
 
     /*

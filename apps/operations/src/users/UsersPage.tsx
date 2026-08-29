@@ -2,10 +2,15 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type FormEvent,
     type ReactNode,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     useAuth,
@@ -670,36 +675,64 @@ export default function UsersPage() {
                 ),
         ).size;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Users
+    |--------------------------------------------------------------------------
+    |
+    | showRefreshing = true:
+    |   Used by the explicit Refresh button and successful mutations.
+    |
+    | silent = true:
+    |   Used by realtime reconciliation. Existing content remains visible,
+    |   the manual Refresh spinner is not shown and current form/dialog state
+    |   is not disturbed.
+    |--------------------------------------------------------------------------
+    */
+
     const loadUsers =
         useCallback(
             async (
                 showRefreshing = false,
+                silent = false,
             ): Promise<void> => {
                 if (
                     !canViewUsers
                 ) {
-                    setLoading(
-                        false,
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false,
+                        );
+
+                        setRefreshing(
+                            false,
+                        );
+                    }
 
                     return;
                 }
 
                 if (
-                    showRefreshing
+                    !silent
                 ) {
-                    setRefreshing(
-                        true,
-                    );
-                } else {
-                    setLoading(
-                        true,
+                    if (
+                        showRefreshing
+                    ) {
+                        setRefreshing(
+                            true,
+                        );
+                    } else {
+                        setLoading(
+                            true,
+                        );
+                    }
+
+                    setError(
+                        null,
                     );
                 }
-
-                setError(
-                    null,
-                );
 
                 try {
                     const result =
@@ -728,19 +761,34 @@ export default function UsersPage() {
                 } catch (
                 exception
                 ) {
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime user list.",
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             exception,
                         ),
                     );
                 } finally {
-                    setLoading(
-                        false,
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false,
+                        );
 
-                    setRefreshing(
-                        false,
-                    );
+                        setRefreshing(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -751,9 +799,21 @@ export default function UsersPage() {
             ],
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Roles / Permissions
+    |--------------------------------------------------------------------------
+    |
+    | Role and permission changes are also published through the `users`
+    | realtime domain by the backend observer.
+    |--------------------------------------------------------------------------
+    */
+
     const loadReferenceData =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 if (
                     !canViewRoles
                     &&
@@ -762,9 +822,13 @@ export default function UsersPage() {
                     return;
                 }
 
-                setReferenceLoading(
-                    true,
-                );
+                if (
+                    !silent
+                ) {
+                    setReferenceLoading(
+                        true,
+                    );
+                }
 
                 try {
                     const jobs:
@@ -813,15 +877,30 @@ export default function UsersPage() {
                 } catch (
                 exception
                 ) {
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime roles and permissions.",
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             exception,
                         ),
                     );
                 } finally {
-                    setReferenceLoading(
-                        false,
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setReferenceLoading(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -829,6 +908,12 @@ export default function UsersPage() {
                 canViewPermissions,
             ],
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial User Load
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -850,6 +935,12 @@ export default function UsersPage() {
         ],
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Reference Data Load
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const frameId =
@@ -868,6 +959,243 @@ export default function UsersPage() {
         [
             loadReferenceData,
         ],
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dialog Race Protection
+    |--------------------------------------------------------------------------
+    |
+    | These refs are only used to validate asynchronous realtime responses.
+    |
+    | If a manager closes a dialog or opens another user while an API request
+    | is in flight, an older response must not reopen or overwrite that newer
+    | UI state.
+    |--------------------------------------------------------------------------
+    */
+
+    const dialogRef =
+        useRef<DialogType>(
+            dialog,
+        );
+
+    const targetUserId =
+        targetUser
+            ?.id
+        ??
+        null;
+
+    const targetUserIdRef =
+        useRef<number | null>(
+            targetUserId,
+        );
+
+    useEffect(
+        () => {
+            dialogRef.current =
+                dialog;
+
+            targetUserIdRef.current =
+                targetUserId;
+        },
+        [
+            dialog,
+            targetUserId,
+        ],
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Open User Context
+    |--------------------------------------------------------------------------
+    |
+    | DETAIL / ROLE / STATUS / SESSIONS contain server-derived user data and
+    | may safely receive a fresh user snapshot.
+    |
+    | CREATE and EDIT are intentionally excluded because replacing their
+    | source data could interfere with unsaved manager input.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshOpenUserContext =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    targetUserId
+                    ===
+                    null
+                    ||
+                    dialog
+                    ===
+                    null
+                    ||
+                    dialog
+                    ===
+                    "CREATE"
+                    ||
+                    dialog
+                    ===
+                    "EDIT"
+                ) {
+                    return;
+                }
+
+                const userId =
+                    targetUserId;
+
+                try {
+                    const current =
+                        await getUser(
+                            userId,
+                        );
+
+                    if (
+                        targetUserIdRef.current
+                        !==
+                        userId
+                        ||
+                        dialogRef.current
+                        ===
+                        null
+                        ||
+                        dialogRef.current
+                        ===
+                        "CREATE"
+                        ||
+                        dialogRef.current
+                        ===
+                        "EDIT"
+                    ) {
+                        return;
+                    }
+
+                    setTargetUser(
+                        current,
+                    );
+                } catch (
+                exception
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime user details.",
+                        exception,
+                    );
+                }
+            },
+            [
+                dialog,
+                targetUserId,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Open Sessions
+    |--------------------------------------------------------------------------
+    |
+    | User status/security changes can invalidate sessions. When the Sessions
+    | dialog is already open, reconcile its list silently as well.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshOpenSessions =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    dialog
+                    !==
+                    "SESSIONS"
+                    ||
+                    targetUserId
+                    ===
+                    null
+                ) {
+                    return;
+                }
+
+                const userId =
+                    targetUserId;
+
+                try {
+                    const result =
+                        await getUserSessions(
+                            userId,
+                        );
+
+                    if (
+                        dialogRef.current
+                        !==
+                        "SESSIONS"
+                        ||
+                        targetUserIdRef.current
+                        !==
+                        userId
+                    ) {
+                        return;
+                    }
+
+                    setSessions(
+                        result,
+                    );
+                } catch (
+                exception
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime user sessions.",
+                        exception,
+                    );
+                }
+            },
+            [
+                dialog,
+                targetUserId,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Backend User, Role and Permission models are all invalidated through
+    | the `users` staff realtime domain.
+    |
+    | Reverb is only an invalidation signal. Laravel REST remains the
+    | authoritative source for:
+    |
+    | - filtered/paginated users
+    | - user status
+    | - assigned roles
+    | - effective permissions
+    | - role definitions
+    | - permission catalog
+    | - an open read-only user context
+    | - an open sessions list
+    |
+    | The CREATE and EDIT forms are deliberately not replaced, so unsaved
+    | input remains intact.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "users",
+        ],
+        async () => {
+            await Promise.all([
+                loadUsers(
+                    false,
+                    true,
+                ),
+
+                loadReferenceData(
+                    true,
+                ),
+
+                refreshOpenUserContext(),
+
+                refreshOpenSessions(),
+            ]);
+        },
     );
 
     function closeDialog():

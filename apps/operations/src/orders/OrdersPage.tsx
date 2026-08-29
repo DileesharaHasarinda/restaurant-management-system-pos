@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
+
+import {
     cancelOrder,
     completeOrder,
     confirmOrder,
@@ -555,15 +559,29 @@ export default function OrdersPage() {
         useCallback(
             async (
                 showRefreshing = false,
+                silent = false,
             ): Promise<void> => {
-                if (showRefreshing) {
-                    setRefreshing(
-                        true,
-                    );
-                } else {
-                    setLoading(
-                        true,
-                    );
+                /*
+                 * Initial and manual refreshes may show UI feedback.
+                 *
+                 * Realtime reconciliation uses silent=true so the
+                 * current table remains visible while Laravel is
+                 * queried for the authoritative state.
+                 */
+                if (
+                    !silent
+                ) {
+                    if (
+                        showRefreshing
+                    ) {
+                        setRefreshing(
+                            true,
+                        );
+                    } else {
+                        setLoading(
+                            true,
+                        );
+                    }
                 }
 
                 setError(
@@ -623,13 +641,17 @@ export default function OrdersPage() {
                         ),
                     );
                 } finally {
-                    setLoading(
-                        false,
-                    );
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false,
+                        );
 
-                    setRefreshing(
-                        false,
-                    );
+                        setRefreshing(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -1050,6 +1072,133 @@ export default function OrdersPage() {
             );
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is an invalidation signal only.
+    |
+    | Laravel REST remains authoritative.
+    |
+    | Realtime changes silently reload:
+    |
+    | - the currently filtered order list
+    | - pagination totals
+    | - an open order-details modal
+    | - an open lifecycle-action modal
+    |
+    | No manual refresh is required.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            'orders',
+            'tables',
+            'billing',
+        ],
+        async () => {
+            /*
+            |--------------------------------------------------------------------------
+            | Refresh Current Order List
+            |--------------------------------------------------------------------------
+            |
+            | Preserve the current filters, status tab, page and rows-per-page.
+            | The refresh is silent so the table does not flash a loading state.
+            |--------------------------------------------------------------------------
+            */
+
+            await loadOrders(
+                false,
+                true,
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Refresh Open Order Detail
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                !selectedOrder
+            ) {
+                return;
+            }
+
+            try {
+                const refreshedOrder =
+                    await getOrder(
+                        selectedOrder.id,
+                    );
+
+                /*
+                 * Race protection:
+                 *
+                 * - do not reopen a modal the user already closed
+                 * - do not overwrite another order opened while this
+                 *   REST request was still running
+                 */
+                setSelectedOrder(
+                    (
+                        current,
+                    ) => {
+                        if (
+                            !current
+                            ||
+                            current.id
+                            !==
+                            refreshedOrder.id
+                        ) {
+                            return current;
+                        }
+
+                        return refreshedOrder;
+                    },
+                );
+
+                /*
+                 * If an action dialog is open for this order, keep its
+                 * order snapshot synchronized as well.
+                 */
+                setPendingAction(
+                    (
+                        current,
+                    ) => {
+                        if (
+                            !current
+                            ||
+                            current.order.id
+                            !==
+                            refreshedOrder.id
+                        ) {
+                            return current;
+                        }
+
+                        return {
+                            ...current,
+
+                            order:
+                                refreshedOrder,
+                        };
+                    },
+                );
+            } catch (
+            exception
+            ) {
+                /*
+                 * A realtime reconciliation problem must not break the
+                 * Operations page. The next event, reconnect, or manual
+                 * refresh can reconcile the state again.
+                 */
+                console.error(
+                    'Unable to reconcile realtime order details.',
+                    exception,
+                );
+            }
+        },
+    );
 
     /*
     |--------------------------------------------------------------------------

@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -123,7 +127,8 @@ const money =
 */
 
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
@@ -137,7 +142,8 @@ function errorMessage(
 }
 
 function toDirection(
-    value: string
+    value:
+        string
 ): FilterState["direction"] {
     switch (
     value
@@ -160,7 +166,8 @@ function toDirection(
 }
 
 function quantityText(
-    value: number
+    value:
+        number
 ): string {
     return value.toLocaleString(
         "en-LK",
@@ -397,13 +404,13 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Load
+    | Load Adjustment Records
     |--------------------------------------------------------------------------
     */
 
     const loadRecords =
         useCallback(
-            async () => {
+            async (): Promise<void> => {
                 try {
                     const result =
                         await getStockAdjustments({
@@ -460,6 +467,65 @@ export default function StockAdjustmentsPage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Ingredient Options
+    |--------------------------------------------------------------------------
+    |
+    | Ingredient options include the current inventory information used by
+    | the physical-count workflow.
+    |
+    | Returning the result makes this reusable for both initial loading and
+    | realtime reconciliation.
+    |--------------------------------------------------------------------------
+    */
+
+    const loadIngredientOptions =
+        useCallback(
+            async (): Promise<
+                StockAdjustmentIngredientOption[]
+            > => {
+                const result =
+                    await getStockAdjustmentIngredientOptions();
+
+                setIngredients(
+                    result
+                );
+
+                return result;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Unit Options
+    |--------------------------------------------------------------------------
+    */
+
+    const loadUnitOptions =
+        useCallback(
+            async (): Promise<
+                StockAdjustmentUnitOption[]
+            > => {
+                const result =
+                    await getStockAdjustmentUnitOptions();
+
+                setUnits(
+                    result
+                );
+
+                return result;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial / Filter Record Loading
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
@@ -482,7 +548,7 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Ingredient Filters
+    | Initial Ingredient Filter Options
     |--------------------------------------------------------------------------
     */
 
@@ -491,19 +557,12 @@ export default function StockAdjustmentsPage() {
             const timeoutId =
                 window.setTimeout(
                     () => {
-                        void getStockAdjustmentIngredientOptions()
-                            .then(
-                                (
-                                    result
-                                ) =>
-                                    setIngredients(
-                                        result
-                                    )
-                            )
+                        void loadIngredientOptions()
                             .catch(
                                 () => {
                                     /*
-                                     * History remains usable.
+                                     * Adjustment history remains usable
+                                     * even when lookup loading fails.
                                      */
                                 }
                             );
@@ -516,7 +575,9 @@ export default function StockAdjustmentsPage() {
                     timeoutId
                 );
         },
-        []
+        [
+            loadIngredientOptions,
+        ]
     );
 
     /*
@@ -533,7 +594,8 @@ export default function StockAdjustmentsPage() {
                         record
                     ) =>
                         record.direction
-                        === "IN"
+                        ===
+                        "IN"
                 ),
             [
                 records,
@@ -548,7 +610,8 @@ export default function StockAdjustmentsPage() {
                         record
                     ) =>
                         record.direction
-                        === "OUT"
+                        ===
+                        "OUT"
                 ),
             [
                 records,
@@ -563,7 +626,8 @@ export default function StockAdjustmentsPage() {
                         record
                     ) =>
                         record.direction
-                        === "NONE"
+                        ===
+                        "NONE"
                 ),
             [
                 records,
@@ -608,12 +672,12 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Open Count
+    | Open Physical Count
     |--------------------------------------------------------------------------
     */
 
     const openPhysicalCount =
-        async () => {
+        async (): Promise<void> => {
             if (
                 formLoading
             ) {
@@ -633,22 +697,10 @@ export default function StockAdjustmentsPage() {
             );
 
             try {
-                const [
-                    ingredientOptions,
-                    unitOptions,
-                ] =
-                    await Promise.all([
-                        getStockAdjustmentIngredientOptions(),
-                        getStockAdjustmentUnitOptions(),
-                    ]);
-
-                setIngredients(
-                    ingredientOptions
-                );
-
-                setUnits(
-                    unitOptions
-                );
+                await Promise.all([
+                    loadIngredientOptions(),
+                    loadUnitOptions(),
+                ]);
 
                 setCreateOpen(
                     true
@@ -670,16 +722,18 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Submit Count
+    | Submit Physical Count
     |--------------------------------------------------------------------------
     */
 
     const submitPhysicalCount =
         async (
-            ingredientId: number,
+            ingredientId:
+                number,
+
             payload:
                 PhysicalStockCountPayload
-        ) => {
+        ): Promise<void> => {
             const adjustment =
                 await recordPhysicalStockCount(
                     ingredientId,
@@ -692,10 +746,12 @@ export default function StockAdjustmentsPage() {
 
             const directionMessage =
                 adjustment.direction
-                    === "IN"
+                    ===
+                    "IN"
                     ? "Stock increased"
                     : adjustment.direction
-                        === "OUT"
+                        ===
+                        "OUT"
                         ? "Stock reduced"
                         : "No stock difference";
 
@@ -717,23 +773,24 @@ export default function StockAdjustmentsPage() {
                 await loadRecords();
             }
 
+            /*
+             * Refresh ingredient/current-stock values after the adjustment.
+             *
+             * The stock adjustment itself has already succeeded, so a lookup
+             * refresh failure must not make the operation appear unsuccessful.
+             */
             try {
-                const current =
-                    await getStockAdjustmentIngredientOptions();
-
-                setIngredients(
-                    current
-                );
+                await loadIngredientOptions();
             } catch {
                 /*
-                 * Adjustment already succeeded.
+                 * Realtime or the next manual load can reconcile this later.
                  */
             }
         };
 
     /*
     |--------------------------------------------------------------------------
-    | View
+    | View Adjustment
     |--------------------------------------------------------------------------
     */
 
@@ -741,7 +798,7 @@ export default function StockAdjustmentsPage() {
         async (
             adjustment:
                 StockAdjustment
-        ) => {
+        ): Promise<void> => {
             setBusyAdjustmentId(
                 adjustment.id
             );
@@ -776,6 +833,68 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
+    | Refresh Selected Adjustment
+    |--------------------------------------------------------------------------
+    |
+    | If the details modal is open when another client changes inventory,
+    | reload the authoritative adjustment snapshot.
+    |
+    | The functional state update protects against an asynchronous race:
+    | closing the modal while the request is running will not reopen it.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedAdjustment =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedAdjustment
+                ) {
+                    return;
+                }
+
+                const adjustmentId =
+                    selectedAdjustment.id;
+
+                try {
+                    const current =
+                        await getStockAdjustment(
+                            adjustmentId
+                        );
+
+                    setSelectedAdjustment(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                adjustmentId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime stock adjustment details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedAdjustment,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
     | Filters
     |--------------------------------------------------------------------------
     */
@@ -784,7 +903,7 @@ export default function StockAdjustmentsPage() {
         (
             event:
                 FormEvent
-        ) => {
+        ): void => {
             event.preventDefault();
 
             if (
@@ -829,7 +948,7 @@ export default function StockAdjustmentsPage() {
         };
 
     const clearFilters =
-        () => {
+        (): void => {
             setFilterDraft(
                 EMPTY_FILTERS
             );
@@ -857,12 +976,12 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Refresh
+    | Manual Refresh
     |--------------------------------------------------------------------------
     */
 
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
@@ -878,7 +997,34 @@ export default function StockAdjustmentsPage() {
             );
 
             try {
-                await loadRecords();
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadRecords(),
+                        loadIngredientOptions(),
+                        refreshSelectedAdjustment(),
+                    ];
+
+                if (
+                    createOpen
+                ) {
+                    jobs.push(
+                        loadUnitOptions()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                setError(
+                    errorMessage(
+                        caught
+                    )
+                );
             } finally {
                 setRefreshing(
                     false
@@ -888,12 +1034,94 @@ export default function StockAdjustmentsPage() {
 
     /*
     |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Stock adjustments, ingredients, units and stock movements all belong to
+    | the inventory realtime domain.
+    |
+    | Reverb tells this page only that inventory changed. Laravel REST remains
+    | authoritative.
+    |
+    | Realtime refreshes:
+    |
+    | - adjustment records
+    | - current filtered page
+    | - summary counts and values
+    | - ingredient/current-stock options
+    | - an open adjustment details modal
+    | - unit options when the Physical Stock Count modal is open
+    |
+    | The browser page is never reloaded and the manual Refresh button is not
+    | required during normal operation.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "inventory",
+        ],
+        async () => {
+            try {
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadRecords(),
+                        loadIngredientOptions(),
+                        refreshSelectedAdjustment(),
+                    ];
+
+                /*
+                 * Units are needed only by the Physical Stock Count modal.
+                 *
+                 * Avoid an unnecessary unit API request on every kitchen sale,
+                 * wastage, purchase or other inventory event while the modal
+                 * is closed.
+                 */
+                if (
+                    createOpen
+                ) {
+                    jobs.push(
+                        loadUnitOptions()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                /*
+                 * A realtime synchronization failure must never interrupt a
+                 * physical-count workflow or break this page.
+                 *
+                 * A later event, reconnect or manual refresh can reconcile
+                 * authoritative state again.
+                 */
+                console.error(
+                    "Unable to reconcile realtime stock adjustment data.",
+                    caught
+                );
+            }
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
     | Render
     |--------------------------------------------------------------------------
     */
 
     return (
         <div className="stock-adjustments-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="stock-adjustments-page-header">
                 <div>
                     <div className="stock-adjustments-eyebrow">
@@ -915,7 +1143,9 @@ export default function StockAdjustmentsPage() {
                     <button
                         type="button"
                         className="stock-adjustments-button stock-adjustments-button-secondary"
-                        disabled={refreshing}
+                        disabled={
+                            refreshing
+                        }
                         onClick={
                             () =>
                                 void refresh()
@@ -934,7 +1164,9 @@ export default function StockAdjustmentsPage() {
                             <button
                                 type="button"
                                 className="stock-adjustments-button stock-adjustments-button-primary"
-                                disabled={formLoading}
+                                disabled={
+                                    formLoading
+                                }
                                 onClick={
                                     () =>
                                         void openPhysicalCount()
@@ -951,23 +1183,45 @@ export default function StockAdjustmentsPage() {
                 </div>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="stock-adjustments-alert stock-adjustments-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 message
                 && (
                     <div className="stock-adjustments-alert stock-adjustments-alert-success">
-                        {message}
+                        {
+                            message
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
 
             <section className="stock-adjustments-summary-grid">
                 <article>
@@ -1045,10 +1299,24 @@ export default function StockAdjustmentsPage() {
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Main Panel
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="stock-adjustments-panel">
+                {/*
+                |--------------------------------------------------------------------------
+                | Filters
+                |--------------------------------------------------------------------------
+                */}
+
                 <form
                     className="stock-adjustments-filters"
-                    onSubmit={submitFilters}
+                    onSubmit={
+                        submitFilters
+                    }
                 >
                     <label className="stock-adjustments-filter-field stock-adjustments-search-field">
                         <span>
@@ -1057,8 +1325,12 @@ export default function StockAdjustmentsPage() {
 
                         <input
                             type="search"
-                            maxLength={150}
-                            value={filterDraft.search}
+                            maxLength={
+                                150
+                            }
+                            value={
+                                filterDraft.search
+                            }
                             placeholder="Adjustment, ingredient, SKU or reason..."
                             onChange={
                                 (
@@ -1084,7 +1356,9 @@ export default function StockAdjustmentsPage() {
                         </span>
 
                         <select
-                            value={filterDraft.ingredientId}
+                            value={
+                                filterDraft.ingredientId
+                            }
                             onChange={
                                 (
                                     event
@@ -1111,8 +1385,12 @@ export default function StockAdjustmentsPage() {
                                         ingredient
                                     ) => (
                                         <option
-                                            key={ingredient.id}
-                                            value={ingredient.id}
+                                            key={
+                                                ingredient.id
+                                            }
+                                            value={
+                                                ingredient.id
+                                            }
                                         >
                                             {
                                                 ingredient.sku
@@ -1136,7 +1414,9 @@ export default function StockAdjustmentsPage() {
                         </span>
 
                         <select
-                            value={filterDraft.direction}
+                            value={
+                                filterDraft.direction
+                            }
                             onChange={
                                 (
                                     event
@@ -1180,7 +1460,9 @@ export default function StockAdjustmentsPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateFrom}
+                            value={
+                                filterDraft.dateFrom
+                            }
                             onChange={
                                 (
                                     event
@@ -1206,7 +1488,9 @@ export default function StockAdjustmentsPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateTo}
+                            value={
+                                filterDraft.dateTo
+                            }
                             onChange={
                                 (
                                     event
@@ -1236,12 +1520,20 @@ export default function StockAdjustmentsPage() {
                         <button
                             type="button"
                             className="stock-adjustments-button stock-adjustments-button-secondary"
-                            onClick={clearFilters}
+                            onClick={
+                                clearFilters
+                            }
                         >
                             Clear
                         </button>
                     </div>
                 </form>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Records
+                |--------------------------------------------------------------------------
+                */}
 
                 {
                     loading
@@ -1250,7 +1542,9 @@ export default function StockAdjustmentsPage() {
                                 Loading stock adjustments...
                             </div>
                         )
-                        : records.length === 0
+                        : records.length
+                            ===
+                            0
                             ? (
                                 <div className="stock-adjustments-empty">
                                     <strong>
@@ -1346,14 +1640,18 @@ export default function StockAdjustmentsPage() {
                                                             <td>
                                                                 <strong>
                                                                     {
-                                                                        adjustment.ingredient?.name
+                                                                        adjustment
+                                                                            .ingredient
+                                                                            ?.name
                                                                         ?? "—"
                                                                     }
                                                                 </strong>
 
                                                                 <small className="stock-adjustments-cell-meta">
                                                                     {
-                                                                        adjustment.ingredient?.sku
+                                                                        adjustment
+                                                                            .ingredient
+                                                                            ?.sku
                                                                         ?? ""
                                                                     }
                                                                 </small>
@@ -1369,7 +1667,9 @@ export default function StockAdjustmentsPage() {
                                                                 {" "}
 
                                                                 {
-                                                                    adjustment.count_unit?.symbol
+                                                                    adjustment
+                                                                        .count_unit
+                                                                        ?.symbol
                                                                     ?? ""
                                                                 }
                                                             </td>
@@ -1384,7 +1684,9 @@ export default function StockAdjustmentsPage() {
                                                                 {" "}
 
                                                                 {
-                                                                    adjustment.count_unit?.symbol
+                                                                    adjustment
+                                                                        .count_unit
+                                                                        ?.symbol
                                                                     ?? ""
                                                                 }
                                                             </td>
@@ -1393,7 +1695,8 @@ export default function StockAdjustmentsPage() {
                                                                 <strong>
                                                                     {
                                                                         adjustment.difference_quantity
-                                                                            > 0
+                                                                            >
+                                                                            0
                                                                             ? "+"
                                                                             : ""
                                                                     }
@@ -1407,7 +1710,9 @@ export default function StockAdjustmentsPage() {
                                                                     {" "}
 
                                                                     {
-                                                                        adjustment.count_unit?.symbol
+                                                                        adjustment
+                                                                            .count_unit
+                                                                            ?.symbol
                                                                         ?? ""
                                                                     }
                                                                 </strong>
@@ -1421,10 +1726,12 @@ export default function StockAdjustmentsPage() {
                                                                 >
                                                                     {
                                                                         adjustment.direction
-                                                                            === "IN"
+                                                                            ===
+                                                                            "IN"
                                                                             ? "Increase"
                                                                             : adjustment.direction
-                                                                                === "OUT"
+                                                                                ===
+                                                                                "OUT"
                                                                                 ? "Reduction"
                                                                                 : "No Change"
                                                                     }
@@ -1443,7 +1750,9 @@ export default function StockAdjustmentsPage() {
 
                                                             <td>
                                                                 {
-                                                                    adjustment.created_by?.name
+                                                                    adjustment
+                                                                        .created_by
+                                                                        ?.name
                                                                     ?? "—"
                                                                 }
                                                             </td>
@@ -1454,7 +1763,8 @@ export default function StockAdjustmentsPage() {
                                                                     className="stock-adjustments-small-button"
                                                                     disabled={
                                                                         busyAdjustmentId
-                                                                        !== null
+                                                                        !==
+                                                                        null
                                                                     }
                                                                     onClick={
                                                                         () =>
@@ -1465,7 +1775,8 @@ export default function StockAdjustmentsPage() {
                                                                 >
                                                                     {
                                                                         busyAdjustmentId
-                                                                            === adjustment.id
+                                                                            ===
+                                                                            adjustment.id
                                                                             ? "Loading..."
                                                                             : "View"
                                                                     }
@@ -1481,8 +1792,16 @@ export default function StockAdjustmentsPage() {
                             )
                 }
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Pagination
+                |--------------------------------------------------------------------------
+                */}
+
                 {
-                    pagination.last_page > 1
+                    pagination.last_page
+                    >
+                    1
                     && (
                         <div className="stock-adjustments-pagination">
                             <span>
@@ -1499,7 +1818,9 @@ export default function StockAdjustmentsPage() {
                                     disabled={
                                         loading
                                         ||
-                                        pagination.current_page <= 1
+                                        pagination.current_page
+                                        <=
+                                        1
                                     }
                                     onClick={
                                         () => {
@@ -1541,7 +1862,8 @@ export default function StockAdjustmentsPage() {
                                         loading
                                         ||
                                         pagination.current_page
-                                        >= pagination.last_page
+                                        >=
+                                        pagination.last_page
                                     }
                                     onClick={
                                         () => {
@@ -1566,12 +1888,22 @@ export default function StockAdjustmentsPage() {
                 }
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Physical Stock Count Modal
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 createOpen
                 && (
                     <PhysicalStockCountModal
-                        ingredients={ingredients}
-                        units={units}
+                        ingredients={
+                            ingredients
+                        }
+                        units={
+                            units
+                        }
                         onClose={
                             () =>
                                 setCreateOpen(
@@ -1584,6 +1916,12 @@ export default function StockAdjustmentsPage() {
                     />
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Adjustment Details Modal
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 selectedAdjustment

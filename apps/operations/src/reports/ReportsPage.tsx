@@ -2,10 +2,15 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type FormEvent,
     type ReactNode,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     useAuth,
@@ -695,6 +700,33 @@ export default function ReportsPage() {
             null,
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Report Request Coordination
+    |--------------------------------------------------------------------------
+    |
+    | Reports can be refreshed by:
+    |
+    | - initial page/tab loading
+    | - filters
+    | - manual Refresh
+    | - realtime invalidation events
+    |
+    | A monotonically increasing request sequence prevents an older REST
+    | response from overwriting a newer report snapshot.
+    |--------------------------------------------------------------------------
+    */
+
+    const reportRequestSequenceRef =
+        useRef(
+            0,
+        );
+
+    const foregroundRequestRef =
+        useRef(
+            0,
+        );
+
     const visibleTabs =
         useMemo(
             () =>
@@ -713,127 +745,286 @@ export default function ReportsPage() {
             ],
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Active Report
+    |--------------------------------------------------------------------------
+    |
+    | showRefreshing = true
+    |   Manual Refresh. The Refresh button shows its normal progress state.
+    |
+    | silent = true
+    |   Realtime reconciliation. The existing report remains visible and no
+    |   loading/refresh spinner is shown.
+    |
+    | Reverb is never treated as authoritative report data. Every refresh
+    | retrieves a new report snapshot from Laravel REST.
+    |--------------------------------------------------------------------------
+    */
+
     const loadReport =
         useCallback(
             async (
                 showRefreshing = false,
+                silent = false,
             ): Promise<void> => {
+                const requestId =
+                    reportRequestSequenceRef.current
+                    +
+                    1;
+
+                reportRequestSequenceRef.current =
+                    requestId;
+
                 if (
-                    showRefreshing
+                    !silent
                 ) {
-                    setRefreshing(
-                        true,
-                    );
-                } else {
-                    setLoading(
-                        true,
+                    foregroundRequestRef.current =
+                        requestId;
+
+                    if (
+                        showRefreshing
+                    ) {
+                        setRefreshing(
+                            true,
+                        );
+                    } else {
+                        setLoading(
+                            true,
+                        );
+                    }
+
+                    setError(
+                        null,
                     );
                 }
 
-                setError(
-                    null,
-                );
+                const isCurrentRequest =
+                    (): boolean =>
+                        reportRequestSequenceRef.current
+                        ===
+                        requestId;
 
                 try {
                     switch (
                     activeTab
                     ) {
-                        case "overview":
-                            setOverview(
+                        case "overview": {
+                            const result =
                                 await getOverviewReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "sales":
-                            setSales(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setOverview(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "sales": {
+                            const result =
                                 await getSalesReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "items":
-                            setItems(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setSales(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "items": {
+                            const result =
                                 await getItemsReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "profit":
-                            setProfit(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setItems(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "profit": {
+                            const result =
                                 await getProfitReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "payments":
-                            setPayments(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setProfit(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "payments": {
+                            const result =
                                 await getPaymentsReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "expenses":
-                            setExpenses(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setPayments(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "expenses": {
+                            const result =
                                 await getExpensesReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "inventory":
-                            setInventory(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setExpenses(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "inventory": {
+                            const result =
                                 await getInventoryReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "purchases":
-                            setPurchases(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setInventory(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "purchases": {
+                            const result =
                                 await getPurchasesReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "orders":
-                            setOrders(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setPurchases(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "orders": {
+                            const result =
                                 await getOrdersReport(
                                     filters,
-                                ),
-                            );
-                            break;
+                                );
 
-                        case "cashier":
-                            setCashier(
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setOrders(
+                                    result,
+                                );
+                            }
+
+                            break;
+                        }
+
+                        case "cashier": {
+                            const result =
                                 await getCashierReport(
                                     filters,
-                                ),
-                            );
+                                );
+
+                            if (
+                                isCurrentRequest()
+                            ) {
+                                setCashier(
+                                    result,
+                                );
+                            }
+
                             break;
+                        }
                     }
                 } catch (
                 exception
                 ) {
+                    if (
+                        !isCurrentRequest()
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime report data.",
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     setError(
                         getErrorMessage(
                             exception,
                         ),
                     );
                 } finally {
-                    setLoading(
-                        false,
-                    );
+                    /*
+                     * Only the latest foreground request may clear its own
+                     * loading indicators. A silent realtime request never
+                     * manipulates these UI states.
+                     */
+                    if (
+                        !silent
+                        &&
+                        foregroundRequestRef.current
+                        ===
+                        requestId
+                    ) {
+                        setLoading(
+                            false,
+                        );
 
-                    setRefreshing(
-                        false,
-                    );
+                        setRefreshing(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -841,6 +1032,12 @@ export default function ReportsPage() {
                 filters,
             ],
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial / Tab / Filter Load
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -860,6 +1057,53 @@ export default function ReportsPage() {
         [
             loadReport,
         ],
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reports aggregate data from several business domains. A change in any
+    | of the domains below can change the currently visible report.
+    |
+    | The shared realtime bus already debounces event storms. This page then
+    | silently reloads only the currently active report using the current
+    | applied filters.
+    |
+    | Realtime updates preserve:
+    |
+    | - active report tab
+    | - draft filters
+    | - applied filters
+    | - date presets
+    | - report scroll/page UI
+    |
+    | No browser reload and no manual Refresh are required.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "orders",
+            "tables",
+            "menu",
+            "inventory",
+            "purchases",
+            "suppliers",
+            "supplier_payments",
+            "wastage",
+            "expenses",
+            "billing",
+            "cash",
+            "business_day",
+        ],
+        async () => {
+            await loadReport(
+                false,
+                true,
+            );
+        },
     );
 
     function applyPreset(

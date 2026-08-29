@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -410,31 +414,41 @@ export default function PurchasesPage() {
         ]
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Supplier Filter Lookups
+    |--------------------------------------------------------------------------
+    */
+
+    const loadSupplierFilters =
+        useCallback(
+            async (): Promise<void> => {
+                try {
+                    const suppliers =
+                        await getPurchaseSupplierOptions(
+                            false
+                        );
+
+                    setSupplierFilters(
+                        suppliers
+                    );
+                } catch {
+                    /*
+                     * Purchase listing remains usable
+                     * even when supplier lookup access
+                     * is unavailable.
+                     */
+                }
+            },
+            []
+        );
+
     useEffect(
         () => {
             const timeoutId =
                 window.setTimeout(
                     () => {
-                        void getPurchaseSupplierOptions(
-                            false
-                        )
-                            .then(
-                                (
-                                    suppliers
-                                ) =>
-                                    setSupplierFilters(
-                                        suppliers
-                                    )
-                            )
-                            .catch(
-                                () => {
-                                    /*
-                                     * Purchase listing remains usable
-                                     * even when supplier lookup access
-                                     * is unavailable.
-                                     */
-                                }
-                            );
+                        void loadSupplierFilters();
                     },
                     0
                 );
@@ -444,7 +458,9 @@ export default function PurchasesPage() {
                     timeoutId
                 );
         },
-        []
+        [
+            loadSupplierFilters,
+        ]
     );
 
     const draftCount =
@@ -507,25 +523,15 @@ export default function PurchasesPage() {
             ]
         );
 
-    const ensureEditorLookups =
-        async () => {
-            if (
-                editorLookupsReady
-            ) {
-                return;
-            }
+    /*
+    |--------------------------------------------------------------------------
+    | Purchase Editor Lookups
+    |--------------------------------------------------------------------------
+    */
 
-            if (
-                lookupLoading
-            ) {
-                return;
-            }
-
-            setLookupLoading(
-                true
-            );
-
-            try {
+    const loadEditorLookups =
+        useCallback(
+            async (): Promise<void> => {
                 const [
                     suppliers,
                     ingredients,
@@ -556,6 +562,30 @@ export default function PurchasesPage() {
                 setEditorLookupsReady(
                     true
                 );
+            },
+            []
+        );
+
+    const ensureEditorLookups =
+        async (): Promise<void> => {
+            if (
+                editorLookupsReady
+            ) {
+                return;
+            }
+
+            if (
+                lookupLoading
+            ) {
+                return;
+            }
+
+            setLookupLoading(
+                true
+            );
+
+            try {
+                await loadEditorLookups();
             } finally {
                 setLookupLoading(
                     false
@@ -968,6 +998,186 @@ export default function PurchasesPage() {
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation Helpers
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is used only as an invalidation signal.
+    | Laravel REST remains authoritative.
+    |
+    | Realtime refreshes are intentionally silent:
+    | - no page reload
+    | - no manual Refresh click
+    | - no full loading-state flash
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedPurchase =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedPurchase
+                ) {
+                    return;
+                }
+
+                const purchaseId =
+                    selectedPurchase.id;
+
+                try {
+                    const current =
+                        await getPurchase(
+                            purchaseId
+                        );
+
+                    setSelectedPurchase(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                || existing.id
+                                !== purchaseId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime purchase details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedPurchase,
+            ]
+        );
+
+    const refreshEditorLookupsFromRealtime =
+        useCallback(
+            async (): Promise<void> => {
+                /*
+                 * Always mark cached editor catalogs as stale.
+                 *
+                 * If no editor is open, the next New/Edit action
+                 * reloads them before allowing the user to work.
+                 */
+                setEditorLookupsReady(
+                    false
+                );
+
+                if (
+                    editingPurchase
+                    === undefined
+                    || lookupLoading
+                ) {
+                    return;
+                }
+
+                setLookupLoading(
+                    true
+                );
+
+                try {
+                    await loadEditorLookups();
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime purchase editor lookups.",
+                        caught
+                    );
+                } finally {
+                    setLookupLoading(
+                        false
+                    );
+                }
+            },
+            [
+                editingPurchase,
+                loadEditorLookups,
+                lookupLoading,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Purchases + Supplier Payments
+    |--------------------------------------------------------------------------
+    |
+    | Purchase writes and supplier-payment writes can change:
+    | - purchase status
+    | - payment status
+    | - balance due
+    | - visible totals
+    | - selected purchase details
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "purchases",
+            "supplier_payments",
+        ],
+        async () => {
+            await Promise.all([
+                loadPurchases(),
+                refreshSelectedPurchase(),
+            ]);
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Suppliers
+    |--------------------------------------------------------------------------
+    |
+    | Supplier edits can change supplier names/codes shown in the
+    | purchase list, filters, details and purchase editor.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "suppliers",
+        ],
+        async () => {
+            await Promise.all([
+                loadPurchases(),
+                loadSupplierFilters(),
+                refreshSelectedPurchase(),
+                refreshEditorLookupsFromRealtime(),
+            ]);
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inventory / Ingredient / Unit Changes
+    |--------------------------------------------------------------------------
+    |
+    | The purchase editor depends on ingredient and unit catalogs.
+    | Inventory-domain changes invalidate those cached lookups.
+    |
+    | We do NOT reload the purchase list for every stock movement.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "inventory",
+        ],
+        () =>
+            refreshEditorLookupsFromRealtime()
+    );
 
     return (
         <div className="purchases-page">

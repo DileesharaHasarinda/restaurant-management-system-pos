@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -41,53 +45,103 @@ import type {
 
 import "./ExpensesPage.css";
 
-interface FilterState {
-    search: string;
+/*
+|--------------------------------------------------------------------------
+| Filter State
+|--------------------------------------------------------------------------
+*/
 
-    categoryId: string;
+interface FilterState {
+    search:
+    string;
+
+    categoryId:
+    string;
 
     paymentMethod:
-    "" | ExpensePaymentMethod;
+    ""
+    | ExpensePaymentMethod;
 
     status:
-    "" | ExpenseStatus;
+    ""
+    | ExpenseStatus;
 
-    dateFrom: string;
+    dateFrom:
+    string;
 
-    dateTo: string;
+    dateTo:
+    string;
 }
 
 const EMPTY_FILTERS:
     FilterState = {
-    search: "",
-    categoryId: "",
-    paymentMethod: "",
-    status: "",
-    dateFrom: "",
-    dateTo: "",
+    search:
+        "",
+
+    categoryId:
+        "",
+
+    paymentMethod:
+        "",
+
+    status:
+        "",
+
+    dateFrom:
+        "",
+
+    dateTo:
+        "",
 };
 
 const EMPTY_PAGINATION:
     ExpensePagination = {
-    current_page: 1,
-    per_page: 30,
-    total: 0,
-    last_page: 1,
+    current_page:
+        1,
+
+    per_page:
+        30,
+
+    total:
+        0,
+
+    last_page:
+        1,
 };
+
+/*
+|--------------------------------------------------------------------------
+| Formatters
+|--------------------------------------------------------------------------
+*/
 
 const money =
     new Intl.NumberFormat(
         "en-LK",
         {
-            style: "currency",
-            currency: "LKR",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            style:
+                "currency",
+
+            currency:
+                "LKR",
+
+            minimumFractionDigits:
+                2,
+
+            maximumFractionDigits:
+                2,
         }
     );
 
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
@@ -101,9 +155,12 @@ function errorMessage(
 }
 
 function toPaymentMethod(
-    value: string
+    value:
+        string
 ): FilterState["paymentMethod"] {
-    switch (value) {
+    switch (
+    value
+    ) {
         case "":
             return "";
 
@@ -131,9 +188,12 @@ function toPaymentMethod(
 }
 
 function toStatus(
-    value: string
+    value:
+        string
 ): FilterState["status"] {
-    switch (value) {
+    switch (
+    value
+    ) {
         case "":
             return "";
 
@@ -148,6 +208,11 @@ function toStatus(
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
 export default function ExpensesPage() {
     const {
@@ -172,19 +237,40 @@ export default function ExpensesPage() {
      */
     const allowCash =
         user?.role?.code
-        === "CASHIER";
+        ===
+        "CASHIER";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Expenses
+    |--------------------------------------------------------------------------
+    */
 
     const [
         expenses,
         setExpenses,
     ] =
-        useState<Expense[]>([]);
+        useState<
+            Expense[]
+        >(
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Lookup Data
+    |--------------------------------------------------------------------------
+    */
 
     const [
         categories,
         setCategories,
     ] =
-        useState<ExpenseCategory[]>([]);
+        useState<
+            ExpenseCategory[]
+        >(
+            []
+        );
 
     const [
         paymentMethods,
@@ -192,7 +278,15 @@ export default function ExpensesPage() {
     ] =
         useState<
             ExpensePaymentMethodOption[]
-        >([]);
+        >(
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination
+    |--------------------------------------------------------------------------
+    */
 
     const [
         pagination,
@@ -206,7 +300,15 @@ export default function ExpensesPage() {
         page,
         setPage,
     ] =
-        useState(1);
+        useState(
+            1
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
 
     const [
         filterDraft,
@@ -224,11 +326,19 @@ export default function ExpensesPage() {
             EMPTY_FILTERS
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Form / Details State
+    |--------------------------------------------------------------------------
+    */
+
     const [
         formOpen,
         setFormOpen,
     ] =
-        useState(false);
+        useState(
+            false
+        );
 
     const [
         editingExpense,
@@ -236,7 +346,9 @@ export default function ExpensesPage() {
     ] =
         useState<
             Expense | undefined
-        >(undefined);
+        >(
+            undefined
+        );
 
     const [
         selectedExpense,
@@ -244,25 +356,39 @@ export default function ExpensesPage() {
     ] =
         useState<
             Expense | undefined
-        >(undefined);
+        >(
+            undefined
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Loading / UI State
+    |--------------------------------------------------------------------------
+    */
 
     const [
         loading,
         setLoading,
     ] =
-        useState(true);
+        useState(
+            true
+        );
 
     const [
         refreshing,
         setRefreshing,
     ] =
-        useState(false);
+        useState(
+            false
+        );
 
     const [
         formLoading,
         setFormLoading,
     ] =
-        useState(false);
+        useState(
+            false
+        );
 
     const [
         busyExpenseId,
@@ -270,23 +396,48 @@ export default function ExpensesPage() {
     ] =
         useState<
             number | null
-        >(null);
+        >(
+            null
+        );
 
     const [
         error,
         setError,
     ] =
-        useState("");
+        useState(
+            ""
+        );
 
     const [
         message,
         setMessage,
     ] =
-        useState("");
+        useState(
+            ""
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Expenses
+    |--------------------------------------------------------------------------
+    |
+    | silent = true is used by realtime reconciliation.
+    |
+    | Realtime refresh must not:
+    |
+    | - show the full loading state
+    | - activate the manual Refresh spinner
+    | - reload the browser
+    | - close an open form or details modal
+    |--------------------------------------------------------------------------
+    */
 
     const loadExpenses =
         useCallback(
-            async () => {
+            async (
+                silent:
+                    boolean = false
+            ): Promise<void> => {
                 try {
                     const result =
                         await getExpenses({
@@ -316,7 +467,8 @@ export default function ExpensesPage() {
                             search:
                                 filters.search,
 
-                            perPage: 30,
+                            perPage:
+                                30,
                         });
 
                     setExpenses(
@@ -329,11 +481,30 @@ export default function ExpensesPage() {
                 } catch (
                 caught
                 ) {
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime expense records.",
+                            caught
+                        );
+
+                        return;
+                    }
+
                     setError(
-                        errorMessage(caught)
+                        errorMessage(
+                            caught
+                        )
                     );
                 } finally {
-                    setLoading(false);
+                    if (
+                        !silent
+                    ) {
+                        setLoading(
+                            false
+                        );
+                    }
                 }
             },
             [
@@ -341,6 +512,47 @@ export default function ExpensesPage() {
                 filters,
             ]
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Expense Lookups
+    |--------------------------------------------------------------------------
+    |
+    | Expense categories are mutable business data.
+    |
+    | Payment methods are also loaded from Laravel so this page never assumes
+    | frontend configuration is authoritative.
+    |--------------------------------------------------------------------------
+    */
+
+    const loadLookups =
+        useCallback(
+            async (): Promise<void> => {
+                const [
+                    categoryResult,
+                    methodResult,
+                ] =
+                    await Promise.all([
+                        getExpenseCategories(),
+                        getExpensePaymentMethods(),
+                    ]);
+
+                setCategories(
+                    categoryResult
+                );
+
+                setPaymentMethods(
+                    methodResult
+                );
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial / Filter Expense Loading
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -362,33 +574,23 @@ export default function ExpensesPage() {
         ]
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Lookup Loading
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timer =
                 window.setTimeout(
                     () => {
-                        void Promise.all([
-                            getExpenseCategories(),
-                            getExpensePaymentMethods(),
-                        ])
-                            .then(
-                                ([
-                                    categoryResult,
-                                    methodResult,
-                                ]) => {
-                                    setCategories(
-                                        categoryResult
-                                    );
-
-                                    setPaymentMethods(
-                                        methodResult
-                                    );
-                                }
-                            )
+                        void loadLookups()
                             .catch(
                                 () => {
                                     /*
-                                     * History remains usable.
+                                     * Expense history remains usable if
+                                     * category/payment-method lookups fail.
                                      */
                                 }
                             );
@@ -401,8 +603,16 @@ export default function ExpensesPage() {
                     timer
                 );
         },
-        []
+        [
+            loadLookups,
+        ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Derived Summary
+    |--------------------------------------------------------------------------
+    */
 
     const pageTotal =
         useMemo(
@@ -413,7 +623,8 @@ export default function ExpensesPage() {
                         expense
                     ) =>
                         total
-                        + expense.amount,
+                        +
+                        expense.amount,
                     0
                 ),
             [
@@ -430,9 +641,11 @@ export default function ExpensesPage() {
                         expense
                     ) =>
                         expense.payment_method
-                            === "CASH"
+                            ===
+                            "CASH"
                             ? total
-                            + expense.amount
+                            +
+                            expense.amount
                             : total,
                     0
                 ),
@@ -455,13 +668,16 @@ export default function ExpensesPage() {
                             (
                                 expense
                             ) =>
-                                expense.category?.id
+                                expense.category
+                                    ?.id
                         )
                         .filter(
                             (
                                 id
                             ) =>
-                                id !== undefined
+                                id
+                                !==
+                                undefined
                         )
                 ).size,
             [
@@ -469,91 +685,128 @@ export default function ExpensesPage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Create
+    |--------------------------------------------------------------------------
+    */
+
     const openCreate =
-        async () => {
+        async (): Promise<void> => {
             if (
                 formLoading
             ) {
                 return;
             }
 
-            setFormLoading(true);
-            setError("");
-            setMessage("");
+            setFormLoading(
+                true
+            );
+
+            setError(
+                ""
+            );
+
+            setMessage(
+                ""
+            );
 
             try {
-                const [
-                    categoryResult,
-                    methodResult,
-                ] =
-                    await Promise.all([
-                        getExpenseCategories(),
-                        getExpensePaymentMethods(),
-                    ]);
-
-                setCategories(
-                    categoryResult
-                );
-
-                setPaymentMethods(
-                    methodResult
-                );
+                await loadLookups();
 
                 setEditingExpense(
                     undefined
                 );
 
-                setFormOpen(true);
+                setFormOpen(
+                    true
+                );
             } catch (
             caught
             ) {
                 setError(
-                    errorMessage(caught)
+                    errorMessage(
+                        caught
+                    )
                 );
             } finally {
-                setFormLoading(false);
+                setFormLoading(
+                    false
+                );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Create
+    |--------------------------------------------------------------------------
+    */
 
     const submitCreate =
         async (
             payload:
                 CreateExpensePayload
-        ) => {
+        ): Promise<void> => {
             const expense =
                 await createExpense(
                     payload
                 );
 
-            setFormOpen(false);
+            setFormOpen(
+                false
+            );
+
+            setEditingExpense(
+                undefined
+            );
 
             setMessage(
                 `${expense.expense_number} recorded successfully.`
             );
 
+            /*
+             * A newly created expense should be easy to locate.
+             */
             if (
-                page !== 1
+                page
+                !==
+                1
             ) {
-                setLoading(true);
-                setPage(1);
+                setLoading(
+                    true
+                );
+
+                setPage(
+                    1
+                );
             } else {
                 await loadExpenses();
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Update
+    |--------------------------------------------------------------------------
+    */
+
     const submitUpdate =
         async (
-            expenseId: number,
+            expenseId:
+                number,
+
             payload:
                 UpdateExpensePayload
-        ) => {
+        ): Promise<void> => {
             const expense =
                 await updateExpense(
                     expenseId,
                     payload
                 );
 
-            setFormOpen(false);
+            setFormOpen(
+                false
+            );
 
             setEditingExpense(
                 undefined
@@ -570,16 +823,24 @@ export default function ExpensesPage() {
             await loadExpenses();
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | View Expense
+    |--------------------------------------------------------------------------
+    */
+
     const viewExpense =
         async (
             expense:
                 Expense
-        ) => {
+        ): Promise<void> => {
             setBusyExpenseId(
                 expense.id
             );
 
-            setError("");
+            setError(
+                ""
+            );
 
             try {
                 const current =
@@ -594,12 +855,82 @@ export default function ExpensesPage() {
             caught
             ) {
                 setError(
-                    errorMessage(caught)
+                    errorMessage(
+                        caught
+                    )
                 );
             } finally {
-                setBusyExpenseId(null);
+                setBusyExpenseId(
+                    null
+                );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Selected Expense
+    |--------------------------------------------------------------------------
+    |
+    | If the details modal is currently open, reload its authoritative
+    | expense record whenever a relevant realtime event is received.
+    |
+    | Functional state replacement protects against asynchronous races:
+    |
+    | - user closes the modal before GET completes
+    | - user opens another expense before GET completes
+    |
+    | The older request cannot reopen or overwrite the newer modal.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedExpense =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedExpense
+                ) {
+                    return;
+                }
+
+                const expenseId =
+                    selectedExpense.id;
+
+                try {
+                    const current =
+                        await getExpense(
+                            expenseId
+                        );
+
+                    setSelectedExpense(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                expenseId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime expense details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedExpense,
+            ]
+        );
 
     /*
     |--------------------------------------------------------------------------
@@ -607,9 +938,10 @@ export default function ExpensesPage() {
     |--------------------------------------------------------------------------
     |
     | Drawer-linked CASH expense:
-    | - must be local cashier
-    | - shift must still be open
     |
+    | - must be local cashier
+    | - cashier shift must still be open
+    |--------------------------------------------------------------------------
     */
 
     const canEditExpense =
@@ -625,14 +957,16 @@ export default function ExpensesPage() {
 
             if (
                 expense.payment_method
-                !== "CASH"
+                !==
+                "CASH"
             ) {
                 return true;
             }
 
             if (
                 expense.cashier_shift
-                === null
+                ===
+                null
             ) {
                 return true;
             }
@@ -641,15 +975,22 @@ export default function ExpensesPage() {
                 allowCash
                 &&
                 expense.cashier_shift.status
-                === "OPEN"
+                ===
+                "OPEN"
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Start Edit
+    |--------------------------------------------------------------------------
+    */
 
     const startEdit =
         (
             expense:
                 Expense
-        ) => {
+        ): void => {
             setSelectedExpense(
                 undefined
             );
@@ -658,15 +999,25 @@ export default function ExpensesPage() {
                 expense
             );
 
-            setFormOpen(true);
+            setFormOpen(
+                true
+            );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Receipt
+    |--------------------------------------------------------------------------
+    */
 
     const uploadReceipt =
         async (
             expense:
                 Expense,
-            file: File
-        ) => {
+
+            file:
+                File
+        ): Promise<void> => {
             const updated =
                 await uploadExpenseReceipt(
                     expense.id,
@@ -684,11 +1035,17 @@ export default function ExpensesPage() {
             await loadExpenses();
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Receipt
+    |--------------------------------------------------------------------------
+    */
+
     const removeReceipt =
         async (
             expense:
                 Expense
-        ) => {
+        ): Promise<void> => {
             const updated =
                 await removeExpenseReceipt(
                     expense.id
@@ -705,11 +1062,17 @@ export default function ExpensesPage() {
             await loadExpenses();
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     const submitFilters =
         (
             event:
                 FormEvent
-        ) => {
+        ): void => {
             event.preventDefault();
 
             if (
@@ -728,10 +1091,21 @@ export default function ExpensesPage() {
                 return;
             }
 
-            setError("");
-            setMessage("");
-            setPage(1);
-            setLoading(true);
+            setError(
+                ""
+            );
+
+            setMessage(
+                ""
+            );
+
+            setPage(
+                1
+            );
+
+            setLoading(
+                true
+            );
 
             setFilters({
                 ...filterDraft,
@@ -742,8 +1116,14 @@ export default function ExpensesPage() {
             });
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Clear Filters
+    |--------------------------------------------------------------------------
+    */
+
     const clearFilters =
-        () => {
+        (): void => {
             setFilterDraft(
                 EMPTY_FILTERS
             );
@@ -752,32 +1132,163 @@ export default function ExpensesPage() {
                 EMPTY_FILTERS
             );
 
-            setPage(1);
-            setLoading(true);
-            setError("");
-            setMessage("");
+            setPage(
+                1
+            );
+
+            setLoading(
+                true
+            );
+
+            setError(
+                ""
+            );
+
+            setMessage(
+                ""
+            );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Manual Refresh
+    |--------------------------------------------------------------------------
+    */
+
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
                 return;
             }
 
-            setRefreshing(true);
-            setError("");
+            setRefreshing(
+                true
+            );
+
+            setError(
+                ""
+            );
 
             try {
-                await loadExpenses();
+                await Promise.all([
+                    loadExpenses(),
+                    loadLookups(),
+                    refreshSelectedExpense(),
+                ]);
+            } catch (
+            caught
+            ) {
+                setError(
+                    errorMessage(
+                        caught
+                    )
+                );
             } finally {
-                setRefreshing(false);
+                setRefreshing(
+                    false
+                );
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | This page depends on:
+    |
+    | expenses
+    | --------
+    | - expense create/update/void changes
+    | - receipt metadata changes
+    | - expense category changes
+    |
+    | cash
+    | ----
+    | - CASH expenses are linked to cashier shifts
+    | - shift state determines whether a drawer-linked expense may be edited
+    | - drawer movement changes can affect related financial state
+    |
+    | business_day
+    | ------------
+    | - operational expense reporting is tied to restaurant business-day
+    |   activity
+    |
+    | Reverb is an invalidation signal only.
+    |
+    | Laravel REST remains authoritative.
+    |
+    | Realtime synchronization updates:
+    |
+    | - current filtered expense list
+    | - pagination
+    | - page summary totals
+    | - expense categories/payment-method options
+    | - an open ExpenseDetailsModal
+    | - cashier-shift information returned with an expense
+    |
+    | IMPORTANT:
+    |
+    | An open ExpenseFormModal is deliberately NOT replaced or remounted.
+    | This protects unsaved description, amount, payment-method, date and
+    | other manager/cashier input.
+    |
+    | The backend must still perform final validation when the form is
+    | submitted, especially if a CASH cashier shift changed remotely while
+    | the form was open.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "expenses",
+            "cash",
+            "business_day",
+        ],
+        async () => {
+            try {
+                await Promise.all([
+                    loadExpenses(
+                        true
+                    ),
+
+                    loadLookups(),
+
+                    refreshSelectedExpense(),
+                ]);
+            } catch (
+            caught
+            ) {
+                /*
+                 * Realtime failure must never interrupt an expense workflow.
+                 *
+                 * A later realtime event, reconnect or manual Refresh can
+                 * reconcile authoritative state.
+                 */
+                console.error(
+                    "Unable to reconcile realtime expense data.",
+                    caught
+                );
+            }
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
     return (
         <div className="expenses-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="expenses-page-header">
                 <div>
                     <div className="expenses-eyebrow">
@@ -799,7 +1310,9 @@ export default function ExpensesPage() {
                     <button
                         type="button"
                         className="expenses-button expenses-button-secondary"
-                        disabled={refreshing}
+                        disabled={
+                            refreshing
+                        }
                         onClick={
                             () =>
                                 void refresh()
@@ -818,7 +1331,9 @@ export default function ExpensesPage() {
                             <button
                                 type="button"
                                 className="expenses-button expenses-button-primary"
-                                disabled={formLoading}
+                                disabled={
+                                    formLoading
+                                }
                                 onClick={
                                     () =>
                                         void openCreate()
@@ -835,23 +1350,45 @@ export default function ExpensesPage() {
                 </div>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="expenses-alert expenses-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 message
                 && (
                     <div className="expenses-alert expenses-alert-success">
-                        {message}
+                        {
+                            message
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Local Cashier Information
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 allowCash
@@ -869,6 +1406,12 @@ export default function ExpensesPage() {
                 )
             }
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="expenses-summary-grid">
                 <article>
                     <span>
@@ -876,7 +1419,9 @@ export default function ExpensesPage() {
                     </span>
 
                     <strong>
-                        {pagination.total}
+                        {
+                            pagination.total
+                        }
                     </strong>
 
                     <small>
@@ -934,15 +1479,32 @@ export default function ExpensesPage() {
                     </strong>
 
                     <small>
-                        {categoriesOnPage} categories
+                        {
+                            categoriesOnPage
+                        }
+                        {" categories"}
                     </small>
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Main Panel
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="expenses-panel">
+                {/*
+                |--------------------------------------------------------------------------
+                | Filters
+                |--------------------------------------------------------------------------
+                */}
+
                 <form
                     className="expenses-filters"
-                    onSubmit={submitFilters}
+                    onSubmit={
+                        submitFilters
+                    }
                 >
                     <label className="expenses-filter-field expenses-search-field">
                         <span>
@@ -951,8 +1513,12 @@ export default function ExpensesPage() {
 
                         <input
                             type="search"
-                            maxLength={150}
-                            value={filterDraft.search}
+                            maxLength={
+                                150
+                            }
+                            value={
+                                filterDraft.search
+                            }
                             placeholder="Expense, description, reference..."
                             onChange={
                                 (
@@ -963,6 +1529,7 @@ export default function ExpensesPage() {
                                             current
                                         ) => ({
                                             ...current,
+
                                             search:
                                                 event.target.value,
                                         })
@@ -977,7 +1544,9 @@ export default function ExpensesPage() {
                         </span>
 
                         <select
-                            value={filterDraft.categoryId}
+                            value={
+                                filterDraft.categoryId
+                            }
                             onChange={
                                 (
                                     event
@@ -987,6 +1556,7 @@ export default function ExpensesPage() {
                                             current
                                         ) => ({
                                             ...current,
+
                                             categoryId:
                                                 event.target.value,
                                         })
@@ -1003,10 +1573,16 @@ export default function ExpensesPage() {
                                         category
                                     ) => (
                                         <option
-                                            key={category.id}
-                                            value={category.id}
+                                            key={
+                                                category.id
+                                            }
+                                            value={
+                                                category.id
+                                            }
                                         >
-                                            {category.name}
+                                            {
+                                                category.name
+                                            }
                                         </option>
                                     )
                                 )
@@ -1020,7 +1596,9 @@ export default function ExpensesPage() {
                         </span>
 
                         <select
-                            value={filterDraft.paymentMethod}
+                            value={
+                                filterDraft.paymentMethod
+                            }
                             onChange={
                                 (
                                     event
@@ -1049,10 +1627,16 @@ export default function ExpensesPage() {
                                         method
                                     ) => (
                                         <option
-                                            key={method.code}
-                                            value={method.code}
+                                            key={
+                                                method.code
+                                            }
+                                            value={
+                                                method.code
+                                            }
                                         >
-                                            {method.label}
+                                            {
+                                                method.label
+                                            }
                                         </option>
                                     )
                                 )
@@ -1066,7 +1650,9 @@ export default function ExpensesPage() {
                         </span>
 
                         <select
-                            value={filterDraft.status}
+                            value={
+                                filterDraft.status
+                            }
                             onChange={
                                 (
                                     event
@@ -1106,7 +1692,9 @@ export default function ExpensesPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateFrom}
+                            value={
+                                filterDraft.dateFrom
+                            }
                             onChange={
                                 (
                                     event
@@ -1132,7 +1720,9 @@ export default function ExpensesPage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateTo}
+                            value={
+                                filterDraft.dateTo
+                            }
                             onChange={
                                 (
                                     event
@@ -1162,12 +1752,20 @@ export default function ExpensesPage() {
                         <button
                             type="button"
                             className="expenses-button expenses-button-secondary"
-                            onClick={clearFilters}
+                            onClick={
+                                clearFilters
+                            }
                         >
                             Clear
                         </button>
                     </div>
                 </form>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Records
+                |--------------------------------------------------------------------------
+                */}
 
                 {
                     loading
@@ -1176,7 +1774,9 @@ export default function ExpensesPage() {
                                 Loading expenses...
                             </div>
                         )
-                        : expenses.length === 0
+                        : expenses.length
+                            ===
+                            0
                             ? (
                                 <div className="expenses-empty">
                                     <strong>
@@ -1194,15 +1794,41 @@ export default function ExpensesPage() {
                                     <table className="expenses-table">
                                         <thead>
                                             <tr>
-                                                <th>Expense</th>
-                                                <th>Date</th>
-                                                <th>Category</th>
-                                                <th>Description</th>
-                                                <th>Payment</th>
-                                                <th>Amount</th>
-                                                <th>Receipt</th>
-                                                <th>Recorded By</th>
-                                                <th>Actions</th>
+                                                <th>
+                                                    Expense
+                                                </th>
+
+                                                <th>
+                                                    Date
+                                                </th>
+
+                                                <th>
+                                                    Category
+                                                </th>
+
+                                                <th>
+                                                    Description
+                                                </th>
+
+                                                <th>
+                                                    Payment
+                                                </th>
+
+                                                <th>
+                                                    Amount
+                                                </th>
+
+                                                <th>
+                                                    Receipt
+                                                </th>
+
+                                                <th>
+                                                    Recorded By
+                                                </th>
+
+                                                <th>
+                                                    Actions
+                                                </th>
                                             </tr>
                                         </thead>
 
@@ -1212,7 +1838,11 @@ export default function ExpensesPage() {
                                                     (
                                                         expense
                                                     ) => (
-                                                        <tr key={expense.id}>
+                                                        <tr
+                                                            key={
+                                                                expense.id
+                                                            }
+                                                        >
                                                             <td>
                                                                 <strong>
                                                                     {
@@ -1221,18 +1851,25 @@ export default function ExpensesPage() {
                                                                 </strong>
 
                                                                 <small className="expenses-cell-meta">
-                                                                    {expense.status}
+                                                                    {
+                                                                        expense.status
+                                                                    }
                                                                 </small>
                                                             </td>
 
                                                             <td>
-                                                                {expense.expense_date}
+                                                                {
+                                                                    expense.expense_date
+                                                                }
                                                             </td>
 
                                                             <td>
                                                                 {
-                                                                    expense.category?.name
-                                                                    ?? "—"
+                                                                    expense
+                                                                        .category
+                                                                        ?.name
+                                                                    ??
+                                                                    "—"
                                                                 }
                                                             </td>
 
@@ -1278,8 +1915,11 @@ export default function ExpensesPage() {
 
                                                             <td>
                                                                 {
-                                                                    expense.created_by?.name
-                                                                    ?? "—"
+                                                                    expense
+                                                                        .created_by
+                                                                        ?.name
+                                                                    ??
+                                                                    "—"
                                                                 }
                                                             </td>
 
@@ -1289,7 +1929,8 @@ export default function ExpensesPage() {
                                                                     className="expenses-small-button"
                                                                     disabled={
                                                                         busyExpenseId
-                                                                        !== null
+                                                                        !==
+                                                                        null
                                                                     }
                                                                     onClick={
                                                                         () =>
@@ -1300,7 +1941,8 @@ export default function ExpensesPage() {
                                                                 >
                                                                     {
                                                                         busyExpenseId
-                                                                            === expense.id
+                                                                            ===
+                                                                            expense.id
                                                                             ? "Loading..."
                                                                             : "View"
                                                                     }
@@ -1316,12 +1958,23 @@ export default function ExpensesPage() {
                             )
                 }
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Pagination
+                |--------------------------------------------------------------------------
+                */}
+
                 {
-                    pagination.last_page > 1
+                    pagination.last_page
+                    >
+                    1
                     && (
                         <div className="expenses-pagination">
                             <span>
-                                {pagination.total} expenses
+                                {
+                                    pagination.total
+                                }
+                                {" expenses"}
                             </span>
 
                             <div>
@@ -1332,11 +1985,14 @@ export default function ExpensesPage() {
                                         loading
                                         ||
                                         pagination.current_page
-                                        <= 1
+                                        <=
+                                        1
                                     }
                                     onClick={
                                         () => {
-                                            setLoading(true);
+                                            setLoading(
+                                                true
+                                            );
 
                                             setPage(
                                                 (
@@ -1354,7 +2010,8 @@ export default function ExpensesPage() {
                                 </button>
 
                                 <span>
-                                    Page{" "}
+                                    Page
+                                    {" "}
                                     {
                                         pagination.current_page
                                     }
@@ -1371,17 +2028,22 @@ export default function ExpensesPage() {
                                         loading
                                         ||
                                         pagination.current_page
-                                        >= pagination.last_page
+                                        >=
+                                        pagination.last_page
                                     }
                                     onClick={
                                         () => {
-                                            setLoading(true);
+                                            setLoading(
+                                                true
+                                            );
 
                                             setPage(
                                                 (
                                                     current
                                                 ) =>
-                                                    current + 1
+                                                    current
+                                                    +
+                                                    1
                                             );
                                         }
                                     }
@@ -1394,37 +2056,74 @@ export default function ExpensesPage() {
                 }
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Expense Form
+            |--------------------------------------------------------------------------
+            |
+            | Realtime events intentionally do not replace editingExpense or
+            | remount this modal. Unsaved form values are preserved.
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 formOpen
                 && (
                     <ExpenseFormModal
-                        expense={editingExpense}
-                        categories={categories}
-                        paymentMethods={paymentMethods}
-                        allowCash={allowCash}
+                        expense={
+                            editingExpense
+                        }
+                        categories={
+                            categories
+                        }
+                        paymentMethods={
+                            paymentMethods
+                        }
+                        allowCash={
+                            allowCash
+                        }
                         onClose={
                             () => {
-                                setFormOpen(false);
-                                setEditingExpense(undefined);
+                                setFormOpen(
+                                    false
+                                );
+
+                                setEditingExpense(
+                                    undefined
+                                );
                             }
                         }
-                        onCreate={submitCreate}
-                        onUpdate={submitUpdate}
+                        onCreate={
+                            submitCreate
+                        }
+                        onUpdate={
+                            submitUpdate
+                        }
                     />
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Expense Details
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 selectedExpense
                 && (
                     <ExpenseDetailsModal
-                        expense={selectedExpense}
+                        expense={
+                            selectedExpense
+                        }
                         canEdit={
                             canEditExpense(
                                 selectedExpense
                             )
                         }
-                        canManageReceipt={canManage}
+                        canManageReceipt={
+                            canManage
+                        }
                         onClose={
                             () =>
                                 setSelectedExpense(

@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -70,9 +74,11 @@ type RecipesTab =
     | "ADDONS";
 
 interface EditorState {
-    target: RecipeEditorTarget;
+    target:
+    RecipeEditorTarget;
 
-    recipe: RecipeResponse;
+    recipe:
+    RecipeResponse;
 }
 
 /*
@@ -121,11 +127,13 @@ const money =
 */
 
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
-        && error.message
+        &&
+        error.message
     ) {
         return error.message;
     }
@@ -150,6 +158,12 @@ export default function RecipesPage() {
             "recipes.manage"
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Tabs
+    |--------------------------------------------------------------------------
+    */
+
     const [
         activeTab,
         setActiveTab,
@@ -157,6 +171,12 @@ export default function RecipesPage() {
         useState<RecipesTab>(
             "MENU"
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menu Items
+    |--------------------------------------------------------------------------
+    */
 
     const [
         menuItems,
@@ -198,6 +218,12 @@ export default function RecipesPage() {
             ""
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Add-ons
+    |--------------------------------------------------------------------------
+    */
+
     const [
         addons,
         setAddons,
@@ -213,6 +239,12 @@ export default function RecipesPage() {
         useState(
             ""
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Loading
+    |--------------------------------------------------------------------------
+    */
 
     const [
         menuLoading,
@@ -254,6 +286,12 @@ export default function RecipesPage() {
             ""
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Modals / Selection
+    |--------------------------------------------------------------------------
+    */
+
     const [
         selectedMenuItem,
         setSelectedMenuItem,
@@ -277,6 +315,12 @@ export default function RecipesPage() {
         useState<EditorState | null>(
             null
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Recipe Editor Catalog
+    |--------------------------------------------------------------------------
+    */
 
     const [
         ingredients,
@@ -310,7 +354,7 @@ export default function RecipesPage() {
 
     const loadMenuItems =
         useCallback(
-            async () => {
+            async (): Promise<void> => {
                 try {
                     const result =
                         await getMenuItems({
@@ -352,9 +396,15 @@ export default function RecipesPage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Add-ons
+    |--------------------------------------------------------------------------
+    */
+
     const loadAddons =
         useCallback(
-            async () => {
+            async (): Promise<void> => {
                 try {
                     const result =
                         await getAddons();
@@ -379,6 +429,12 @@ export default function RecipesPage() {
             []
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Menu Load
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
@@ -399,6 +455,12 @@ export default function RecipesPage() {
             loadMenuItems,
         ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Add-on Load
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -423,13 +485,19 @@ export default function RecipesPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Editor Catalog
+    | Load All Ingredients
+    |--------------------------------------------------------------------------
+    |
+    | Recipe editor needs the full ingredient catalog rather than only one
+    | paginated ingredient page.
     |--------------------------------------------------------------------------
     */
 
     const loadAllIngredients =
         useCallback(
-            async (): Promise<Ingredient[]> => {
+            async (): Promise<
+                Ingredient[]
+            > => {
                 const collected:
                     Ingredient[] = [];
 
@@ -468,7 +536,8 @@ export default function RecipesPage() {
                         1;
                 } while (
                     currentPage
-                    <= lastPage
+                    <=
+                    lastPage
                 );
 
                 return collected;
@@ -476,16 +545,15 @@ export default function RecipesPage() {
             []
         );
 
-    const ensureEditorCatalog =
-        useCallback(
-            async () => {
-                if (
-                    !canManage
-                    || editorCatalogLoaded
-                ) {
-                    return;
-                }
+    /*
+    |--------------------------------------------------------------------------
+    | Load Recipe Editor Catalog
+    |--------------------------------------------------------------------------
+    */
 
+    const loadEditorCatalog =
+        useCallback(
+            async (): Promise<void> => {
                 const [
                     ingredientRows,
                     unitRows,
@@ -508,9 +576,33 @@ export default function RecipesPage() {
                 );
             },
             [
+                loadAllIngredients,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ensure Recipe Editor Catalog
+    |--------------------------------------------------------------------------
+    */
+
+    const ensureEditorCatalog =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !canManage
+                    ||
+                    editorCatalogLoaded
+                ) {
+                    return;
+                }
+
+                await loadEditorCatalog();
+            },
+            [
                 canManage,
                 editorCatalogLoaded,
-                loadAllIngredients,
+                loadEditorCatalog,
             ]
         );
 
@@ -522,8 +614,9 @@ export default function RecipesPage() {
 
     const submitSearch =
         (
-            event: FormEvent
-        ) => {
+            event:
+                FormEvent
+        ): void => {
             event.preventDefault();
 
             setPage(
@@ -536,7 +629,7 @@ export default function RecipesPage() {
         };
 
     const resetSearch =
-        () => {
+        (): void => {
             setSearchDraft(
                 ""
             );
@@ -549,6 +642,12 @@ export default function RecipesPage() {
                 1
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filtered Add-ons
+    |--------------------------------------------------------------------------
+    */
 
     const filteredAddons =
         useMemo(
@@ -565,19 +664,23 @@ export default function RecipesPage() {
                 }
 
                 return addons.filter(
-                    (addon) =>
+                    (
+                        addon
+                    ) =>
                         addon.name
                             .toLowerCase()
                             .includes(
                                 value
                             )
-                        || (
+                        ||
+                        (
                             addon.sku
                                 ?.toLowerCase()
                                 .includes(
                                     value
                                 )
-                            ?? false
+                            ??
+                            false
                         )
                 );
             },
@@ -589,12 +692,184 @@ export default function RecipesPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Refresh
+    | Refresh Selected Menu Target
+    |--------------------------------------------------------------------------
+    |
+    | The target-selection modal does not contain editable form data, so it
+    | can safely be reconciled while it is open.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedMenuItem =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedMenuItem
+                ) {
+                    return;
+                }
+
+                const menuItemId =
+                    selectedMenuItem.id;
+
+                try {
+                    const current =
+                        await getRecipeMenuItem(
+                            menuItemId
+                        );
+
+                    setSelectedMenuItem(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                menuItemId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime recipe target data.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedMenuItem,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Consumption Preview Menu Item
+    |--------------------------------------------------------------------------
+    |
+    | ConsumptionPreviewModal is read-only from the Recipes page's
+    | perspective, therefore menu/variant/add-on metadata can safely refresh.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshPreviewMenuItem =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !previewMenuItem
+                ) {
+                    return;
+                }
+
+                const menuItemId =
+                    previewMenuItem.id;
+
+                try {
+                    const current =
+                        await getRecipeMenuItem(
+                            menuItemId
+                        );
+
+                    setPreviewMenuItem(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                menuItemId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime consumption preview menu data.",
+                        caught
+                    );
+                }
+            },
+            [
+                previewMenuItem,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Editor Catalog From Realtime
+    |--------------------------------------------------------------------------
+    |
+    | Ingredient and unit changes can make the recipe editor's lookup catalog
+    | stale.
+    |
+    | If no editor is open, invalidate the cache and defer the API call until
+    | the next editor opening.
+    |
+    | If an editor is already open, refresh only the ingredient/unit catalog.
+    | The recipe currently being edited is deliberately NOT replaced because
+    | doing so could destroy unsaved manager input.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshEditorCatalogFromRealtime =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !canManage
+                ) {
+                    return;
+                }
+
+                if (
+                    !editor
+                ) {
+                    setEditorCatalogLoaded(
+                        false
+                    );
+
+                    return;
+                }
+
+                try {
+                    await loadEditorCatalog();
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime recipe editor catalog.",
+                        caught
+                    );
+                }
+            },
+            [
+                canManage,
+                editor,
+                loadEditorCatalog,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Manual Refresh
     |--------------------------------------------------------------------------
     */
 
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
@@ -610,10 +885,45 @@ export default function RecipesPage() {
             );
 
             try {
-                await Promise.all([
-                    loadMenuItems(),
-                    loadAddons(),
-                ]);
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadMenuItems(),
+                        loadAddons(),
+                        refreshSelectedMenuItem(),
+                        refreshPreviewMenuItem(),
+                    ];
+
+                /*
+                 * If editor catalogs are already in use, refresh them as part
+                 * of the manual refresh as well.
+                 */
+                if (
+                    canManage
+                    &&
+                    (
+                        editor
+                        ||
+                        editorCatalogLoaded
+                    )
+                ) {
+                    jobs.push(
+                        loadEditorCatalog()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                setError(
+                    errorMessage(
+                        caught
+                    )
+                );
             } finally {
                 setRefreshing(
                     false
@@ -629,8 +939,9 @@ export default function RecipesPage() {
 
     const openMenuOptions =
         async (
-            item: MenuItem
-        ) => {
+            item:
+                MenuItem
+        ): Promise<void> => {
             if (
                 opening
             ) {
@@ -671,12 +982,12 @@ export default function RecipesPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Open Editors
+    | Prepare Editor
     |--------------------------------------------------------------------------
     */
 
     const prepareEditor =
-        async () => {
+        async (): Promise<void> => {
             if (
                 canManage
             ) {
@@ -684,10 +995,17 @@ export default function RecipesPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Base Recipe
+    |--------------------------------------------------------------------------
+    */
+
     const openBaseRecipe =
         async (
-            item: MenuItem
-        ) => {
+            item:
+                MenuItem
+        ): Promise<void> => {
             setOpening(
                 true
             );
@@ -704,6 +1022,7 @@ export default function RecipesPage() {
                         getMenuRecipe(
                             item.id
                         ),
+
                         prepareEditor(),
                     ]);
 
@@ -740,11 +1059,20 @@ export default function RecipesPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Variant Recipe
+    |--------------------------------------------------------------------------
+    */
+
     const openVariantRecipe =
         async (
-            item: MenuItem,
-            variant: MenuItemVariant
-        ) => {
+            item:
+                MenuItem,
+
+            variant:
+                MenuItemVariant
+        ): Promise<void> => {
             setOpening(
                 true
             );
@@ -762,6 +1090,7 @@ export default function RecipesPage() {
                             item.id,
                             variant.id
                         ),
+
                         prepareEditor(),
                     ]);
 
@@ -797,10 +1126,17 @@ export default function RecipesPage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Add-on Recipe
+    |--------------------------------------------------------------------------
+    */
+
     const openAddonRecipe =
         async (
-            addon: MenuAddon
-        ) => {
+            addon:
+                MenuAddon
+        ): Promise<void> => {
             setOpening(
                 true
             );
@@ -817,6 +1153,7 @@ export default function RecipesPage() {
                         getAddonRecipe(
                             addon.id
                         ),
+
                         prepareEditor(),
                     ]);
 
@@ -853,8 +1190,9 @@ export default function RecipesPage() {
 
     const openPreview =
         async (
-            item: MenuItem
-        ) => {
+            item:
+                MenuItem
+        ): Promise<void> => {
             setOpening(
                 true
             );
@@ -867,10 +1205,13 @@ export default function RecipesPage() {
                 const detailed =
                     item.addons
                         .length
-                        > 0
-                        || item.variants
+                        >
+                        0
+                        ||
+                        item.variants
                             .length
-                        > 0
+                        >
+                        0
                         ? item
                         : await getRecipeMenuItem(
                             item.id
@@ -900,13 +1241,14 @@ export default function RecipesPage() {
 
     /*
     |--------------------------------------------------------------------------
-    | Editor Actions
+    | Save Current Recipe
     |--------------------------------------------------------------------------
     */
 
     const saveCurrentRecipe =
         async (
-            payload: SaveRecipePayload
+            payload:
+                SaveRecipePayload
         ): Promise<RecipeResponse> => {
             if (
                 !editor
@@ -921,7 +1263,8 @@ export default function RecipesPage() {
 
             if (
                 target.kind
-                === "ADDON"
+                ===
+                "ADDON"
             ) {
                 const result =
                     await saveAddonRecipe(
@@ -929,6 +1272,9 @@ export default function RecipesPage() {
                         payload
                     );
 
+                /*
+                 * Saving an add-on recipe can change consumes_inventory.
+                 */
                 void loadAddons();
 
                 return result;
@@ -936,7 +1282,8 @@ export default function RecipesPage() {
 
             if (
                 target.kind
-                === "VARIANT"
+                ===
+                "VARIANT"
             ) {
                 return saveVariantRecipe(
                     target.menuItem.id,
@@ -950,6 +1297,12 @@ export default function RecipesPage() {
                 payload
             );
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Clear Current Recipe
+    |--------------------------------------------------------------------------
+    */
 
     const clearCurrentRecipe =
         async (): Promise<RecipeResponse> => {
@@ -966,7 +1319,8 @@ export default function RecipesPage() {
 
             if (
                 target.kind
-                === "ADDON"
+                ===
+                "ADDON"
             ) {
                 const result =
                     await clearAddonRecipe(
@@ -975,8 +1329,7 @@ export default function RecipesPage() {
 
                 /*
                  * Saving / clearing an add-on recipe also changes
-                 * consumes_inventory on the backend. Refresh the
-                 * add-on catalog after the operation.
+                 * consumes_inventory on the backend.
                  */
                 void loadAddons();
 
@@ -985,7 +1338,8 @@ export default function RecipesPage() {
 
             if (
                 target.kind
-                === "VARIANT"
+                ===
+                "VARIANT"
             ) {
                 return clearVariantRecipe(
                     target.menuItem.id,
@@ -1000,12 +1354,88 @@ export default function RecipesPage() {
 
     /*
     |--------------------------------------------------------------------------
+    | Menu + Recipe Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | `menu`
+    |   Menu item, variant and add-on metadata changed.
+    |
+    | `recipes`
+    |   Recipe components changed.
+    |
+    | Laravel REST remains authoritative. Reverb simply tells this screen
+    | that something relevant changed.
+    |
+    | Important:
+    |
+    | We deliberately DO NOT replace `editor.recipe` when an editor is open.
+    | That could overwrite unsaved recipe quantities currently being entered
+    | by a manager.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "menu",
+            "recipes",
+        ],
+        async () => {
+            try {
+                await Promise.all([
+                    loadMenuItems(),
+                    loadAddons(),
+                    refreshSelectedMenuItem(),
+                    refreshPreviewMenuItem(),
+                ]);
+            } catch (
+            caught
+            ) {
+                console.error(
+                    "Unable to reconcile realtime recipe/menu data.",
+                    caught
+                );
+            }
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inventory Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Recipe editor ingredient and unit choices come from the inventory
+    | domain.
+    |
+    | If the editor is closed, only invalidate the cached catalog.
+    |
+    | If the editor is open, refresh its supporting lookup data without
+    | replacing the recipe being edited.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "inventory",
+        ],
+        async () => {
+            await refreshEditorCatalogFromRealtime();
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
     | Render
     |--------------------------------------------------------------------------
     */
 
     return (
         <div className="recipes-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="recipes-page-header">
                 <div>
                     <div className="recipes-eyebrow">
@@ -1029,7 +1459,9 @@ export default function RecipesPage() {
                         () =>
                             void refresh()
                     }
-                    disabled={refreshing}
+                    disabled={
+                        refreshing
+                    }
                 >
                     {
                         refreshing
@@ -1039,14 +1471,28 @@ export default function RecipesPage() {
                 </button>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="recipes-alert recipes-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Access Information
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 !canManage
@@ -1057,6 +1503,12 @@ export default function RecipesPage() {
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
 
             <section className="recipes-summary-grid">
                 <article className="recipes-summary-card">
@@ -1114,12 +1566,19 @@ export default function RecipesPage() {
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Tabs
+            |--------------------------------------------------------------------------
+            */}
+
             <div className="recipes-tabs">
                 <button
                     type="button"
                     className={
                         activeTab
-                            === "MENU"
+                            ===
+                            "MENU"
                             ? "recipes-tab recipes-tab-active"
                             : "recipes-tab"
                     }
@@ -1137,7 +1596,8 @@ export default function RecipesPage() {
                     type="button"
                     className={
                         activeTab
-                            === "ADDONS"
+                            ===
+                            "ADDONS"
                             ? "recipes-tab recipes-tab-active"
                             : "recipes-tab"
                     }
@@ -1152,9 +1612,16 @@ export default function RecipesPage() {
                 </button>
             </div>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Menu Recipes
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 activeTab
-                    === "MENU"
+                    ===
+                    "MENU"
                     ? (
                         <section className="recipes-panel">
                             <div className="recipes-panel-header">
@@ -1164,18 +1631,22 @@ export default function RecipesPage() {
                                     </h2>
 
                                     <p>
-                                        Open a menu item to configure its base recipe, variant recipes
-                                        or run a consumption preview.
+                                        Open a menu item to configure its base recipe,
+                                        variant recipes or run a consumption preview.
                                     </p>
                                 </div>
 
                                 <form
                                     className="recipes-search"
-                                    onSubmit={submitSearch}
+                                    onSubmit={
+                                        submitSearch
+                                    }
                                 >
                                     <input
                                         type="search"
-                                        value={searchDraft}
+                                        value={
+                                            searchDraft
+                                        }
                                         placeholder="Search menu item or SKU..."
                                         onChange={
                                             (
@@ -1202,7 +1673,9 @@ export default function RecipesPage() {
                                             <button
                                                 type="button"
                                                 className="recipes-button recipes-button-secondary"
-                                                onClick={resetSearch}
+                                                onClick={
+                                                    resetSearch
+                                                }
                                             >
                                                 Clear
                                             </button>
@@ -1219,7 +1692,8 @@ export default function RecipesPage() {
                                         </div>
                                     )
                                     : menuItems.length
-                                        === 0
+                                        ===
+                                        0
                                         ? (
                                             <div className="recipes-empty">
                                                 <strong>
@@ -1239,7 +1713,9 @@ export default function RecipesPage() {
                                                             item
                                                         ) => (
                                                             <article
-                                                                key={item.id}
+                                                                key={
+                                                                    item.id
+                                                                }
                                                                 className="recipes-item-card"
                                                             >
                                                                 <div className="recipes-item-main">
@@ -1247,7 +1723,9 @@ export default function RecipesPage() {
                                                                         item.photo_url
                                                                             ? (
                                                                                 <img
-                                                                                    src={item.photo_url}
+                                                                                    src={
+                                                                                        item.photo_url
+                                                                                    }
                                                                                     alt=""
                                                                                     className="recipes-item-photo"
                                                                                 />
@@ -1300,7 +1778,8 @@ export default function RecipesPage() {
                                                                             <span>
                                                                                 {
                                                                                     item.sku
-                                                                                    || "No SKU"
+                                                                                    ||
+                                                                                    "No SKU"
                                                                                 }
                                                                             </span>
 
@@ -1308,7 +1787,8 @@ export default function RecipesPage() {
                                                                                 {
                                                                                     item.category
                                                                                         ?.name
-                                                                                    || "Uncategorised"
+                                                                                    ||
+                                                                                    "Uncategorised"
                                                                                 }
                                                                             </span>
 
@@ -1341,7 +1821,9 @@ export default function RecipesPage() {
                                                                                 item
                                                                             )
                                                                     }
-                                                                    disabled={opening}
+                                                                    disabled={
+                                                                        opening
+                                                                    }
                                                                 >
                                                                     Open Recipes
                                                                 </button>
@@ -1355,7 +1837,8 @@ export default function RecipesPage() {
 
                             {
                                 menuPagination.last_page
-                                > 1
+                                >
+                                1
                                 && (
                                     <div className="recipes-pagination">
                                         <button
@@ -1363,9 +1846,11 @@ export default function RecipesPage() {
                                             className="recipes-button recipes-button-secondary"
                                             disabled={
                                                 menuLoading
-                                                || menuPagination
+                                                ||
+                                                menuPagination
                                                     .current_page
-                                                <= 1
+                                                <=
+                                                1
                                             }
                                             onClick={
                                                 () =>
@@ -1376,7 +1861,8 @@ export default function RecipesPage() {
                                                             Math.max(
                                                                 1,
                                                                 current
-                                                                - 1
+                                                                -
+                                                                1
                                                             )
                                                     )
                                             }
@@ -1401,9 +1887,11 @@ export default function RecipesPage() {
                                             className="recipes-button recipes-button-secondary"
                                             disabled={
                                                 menuLoading
-                                                || menuPagination
+                                                ||
+                                                menuPagination
                                                     .current_page
-                                                >= menuPagination
+                                                >=
+                                                menuPagination
                                                     .last_page
                                             }
                                             onClick={
@@ -1413,7 +1901,8 @@ export default function RecipesPage() {
                                                             current
                                                         ) =>
                                                             current
-                                                            + 1
+                                                            +
+                                                            1
                                                     )
                                             }
                                         >
@@ -1425,6 +1914,12 @@ export default function RecipesPage() {
                         </section>
                     )
                     : (
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Add-on Recipes
+                        |--------------------------------------------------------------------------
+                        */
+
                         <section className="recipes-panel">
                             <div className="recipes-panel-header">
                                 <div>
@@ -1441,7 +1936,9 @@ export default function RecipesPage() {
                                 <div className="recipes-search recipes-search-single">
                                     <input
                                         type="search"
-                                        value={addonSearch}
+                                        value={
+                                            addonSearch
+                                        }
                                         placeholder="Search add-on or SKU..."
                                         onChange={
                                             (
@@ -1465,7 +1962,8 @@ export default function RecipesPage() {
                                         </div>
                                     )
                                     : filteredAddons.length
-                                        === 0
+                                        ===
+                                        0
                                         ? (
                                             <div className="recipes-empty">
                                                 <strong>
@@ -1481,7 +1979,9 @@ export default function RecipesPage() {
                                                             addon
                                                         ) => (
                                                             <article
-                                                                key={addon.id}
+                                                                key={
+                                                                    addon.id
+                                                                }
                                                                 className="recipes-addon-card"
                                                             >
                                                                 <div>
@@ -1513,7 +2013,8 @@ export default function RecipesPage() {
                                                                         <span>
                                                                             {
                                                                                 addon.sku
-                                                                                || "No SKU"
+                                                                                ||
+                                                                                "No SKU"
                                                                             }
                                                                         </span>
 
@@ -1552,7 +2053,9 @@ export default function RecipesPage() {
                                                                                 addon
                                                                             )
                                                                     }
-                                                                    disabled={opening}
+                                                                    disabled={
+                                                                        opening
+                                                                    }
                                                                 >
                                                                     Open Recipe
                                                                 </button>
@@ -1567,6 +2070,12 @@ export default function RecipesPage() {
                     )
             }
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Recipe Target Modal
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 selectedMenuItem
                 && (
@@ -1578,7 +2087,9 @@ export default function RecipesPage() {
                             className="recipes-modal recipes-target-modal"
                             role="dialog"
                             aria-modal="true"
-                            aria-label={`Recipes for ${selectedMenuItem.name}`}
+                            aria-label={
+                                `Recipes for ${selectedMenuItem.name}`
+                            }
                         >
                             <div className="recipes-modal-header">
                                 <div>
@@ -1593,8 +2104,8 @@ export default function RecipesPage() {
                                     </h2>
 
                                     <p>
-                                        Choose the exact recipe definition you want to view or
-                                        manage.
+                                        Choose the exact recipe definition you want to
+                                        view or manage.
                                     </p>
                                 </div>
 
@@ -1607,7 +2118,9 @@ export default function RecipesPage() {
                                                 null
                                             )
                                     }
-                                    disabled={opening}
+                                    disabled={
+                                        opening
+                                    }
                                     aria-label="Close recipe target selector"
                                 >
                                     ×
@@ -1625,7 +2138,9 @@ export default function RecipesPage() {
                                                     selectedMenuItem
                                                 )
                                         }
-                                        disabled={opening}
+                                        disabled={
+                                            opening
+                                        }
                                     >
                                         <span>
                                             Base Recipe
@@ -1654,7 +2169,9 @@ export default function RecipesPage() {
                                                     variant
                                                 ) => (
                                                     <button
-                                                        key={variant.id}
+                                                        key={
+                                                            variant.id
+                                                        }
                                                         type="button"
                                                         className="recipes-target-card"
                                                         onClick={
@@ -1664,7 +2181,9 @@ export default function RecipesPage() {
                                                                     variant
                                                                 )
                                                         }
-                                                        disabled={opening}
+                                                        disabled={
+                                                            opening
+                                                        }
                                                     >
                                                         <span>
                                                             Variant Recipe
@@ -1705,7 +2224,9 @@ export default function RecipesPage() {
                                                     null
                                                 )
                                         }
-                                        disabled={opening}
+                                        disabled={
+                                            opening
+                                        }
                                     >
                                         Close
                                     </button>
@@ -1719,7 +2240,9 @@ export default function RecipesPage() {
                                                     selectedMenuItem
                                                 )
                                         }
-                                        disabled={opening}
+                                        disabled={
+                                            opening
+                                        }
                                     >
                                         Consumption Preview
                                     </button>
@@ -1730,32 +2253,64 @@ export default function RecipesPage() {
                 )
             }
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Recipe Editor
+            |--------------------------------------------------------------------------
+            |
+            | Realtime events never replace `editor.recipe` while this modal
+            | is open. This protects unsaved quantities/rows.
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 editor
                 && (
                     <RecipeEditorModal
-                        target={editor.target}
-                        recipe={editor.recipe}
-                        ingredients={ingredients}
-                        units={units}
-                        canManage={canManage}
+                        target={
+                            editor.target
+                        }
+                        recipe={
+                            editor.recipe
+                        }
+                        ingredients={
+                            ingredients
+                        }
+                        units={
+                            units
+                        }
+                        canManage={
+                            canManage
+                        }
                         onClose={
                             () =>
                                 setEditor(
                                     null
                                 )
                         }
-                        onSave={saveCurrentRecipe}
-                        onClear={clearCurrentRecipe}
+                        onSave={
+                            saveCurrentRecipe
+                        }
+                        onClear={
+                            clearCurrentRecipe
+                        }
                     />
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Consumption Preview
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 previewMenuItem
                 && (
                     <ConsumptionPreviewModal
-                        menuItem={previewMenuItem}
+                        menuItem={
+                            previewMenuItem
+                        }
                         onClose={
                             () =>
                                 setPreviewMenuItem(

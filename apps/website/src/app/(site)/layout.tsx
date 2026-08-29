@@ -4,6 +4,9 @@ import SiteFooter
 import SiteHeader
     from "../../components/site/SiteHeader";
 
+import PublicRealtimeBridge
+    from "../../components/realtime/PublicRealtimeBridge";
+
 import {
     DEFAULT_RESTAURANT_SETTINGS,
     getRestaurantSettings,
@@ -26,9 +29,9 @@ export default async function SiteLayout({
             );
 
     return (
-        <div
-            className="site-root"
-        >
+        <div className="site-root">
+            <PublicRealtimeBridge />
+
             <SiteHeader
                 settings={
                     settings

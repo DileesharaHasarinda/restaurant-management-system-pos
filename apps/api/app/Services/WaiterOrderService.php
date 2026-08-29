@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\OrderRealtimeUpdated;
 use App\Exceptions\WaiterOrderException;
 use App\Models\Order;
 use App\Models\OrderAdditionSubmission;
@@ -13,6 +14,7 @@ use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 final class WaiterOrderService
 {
@@ -79,156 +81,157 @@ final class WaiterOrderService
             $sessionResult['session'];
 
         try {
-            return DB::transaction(
-                function () use (
-                    $actor,
-                    $table,
-                    $session,
-                    $data,
-                    $submissionHash
-                ): array {
-                    /** @var TableSession $lockedSession */
-                    $lockedSession =
-                        TableSession::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $session->id
+            $result =
+                DB::transaction(
+                    function () use (
+                        $actor,
+                        $table,
+                        $session,
+                        $data,
+                        $submissionHash
+                    ): array {
+                        /** @var TableSession $lockedSession */
+                        $lockedSession =
+                            TableSession::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $session->id
+                            );
+
+                        if (
+                            $lockedSession->status
+                            !== TableSession::STATUS_OPEN
+                        ) {
+                            throw new WaiterOrderException(
+                                message: 'This table session is no longer open.',
+
+                                errorCode: 'TABLE_SESSION_NOT_OPEN'
+                            );
+                        }
+
+                        /** @var RestaurantTable $lockedTable */
+                        $lockedTable =
+                            RestaurantTable::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $table->id
+                            );
+
+                        $this->validateTable(
+                            $lockedTable
                         );
 
-                    if (
-                        $lockedSession->status
-                        !== TableSession::STATUS_OPEN
-                    ) {
-                        throw new WaiterOrderException(
-                            message: 'This table session is no longer open.',
+                        if (
+                            (int)
+                            $lockedSession->table_id
+                            !==
+                            (int)
+                            $lockedTable->id
+                        ) {
+                            throw new WaiterOrderException(
+                                message: 'The selected table does not match the active table session.',
 
-                            errorCode: 'TABLE_SESSION_NOT_OPEN'
-                        );
-                    }
+                                errorCode: 'TABLE_SESSION_MISMATCH'
+                            );
+                        }
 
-                    /** @var RestaurantTable $lockedTable */
-                    $lockedTable =
-                        RestaurantTable::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $table->id
-                        );
-
-                    $this->validateTable(
-                        $lockedTable
-                    );
-
-                    if (
-                        (int)
-                        $lockedSession->table_id
-                        !==
-                        (int)
-                        $lockedTable->id
-                    ) {
-                        throw new WaiterOrderException(
-                            message: 'The selected table does not match the active table session.',
-
-                            errorCode: 'TABLE_SESSION_MISMATCH'
-                        );
-                    }
-
-                    /*
+                        /*
                      * Network/double-tap duplicate
                      * check inside transaction.
                      */
-                    $existing =
-                        Order::query()
-                        ->where(
-                            'client_order_id',
-                            $data['client_order_id']
-                        )
-                        ->first();
+                        $existing =
+                            Order::query()
+                            ->where(
+                                'client_order_id',
+                                $data['client_order_id']
+                            )
+                            ->first();
 
-                    if ($existing) {
-                        return [
-                            'order' =>
-                            $this
-                                ->validateExistingFirstOrder(
-                                    order: $existing,
-                                    actor: $actor,
-                                    table: $lockedTable,
-                                    submissionHash: $submissionHash
-                                ),
+                        if ($existing) {
+                            return [
+                                'order' =>
+                                $this
+                                    ->validateExistingFirstOrder(
+                                        order: $existing,
+                                        actor: $actor,
+                                        table: $lockedTable,
+                                        submissionHash: $submissionHash
+                                    ),
 
-                            'created' =>
-                            false,
-                        ];
-                    }
+                                'created' =>
+                                false,
+                            ];
+                        }
 
-                    /*
+                        /*
                      * A table has one active waiter
                      * order. Additional items must
                      * append to it.
                      */
-                    $activeWaiterOrder =
-                        Order::query()
-                        ->where(
-                            'table_session_id',
-                            $lockedSession->id
-                        )
-                        ->where(
-                            'order_source',
-                            Order::SOURCE_WAITER
-                        )
-                        ->whereNotIn(
-                            'status',
-                            [
-                                Order::STATUS_COMPLETED,
-                                Order::STATUS_CANCELLED,
-                                Order::STATUS_REJECTED,
-                            ]
-                        )
-                        ->lockForUpdate()
-                        ->latest('id')
-                        ->first();
+                        $activeWaiterOrder =
+                            Order::query()
+                            ->where(
+                                'table_session_id',
+                                $lockedSession->id
+                            )
+                            ->where(
+                                'order_source',
+                                Order::SOURCE_WAITER
+                            )
+                            ->whereNotIn(
+                                'status',
+                                [
+                                    Order::STATUS_COMPLETED,
+                                    Order::STATUS_CANCELLED,
+                                    Order::STATUS_REJECTED,
+                                ]
+                            )
+                            ->lockForUpdate()
+                            ->latest('id')
+                            ->first();
 
-                    if ($activeWaiterOrder) {
-                        throw new WaiterOrderException(
-                            message: 'This table already has an active waiter order. Add the new items to the existing order.',
+                        if ($activeWaiterOrder) {
+                            throw new WaiterOrderException(
+                                message: 'This table already has an active waiter order. Add the new items to the existing order.',
 
-                            errorCode: 'WAITER_ORDER_ALREADY_EXISTS',
+                                errorCode: 'WAITER_ORDER_ALREADY_EXISTS',
 
-                            status: 409
-                        );
-                    }
+                                status: 409
+                            );
+                        }
 
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Use Existing Phase 15 Cart Engine
                     |--------------------------------------------------------------------------
                     */
 
-                    $prepared =
+                        $prepared =
+                            $this->cartService
+                            ->prepareDineInCartForStaff(
+                                $data['items']
+                            );
+
                         $this->cartService
-                        ->prepareDineInCartForStaff(
-                            $data['items']
-                        );
+                            ->validatePreparedCartStock(
+                                $prepared['requirements']
+                            );
 
-                    $this->cartService
-                        ->validatePreparedCartStock(
-                            $prepared['requirements']
-                        );
+                        $sequence =
+                            (
+                                (int)
+                                Order::query()
+                                    ->where(
+                                        'table_session_id',
+                                        $lockedSession->id
+                                    )
+                                    ->max(
+                                        'session_sequence'
+                                    )
+                            )
+                            + 1;
 
-                    $sequence =
-                        (
-                            (int)
-                            Order::query()
-                                ->where(
-                                    'table_session_id',
-                                    $lockedSession->id
-                                )
-                                ->max(
-                                    'session_sequence'
-                                )
-                        )
-                        + 1;
-
-                    /*
+                        /*
                     |--------------------------------------------------------------------------
                     | Waiter Orders Are Trusted Staff Orders
                     |--------------------------------------------------------------------------
@@ -239,171 +242,178 @@ final class WaiterOrderService
                     |
                     */
 
-                    $order =
-                        Order::query()
-                        ->create([
-                            'order_number' =>
-                            'TMP-' .
-                                Str::upper(
-                                    (string)
-                                    Str::ulid()
-                                ),
-
-                            'client_order_id' =>
-                            $data['client_order_id'],
-
-                            'submission_hash' =>
-                            $submissionHash,
-
-                            'business_day_id' =>
-                            $lockedSession
-                                ->business_day_id,
-
-                            'table_session_id' =>
-                            $lockedSession->id,
-
-                            'table_id' =>
-                            $lockedTable->id,
-
-                            'order_type' =>
-                            Order::TYPE_DINE_IN,
-
-                            'order_source' =>
-                            Order::SOURCE_WAITER,
-
-                            'session_sequence' =>
-                            $sequence,
-
-                            'table_name_snapshot' =>
-                            $lockedTable->name,
-
-                            'status' =>
-                            Order::STATUS_CONFIRMED,
-
-                            'subtotal' =>
-                            $prepared['subtotal'],
-
-                            'discount_total' =>
-                            0,
-
-                            'tax_total' =>
-                            0,
-
-                            'service_charge_total' =>
-                            0,
-
-                            'grand_total' =>
-                            $prepared['subtotal'],
-
-                            'estimated_cost_total' =>
-                            $prepared['estimated_cost_total'],
-
-                            'created_by' =>
-                            $actor->id,
-
-                            'confirmed_by' =>
-                            $actor->id,
-
-                            'confirmed_at' =>
-                            now(),
-                        ]);
-
-                    $order->order_number =
-                        sprintf(
-                            'ORD-%s-%06d',
-                            now()->format(
-                                'ymd'
-                            ),
-                            $order->id
-                        );
-
-                    $order->save();
-
-                    $this->cartService
-                        ->savePreparedOrderItems(
-                            order: $order,
-                            lines: $prepared['lines']
-                        );
-
-                    OrderStatusHistory::query()
-                        ->create([
-                            'order_id' =>
-                            $order->id,
-
-                            'from_status' =>
-                            null,
-
-                            'to_status' =>
-                            Order::STATUS_CONFIRMED,
-
-                            'changed_by' =>
-                            $actor->id,
-
-                            'notes' =>
-                            'Order created by waiter.',
-
-                            'changed_at' =>
-                            now(),
-                        ]);
-
-                    /*
-                     * A newly changed order makes an
-                     * old bill request stale.
-                     */
-                    $this->clearBillRequest(
-                        $lockedSession
-                    );
-
-                    $lockedSession
-                        ->last_activity_at =
-                        now();
-
-                    $lockedSession->save();
-
-                    $this->auditLogger
-                        ->record(
-                            action: 'WAITER_ORDER_CREATED',
-
-                            entityType: 'order',
-
-                            entityId: $order->id,
-
-                            newValues: [
+                        $order =
+                            Order::query()
+                            ->create([
                                 'order_number' =>
-                                $order->order_number,
+                                'TMP-' .
+                                    Str::upper(
+                                        (string)
+                                        Str::ulid()
+                                    ),
 
-                                'status' =>
-                                $order->status,
+                                'client_order_id' =>
+                                $data['client_order_id'],
 
-                                'grand_total' =>
-                                (float)
-                                $order->grand_total,
-                            ],
+                                'submission_hash' =>
+                                $submissionHash,
 
-                            metadata: [
-                                'table_id' =>
-                                $lockedTable->id,
+                                'business_day_id' =>
+                                $lockedSession
+                                    ->business_day_id,
 
                                 'table_session_id' =>
                                 $lockedSession->id,
-                            ],
 
-                            userId: $actor->id
+                                'table_id' =>
+                                $lockedTable->id,
+
+                                'order_type' =>
+                                Order::TYPE_DINE_IN,
+
+                                'order_source' =>
+                                Order::SOURCE_WAITER,
+
+                                'session_sequence' =>
+                                $sequence,
+
+                                'table_name_snapshot' =>
+                                $lockedTable->name,
+
+                                'status' =>
+                                Order::STATUS_CONFIRMED,
+
+                                'subtotal' =>
+                                $prepared['subtotal'],
+
+                                'discount_total' =>
+                                0,
+
+                                'tax_total' =>
+                                0,
+
+                                'service_charge_total' =>
+                                0,
+
+                                'grand_total' =>
+                                $prepared['subtotal'],
+
+                                'estimated_cost_total' =>
+                                $prepared['estimated_cost_total'],
+
+                                'created_by' =>
+                                $actor->id,
+
+                                'confirmed_by' =>
+                                $actor->id,
+
+                                'confirmed_at' =>
+                                now(),
+                            ]);
+
+                        $order->order_number =
+                            sprintf(
+                                'ORD-%s-%06d',
+                                now()->format(
+                                    'ymd'
+                                ),
+                                $order->id
+                            );
+
+                        $order->save();
+
+                        $this->cartService
+                            ->savePreparedOrderItems(
+                                order: $order,
+                                lines: $prepared['lines']
+                            );
+
+                        OrderStatusHistory::query()
+                            ->create([
+                                'order_id' =>
+                                $order->id,
+
+                                'from_status' =>
+                                null,
+
+                                'to_status' =>
+                                Order::STATUS_CONFIRMED,
+
+                                'changed_by' =>
+                                $actor->id,
+
+                                'notes' =>
+                                'Order created by waiter.',
+
+                                'changed_at' =>
+                                now(),
+                            ]);
+
+                        /*
+                     * A newly changed order makes an
+                     * old bill request stale.
+                     */
+                        $this->clearBillRequest(
+                            $lockedSession
                         );
 
-                    return [
-                        'order' =>
-                        $this->cartService
-                            ->reloadOrderWithItems(
-                                $order
-                            ),
+                        $lockedSession
+                            ->last_activity_at =
+                            now();
 
-                        'created' =>
-                        true,
-                    ];
-                },
-                3
+                        $lockedSession->save();
+
+                        $this->auditLogger
+                            ->record(
+                                action: 'WAITER_ORDER_CREATED',
+
+                                entityType: 'order',
+
+                                entityId: $order->id,
+
+                                newValues: [
+                                    'order_number' =>
+                                    $order->order_number,
+
+                                    'status' =>
+                                    $order->status,
+
+                                    'grand_total' =>
+                                    (float)
+                                    $order->grand_total,
+                                ],
+
+                                metadata: [
+                                    'table_id' =>
+                                    $lockedTable->id,
+
+                                    'table_session_id' =>
+                                    $lockedSession->id,
+                                ],
+
+                                userId: $actor->id
+                            );
+
+                        return [
+                            'order' =>
+                            $this->cartService
+                                ->reloadOrderWithItems(
+                                    $order
+                                ),
+
+                            'created' =>
+                            true,
+                        ];
+                    },
+                    3
+                );
+
+            $this->broadcastOrderRealtime(
+                result: $result,
+                action: 'CREATED'
             );
+
+            return $result;
         } catch (
             QueryException $exception
         ) {
@@ -481,118 +491,119 @@ final class WaiterOrderService
         }
 
         try {
-            return DB::transaction(
-                function () use (
-                    $actor,
-                    $order,
-                    $data,
-                    $submissionHash
-                ): array {
-                    /** @var Order $lockedOrder */
-                    $lockedOrder =
-                        Order::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $order->id
-                        );
+            $result =
+                DB::transaction(
+                    function () use (
+                        $actor,
+                        $order,
+                        $data,
+                        $submissionHash
+                    ): array {
+                        /** @var Order $lockedOrder */
+                        $lockedOrder =
+                            Order::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $order->id
+                            );
 
-                    $this->validateWaiterOrder(
-                        $lockedOrder
-                    );
-
-                    /** @var TableSession $session */
-                    $session =
-                        TableSession::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
+                        $this->validateWaiterOrder(
                             $lockedOrder
-                                ->table_session_id
                         );
 
-                    if (
-                        $session->status
-                        !== TableSession::STATUS_OPEN
-                    ) {
-                        throw new WaiterOrderException(
-                            message: 'This table session is no longer open.',
+                        /** @var TableSession $session */
+                        $session =
+                            TableSession::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $lockedOrder
+                                    ->table_session_id
+                            );
 
-                            errorCode: 'TABLE_SESSION_NOT_OPEN'
+                        if (
+                            $session->status
+                            !== TableSession::STATUS_OPEN
+                        ) {
+                            throw new WaiterOrderException(
+                                message: 'This table session is no longer open.',
+
+                                errorCode: 'TABLE_SESSION_NOT_OPEN'
+                            );
+                        }
+
+                        /** @var RestaurantTable $table */
+                        $table =
+                            RestaurantTable::query()
+                            ->lockForUpdate()
+                            ->findOrFail(
+                                $lockedOrder
+                                    ->table_id
+                            );
+
+                        $this->validateTable(
+                            $table
                         );
-                    }
 
-                    /** @var RestaurantTable $table */
-                    $table =
-                        RestaurantTable::query()
-                        ->lockForUpdate()
-                        ->findOrFail(
-                            $lockedOrder
-                                ->table_id
-                        );
+                        $existingSubmission =
+                            OrderAdditionSubmission::query()
+                            ->where(
+                                'client_submission_id',
+                                $data['client_submission_id']
+                            )
+                            ->first();
 
-                    $this->validateTable(
-                        $table
-                    );
+                        if ($existingSubmission) {
+                            return [
+                                'order' =>
+                                $this
+                                    ->validateExistingAddition(
+                                        submission: $existingSubmission,
 
-                    $existingSubmission =
-                        OrderAdditionSubmission::query()
-                        ->where(
-                            'client_submission_id',
-                            $data['client_submission_id']
-                        )
-                        ->first();
+                                        order: $lockedOrder,
 
-                    if ($existingSubmission) {
-                        return [
-                            'order' =>
-                            $this
-                                ->validateExistingAddition(
-                                    submission: $existingSubmission,
+                                        submissionHash: $submissionHash
+                                    ),
 
-                                    order: $lockedOrder,
+                                'created' =>
+                                false,
+                            ];
+                        }
 
-                                    submissionHash: $submissionHash
-                                ),
+                        $prepared =
+                            $this->cartService
+                            ->prepareDineInCartForStaff(
+                                $data['items']
+                            );
 
-                            'created' =>
-                            false,
-                        ];
-                    }
-
-                    $prepared =
                         $this->cartService
-                        ->prepareDineInCartForStaff(
-                            $data['items']
-                        );
+                            ->validatePreparedCartStock(
+                                $prepared['requirements']
+                            );
 
-                    $this->cartService
-                        ->validatePreparedCartStock(
-                            $prepared['requirements']
-                        );
+                        OrderAdditionSubmission::query()
+                            ->create([
+                                'order_id' =>
+                                $lockedOrder->id,
 
-                    OrderAdditionSubmission::query()
-                        ->create([
-                            'order_id' =>
-                            $lockedOrder->id,
+                                'client_submission_id' =>
+                                $data['client_submission_id'],
 
-                            'client_submission_id' =>
-                            $data['client_submission_id'],
+                                'submission_hash' =>
+                                $submissionHash,
+                            ]);
 
-                            'submission_hash' =>
-                            $submissionHash,
-                        ]);
+                        $this->cartService
+                            ->savePreparedOrderItems(
+                                order: $lockedOrder,
+                                lines: $prepared['lines']
+                            );
 
-                    $this->cartService
-                        ->savePreparedOrderItems(
-                            order: $lockedOrder,
-                            lines: $prepared['lines']
-                        );
+                        $this->cartService
+                            ->recalculatePreparedOrder(
+                                $lockedOrder
+                            );
 
-                    $this->cartService
-                        ->recalculatePreparedOrder(
-                            $lockedOrder
-                        );
-
-                    /*
+                        /*
 |--------------------------------------------------------------------------
 | Phase 17 Lifecycle Re-entry
 |--------------------------------------------------------------------------
@@ -604,74 +615,81 @@ final class WaiterOrderService
 |
 */
 
-                    $lockedOrder =
-                        app(
-                            OrderLifecycleService::class
-                        )
-                        ->reopenForAdditionalItems(
-                            order: $lockedOrder,
+                        $lockedOrder =
+                            app(
+                                OrderLifecycleService::class
+                            )
+                            ->reopenForAdditionalItems(
+                                order: $lockedOrder,
 
-                            actor: $actor,
+                                actor: $actor,
 
-                            source: Order::SOURCE_WAITER
-                        );
+                                source: Order::SOURCE_WAITER
+                            );
 
-                    /*
+                        /*
                      * Additional items invalidate an
                      * earlier bill request.
                      */
-                    $this->clearBillRequest(
-                        $session
-                    );
-
-                    $session->last_activity_at =
-                        now();
-
-                    $session->save();
-
-                    $this->auditLogger
-                        ->record(
-                            action: 'WAITER_ORDER_ITEMS_ADDED',
-
-                            entityType: 'order',
-
-                            entityId: $lockedOrder->id,
-
-                            newValues: [
-                                'grand_total' =>
-                                (float)
-                                $lockedOrder
-                                    ->fresh()
-                                    ->grand_total,
-                            ],
-
-                            metadata: [
-                                'table_id' =>
-                                $table->id,
-
-                                'new_lines' =>
-                                count(
-                                    $prepared['lines']
-                                ),
-                            ],
-
-                            userId: $actor->id
+                        $this->clearBillRequest(
+                            $session
                         );
 
-                    return [
-                        'order' =>
-                        $this->cartService
-                            ->reloadOrderWithItems(
-                                $lockedOrder
-                                    ->fresh()
-                            ),
+                        $session->last_activity_at =
+                            now();
 
-                        'created' =>
-                        true,
-                    ];
-                },
-                3
+                        $session->save();
+
+                        $this->auditLogger
+                            ->record(
+                                action: 'WAITER_ORDER_ITEMS_ADDED',
+
+                                entityType: 'order',
+
+                                entityId: $lockedOrder->id,
+
+                                newValues: [
+                                    'grand_total' =>
+                                    (float)
+                                    $lockedOrder
+                                        ->fresh()
+                                        ->grand_total,
+                                ],
+
+                                metadata: [
+                                    'table_id' =>
+                                    $table->id,
+
+                                    'new_lines' =>
+                                    count(
+                                        $prepared['lines']
+                                    ),
+                                ],
+
+                                userId: $actor->id
+                            );
+
+                        return [
+                            'order' =>
+                            $this->cartService
+                                ->reloadOrderWithItems(
+                                    $lockedOrder
+                                        ->fresh()
+                                ),
+
+                            'created' =>
+                            true,
+                        ];
+                    },
+                    3
+                );
+
+            $this->broadcastOrderRealtime(
+                result: $result,
+                action: 'ITEMS_ADDED'
             );
+
+            return $result;
         } catch (
             QueryException $exception
         ) {
@@ -833,6 +851,37 @@ final class WaiterOrderService
             },
             3
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Real-Time Broadcast Helper
+    |--------------------------------------------------------------------------
+    */
+
+    private function broadcastOrderRealtime(
+        array $result,
+        string $action
+    ): void {
+        if (
+            ! ($result['created'] ?? false)
+            || ! (($result['order'] ?? null) instanceof Order)
+        ) {
+            return;
+        }
+
+        try {
+            OrderRealtimeUpdated::dispatch(
+                $result['order'],
+                $action
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+        }
     }
 
     /*

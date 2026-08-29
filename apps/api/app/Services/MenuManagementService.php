@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\MenuRealtimeUpdated;
 use App\Models\Addon;
 use App\Models\AddonGroup;
 use App\Models\Category;
@@ -493,64 +494,91 @@ final class MenuManagementService
         MenuItem $item,
         array $data
     ): MenuItem {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $item,
-                $data
-            ): MenuItem {
-                $locked =
-                    MenuItem::query()
-                    ->lockForUpdate()
-                    ->findOrFail(
-                        $item->id
-                    );
+        $updated =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $item,
+                    $data
+                ): MenuItem {
+                    $locked =
+                        MenuItem::query()
+                        ->lockForUpdate()
+                        ->findOrFail(
+                            $item->id
+                        );
 
-                $allowed = [
-                    'is_active',
-                    'is_available',
-                    'is_visible_on_website',
-                    'is_visible_on_qr',
-                    'sort_order',
-                ];
+                    $allowed = [
+                        'is_active',
+                        'is_available',
+                        'is_visible_on_website',
+                        'is_visible_on_qr',
+                        'sort_order',
+                    ];
 
-                $old =
-                    $locked->only(
-                        $allowed
-                    );
-
-                $locked->fill(
-                    array_intersect_key(
-                        $data,
-                        array_flip(
+                    $old =
+                        $locked->only(
                             $allowed
+                        );
+
+                    $locked->fill(
+                        array_intersect_key(
+                            $data,
+                            array_flip(
+                                $allowed
+                            )
                         )
-                    )
-                );
+                    );
 
-                $locked->save();
+                    $locked->save();
 
-                $this->auditLogger->record(
-                    action: 'MENU_ITEM_STATE_UPDATED',
+                    $this->auditLogger->record(
+                        action: 'MENU_ITEM_STATE_UPDATED',
 
-                    entityType: 'menu_item',
+                        entityType: 'menu_item',
 
-                    entityId: $locked->id,
+                        entityId: $locked->id,
 
-                    oldValues: $old,
+                        oldValues: $old,
 
-                    newValues: $locked->only(
-                        $allowed
-                    ),
+                        newValues: $locked->only(
+                            $allowed
+                        ),
 
-                    userId: $actor->id
-                );
+                        userId: $actor->id
+                    );
 
-                return $this->loadMenuItem(
-                    $locked
-                );
-            }
-        );
+                    return $this->loadMenuItem(
+                        $locked
+                    );
+                }
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Real-Time Menu Invalidation
+        |--------------------------------------------------------------------------
+        |
+        | This runs after the database transaction has committed.
+        | Public clients use the event as an invalidation signal and refetch
+        | the authoritative public menu from Laravel.
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+            MenuRealtimeUpdated::dispatch(
+                $updated,
+                'ITEM_STATE_UPDATED'
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+        }
+
+        return $updated;
     }
 
     /*

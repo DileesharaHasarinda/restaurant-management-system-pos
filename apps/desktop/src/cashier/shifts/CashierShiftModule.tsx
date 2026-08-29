@@ -6,6 +6,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../../realtime/realtimeBus";
+
+import {
     ApiError,
     api,
 } from "../../api";
@@ -510,6 +514,32 @@ export default function CashierShiftModule(
                 loadMovements,
             ]
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | CashierWorkspace owns the single Echo / Reverb connection.
+    |
+    | These events are only invalidation signals. The Shift module reloads
+    | the authoritative current shift, summary and drawer movements through
+    | Laravel REST.
+    |
+    | No open-shift, cash-in, cash-out or close-shift POST is repeated by
+    | realtime events.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "cash",
+            "billing",
+            "expenses",
+        ],
+        () =>
+            loadCurrentShift(),
+    );
 
     useEffect(
         () => {

@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../realtime/realtimeBus";
+
+import {
     useAuth,
 } from "../auth/useAuth";
 
@@ -36,6 +40,12 @@ import type {
 
 import "./WastagePage.css";
 
+/*
+|--------------------------------------------------------------------------
+| Filter State
+|--------------------------------------------------------------------------
+*/
+
 interface FilterState {
     ingredientId:
     string;
@@ -45,7 +55,8 @@ interface FilterState {
     | WastageReasonCode;
 
     status:
-    "" | "POSTED";
+    ""
+    | "POSTED";
 
     dateFrom:
     string;
@@ -114,6 +125,12 @@ const DEFAULT_REASONS:
         "Other",
 };
 
+/*
+|--------------------------------------------------------------------------
+| Formatters
+|--------------------------------------------------------------------------
+*/
+
 const money =
     new Intl.NumberFormat(
         "en-LK",
@@ -132,8 +149,15 @@ const money =
         }
     );
 
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 function errorMessage(
-    error: unknown
+    error:
+        unknown
 ): string {
     if (
         error instanceof Error
@@ -147,7 +171,8 @@ function errorMessage(
 }
 
 function toReasonCode(
-    value: string
+    value:
+        string
 ): FilterState["reasonCode"] {
     switch (
     value
@@ -185,10 +210,12 @@ function toReasonCode(
 }
 
 function toStatus(
-    value: string
+    value:
+        string
 ): FilterState["status"] {
     return value
-        === "POSTED"
+        ===
+        "POSTED"
         ? "POSTED"
         : "";
 }
@@ -240,7 +267,8 @@ function formatDateTime(
 }
 
 function quantityText(
-    value: number
+    value:
+        number
 ): string {
     return value.toLocaleString(
         "en-LK",
@@ -250,6 +278,12 @@ function quantityText(
         }
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
 export default function WastagePage() {
     const {
@@ -262,6 +296,12 @@ export default function WastagePage() {
             "wastage.create"
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Records
+    |--------------------------------------------------------------------------
+    */
+
     const [
         records,
         setRecords,
@@ -271,6 +311,12 @@ export default function WastagePage() {
         >(
             []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Form / Filter Lookups
+    |--------------------------------------------------------------------------
+    */
 
     const [
         ingredients,
@@ -302,6 +348,12 @@ export default function WastagePage() {
             DEFAULT_REASONS
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination
+    |--------------------------------------------------------------------------
+    */
+
     const [
         pagination,
         setPagination,
@@ -318,6 +370,12 @@ export default function WastagePage() {
             1
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     const [
         filterDraft,
         setFilterDraft,
@@ -333,6 +391,12 @@ export default function WastagePage() {
         useState<FilterState>(
             EMPTY_FILTERS
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Modals
+    |--------------------------------------------------------------------------
+    */
 
     const [
         selectedWastage,
@@ -352,6 +416,12 @@ export default function WastagePage() {
         useState(
             false
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | State
+    |--------------------------------------------------------------------------
+    */
 
     const [
         loading,
@@ -403,9 +473,15 @@ export default function WastagePage() {
             ""
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Wastage Records
+    |--------------------------------------------------------------------------
+    */
+
     const loadRecords =
         useCallback(
-            async () => {
+            async (): Promise<void> => {
                 try {
                     const result =
                         await getWastages({
@@ -448,7 +524,8 @@ export default function WastagePage() {
                         Object.keys(
                             result.reasonCodes
                         ).length
-                        > 0
+                        >
+                        0
                     ) {
                         setReasonCodes(
                             result.reasonCodes
@@ -474,6 +551,58 @@ export default function WastagePage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Ingredient Options
+    |--------------------------------------------------------------------------
+    */
+
+    const loadIngredientOptions =
+        useCallback(
+            async (): Promise<
+                WastageIngredientOption[]
+            > => {
+                const result =
+                    await getWastageIngredientOptions();
+
+                setIngredients(
+                    result
+                );
+
+                return result;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Unit Options
+    |--------------------------------------------------------------------------
+    */
+
+    const loadUnitOptions =
+        useCallback(
+            async (): Promise<
+                WastageUnitOption[]
+            > => {
+                const result =
+                    await getWastageUnitOptions();
+
+                setUnits(
+                    result
+                );
+
+                return result;
+            },
+            []
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial / Filter Record Loading
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
@@ -494,25 +623,23 @@ export default function WastagePage() {
         ]
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Ingredient Options
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(
         () => {
             const timeoutId =
                 window.setTimeout(
                     () => {
-                        void getWastageIngredientOptions()
-                            .then(
-                                (
-                                    result
-                                ) =>
-                                    setIngredients(
-                                        result
-                                    )
-                            )
+                        void loadIngredientOptions()
                             .catch(
                                 () => {
                                     /*
-                                     * History still works if
-                                     * ingredient lookup fails.
+                                     * Wastage history remains usable if
+                                     * ingredient lookup loading fails.
                                      */
                                 }
                             );
@@ -525,8 +652,16 @@ export default function WastagePage() {
                     timeoutId
                 );
         },
-        []
+        [
+            loadIngredientOptions,
+        ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Summary
+    |--------------------------------------------------------------------------
+    */
 
     const pageEstimatedCost =
         useMemo(
@@ -554,7 +689,8 @@ export default function WastagePage() {
                         record
                     ) =>
                         record.status
-                        === "POSTED"
+                        ===
+                        "POSTED"
                 ).length,
             [
                 records,
@@ -577,8 +713,14 @@ export default function WastagePage() {
             ]
         );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Open Create Modal
+    |--------------------------------------------------------------------------
+    */
+
     const openCreateModal =
-        async () => {
+        async (): Promise<void> => {
             if (
                 formLoading
             ) {
@@ -598,22 +740,10 @@ export default function WastagePage() {
             );
 
             try {
-                const [
-                    ingredientOptions,
-                    unitOptions,
-                ] =
-                    await Promise.all([
-                        getWastageIngredientOptions(),
-                        getWastageUnitOptions(),
-                    ]);
-
-                setIngredients(
-                    ingredientOptions
-                );
-
-                setUnits(
-                    unitOptions
-                );
+                await Promise.all([
+                    loadIngredientOptions(),
+                    loadUnitOptions(),
+                ]);
 
                 setCreateOpen(
                     true
@@ -633,11 +763,17 @@ export default function WastagePage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Create
+    |--------------------------------------------------------------------------
+    */
+
     const submitCreate =
         async (
             payload:
                 CreateWastagePayload
-        ) => {
+        ): Promise<void> => {
             const wastage =
                 await createWastage(
                     payload
@@ -651,6 +787,10 @@ export default function WastagePage() {
                 `${wastage.wastage_number} recorded successfully.`
             );
 
+            /*
+             * Return to the first page so a newly created wastage record can
+             * be visible immediately.
+             */
             if (
                 page !== 1
             ) {
@@ -666,30 +806,34 @@ export default function WastagePage() {
             }
 
             /*
-             * Reload ingredients so current stock
-             * shown in subsequent forms is fresh.
+             * Wastage reduces inventory immediately.
+             *
+             * Refresh the ingredient/current-stock options so the next form
+             * uses fresh authoritative stock values.
+             *
+             * The wastage itself has already succeeded, therefore lookup
+             * failure must not turn this into a false operation failure.
              */
             try {
-                const currentIngredients =
-                    await getWastageIngredientOptions();
-
-                setIngredients(
-                    currentIngredients
-                );
+                await loadIngredientOptions();
             } catch {
                 /*
-                 * Wastage was already successfully
-                 * recorded, so do not turn a lookup
-                 * refresh failure into a false error.
+                 * A later realtime event/reconnect can reconcile this.
                  */
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | View Record
+    |--------------------------------------------------------------------------
+    */
 
     const viewRecord =
         async (
             record:
                 WastageRecord
-        ) => {
+        ): Promise<void> => {
             setBusyRecordId(
                 record.id
             );
@@ -722,11 +866,79 @@ export default function WastagePage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Selected Wastage
+    |--------------------------------------------------------------------------
+    |
+    | Keep an already-open details modal synchronized.
+    |
+    | Functional state replacement protects against a race where the manager
+    | closes the modal or opens another record while the REST request is
+    | still running.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedWastage =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selectedWastage
+                ) {
+                    return;
+                }
+
+                const wastageId =
+                    selectedWastage.id;
+
+                try {
+                    const current =
+                        await getWastage(
+                            wastageId
+                        );
+
+                    setSelectedWastage(
+                        (
+                            existing
+                        ) => {
+                            if (
+                                !existing
+                                ||
+                                existing.id
+                                !==
+                                wastageId
+                            ) {
+                                return existing;
+                            }
+
+                            return current;
+                        }
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime wastage details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selectedWastage,
+            ]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     const submitFilters =
         (
             event:
                 FormEvent
-        ) => {
+        ): void => {
             event.preventDefault();
 
             if (
@@ -767,7 +979,7 @@ export default function WastagePage() {
         };
 
     const clearFilters =
-        () => {
+        (): void => {
             setFilterDraft(
                 EMPTY_FILTERS
             );
@@ -793,8 +1005,14 @@ export default function WastagePage() {
             );
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Manual Refresh
+    |--------------------------------------------------------------------------
+    */
+
     const refresh =
-        async () => {
+        async (): Promise<void> => {
             if (
                 refreshing
             ) {
@@ -810,7 +1028,34 @@ export default function WastagePage() {
             );
 
             try {
-                await loadRecords();
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadRecords(),
+                        loadIngredientOptions(),
+                        refreshSelectedWastage(),
+                    ];
+
+                if (
+                    createOpen
+                ) {
+                    jobs.push(
+                        loadUnitOptions()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                setError(
+                    errorMessage(
+                        caught
+                    )
+                );
             } finally {
                 setRefreshing(
                     false
@@ -818,8 +1063,101 @@ export default function WastagePage() {
             }
         };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Wastage has two important realtime effects:
+    |
+    | 1. A Wastage record is created.
+    | 2. Inventory is reduced through an immutable stock movement.
+    |
+    | Therefore this page listens to both `wastage` and `inventory`.
+    |
+    | Reverb remains an invalidation signal only. Laravel REST is always
+    | authoritative.
+    |
+    | Realtime synchronization updates:
+    |
+    | - current filtered wastage list
+    | - pagination totals
+    | - page summary values
+    | - reason catalog returned by the API
+    | - ingredient/current-stock options
+    | - open wastage details
+    | - unit options while the Create Wastage modal is open
+    |
+    | It does not reload the browser, show the manual Refresh spinner, or
+    | close the current modal.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "wastage",
+            "inventory",
+        ],
+        async () => {
+            try {
+                const jobs:
+                    Array<
+                        Promise<unknown>
+                    > = [
+                        loadRecords(),
+                        loadIngredientOptions(),
+                        refreshSelectedWastage(),
+                    ];
+
+                /*
+                 * Unit options are only needed by the creation modal.
+                 *
+                 * Avoid requesting them on every stock event when the modal
+                 * is not open.
+                 */
+                if (
+                    createOpen
+                ) {
+                    jobs.push(
+                        loadUnitOptions()
+                    );
+                }
+
+                await Promise.all(
+                    jobs
+                );
+            } catch (
+            caught
+            ) {
+                /*
+                 * A realtime failure must not interrupt the manager's
+                 * current workflow.
+                 *
+                 * A later event, reconnect, or manual Refresh can reconcile
+                 * the authoritative state.
+                 */
+                console.error(
+                    "Unable to reconcile realtime wastage data.",
+                    caught
+                );
+            }
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
     return (
         <div className="wastage-page">
+            {/*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */}
+
             <header className="wastage-page-header">
                 <div>
                     <div className="wastage-eyebrow">
@@ -841,7 +1179,9 @@ export default function WastagePage() {
                     <button
                         type="button"
                         className="wastage-button wastage-button-secondary"
-                        disabled={refreshing}
+                        disabled={
+                            refreshing
+                        }
                         onClick={
                             () =>
                                 void refresh()
@@ -860,7 +1200,9 @@ export default function WastagePage() {
                             <button
                                 type="button"
                                 className="wastage-button wastage-button-primary"
-                                disabled={formLoading}
+                                disabled={
+                                    formLoading
+                                }
                                 onClick={
                                     () =>
                                         void openCreateModal()
@@ -877,23 +1219,45 @@ export default function WastagePage() {
                 </div>
             </header>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Error
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 error
                 && (
                     <div className="wastage-alert wastage-alert-error">
-                        {error}
+                        {
+                            error
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 message
                 && (
                     <div className="wastage-alert wastage-alert-success">
-                        {message}
+                        {
+                            message
+                        }
                     </div>
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Summary
+            |--------------------------------------------------------------------------
+            */}
 
             <section className="wastage-summary-grid">
                 <article>
@@ -963,10 +1327,24 @@ export default function WastagePage() {
                 </article>
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Main Panel
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="wastage-panel">
+                {/*
+                |--------------------------------------------------------------------------
+                | Filters
+                |--------------------------------------------------------------------------
+                */}
+
                 <form
                     className="wastage-filters"
-                    onSubmit={submitFilters}
+                    onSubmit={
+                        submitFilters
+                    }
                 >
                     <label className="wastage-filter-field">
                         <span>
@@ -974,7 +1352,9 @@ export default function WastagePage() {
                         </span>
 
                         <select
-                            value={filterDraft.ingredientId}
+                            value={
+                                filterDraft.ingredientId
+                            }
                             onChange={
                                 (
                                     event
@@ -1001,8 +1381,12 @@ export default function WastagePage() {
                                         ingredient
                                     ) => (
                                         <option
-                                            key={ingredient.id}
-                                            value={ingredient.id}
+                                            key={
+                                                ingredient.id
+                                            }
+                                            value={
+                                                ingredient.id
+                                            }
                                         >
                                             {
                                                 ingredient.sku
@@ -1026,7 +1410,9 @@ export default function WastagePage() {
                         </span>
 
                         <select
-                            value={filterDraft.reasonCode}
+                            value={
+                                filterDraft.reasonCode
+                            }
                             onChange={
                                 (
                                     event
@@ -1058,10 +1444,16 @@ export default function WastagePage() {
                                         label,
                                     ]) => (
                                         <option
-                                            key={code}
-                                            value={code}
+                                            key={
+                                                code
+                                            }
+                                            value={
+                                                code
+                                            }
                                         >
-                                            {label}
+                                            {
+                                                label
+                                            }
                                         </option>
                                     )
                                 )
@@ -1075,7 +1467,9 @@ export default function WastagePage() {
                         </span>
 
                         <select
-                            value={filterDraft.status}
+                            value={
+                                filterDraft.status
+                            }
                             onChange={
                                 (
                                     event
@@ -1111,7 +1505,9 @@ export default function WastagePage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateFrom}
+                            value={
+                                filterDraft.dateFrom
+                            }
                             onChange={
                                 (
                                     event
@@ -1137,7 +1533,9 @@ export default function WastagePage() {
 
                         <input
                             type="date"
-                            value={filterDraft.dateTo}
+                            value={
+                                filterDraft.dateTo
+                            }
                             onChange={
                                 (
                                     event
@@ -1167,12 +1565,20 @@ export default function WastagePage() {
                         <button
                             type="button"
                             className="wastage-button wastage-button-secondary"
-                            onClick={clearFilters}
+                            onClick={
+                                clearFilters
+                            }
                         >
                             Clear
                         </button>
                     </div>
                 </form>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Records
+                |--------------------------------------------------------------------------
+                */}
 
                 {
                     loading
@@ -1181,7 +1587,9 @@ export default function WastagePage() {
                                 Loading wastage records...
                             </div>
                         )
-                        : records.length === 0
+                        : records.length
+                            ===
+                            0
                             ? (
                                 <div className="wastage-empty">
                                     <strong>
@@ -1243,7 +1651,11 @@ export default function WastagePage() {
                                                     (
                                                         record
                                                     ) => (
-                                                        <tr key={record.id}>
+                                                        <tr
+                                                            key={
+                                                                record.id
+                                                            }
+                                                        >
                                                             <td>
                                                                 <strong>
                                                                     {
@@ -1269,14 +1681,18 @@ export default function WastagePage() {
                                                             <td>
                                                                 <strong>
                                                                     {
-                                                                        record.ingredient?.name
+                                                                        record
+                                                                            .ingredient
+                                                                            ?.name
                                                                         ?? "—"
                                                                     }
                                                                 </strong>
 
                                                                 <small className="wastage-cell-meta">
                                                                     {
-                                                                        record.ingredient?.sku
+                                                                        record
+                                                                            .ingredient
+                                                                            ?.sku
                                                                         ?? ""
                                                                     }
                                                                 </small>
@@ -1285,14 +1701,19 @@ export default function WastagePage() {
                                                             <td>
                                                                 {
                                                                     quantityText(
-                                                                        record.entered_quantity.quantity
+                                                                        record
+                                                                            .entered_quantity
+                                                                            .quantity
                                                                     )
                                                                 }
 
                                                                 {" "}
 
                                                                 {
-                                                                    record.entered_quantity.unit?.symbol
+                                                                    record
+                                                                        .entered_quantity
+                                                                        .unit
+                                                                        ?.symbol
                                                                     ?? ""
                                                                 }
                                                             </td>
@@ -1307,7 +1728,10 @@ export default function WastagePage() {
                                                                 {" "}
 
                                                                 {
-                                                                    record.ingredient?.base_unit?.symbol
+                                                                    record
+                                                                        .ingredient
+                                                                        ?.base_unit
+                                                                        ?.symbol
                                                                     ?? ""
                                                                 }
                                                             </td>
@@ -1332,7 +1756,9 @@ export default function WastagePage() {
 
                                                             <td>
                                                                 {
-                                                                    record.created_by?.name
+                                                                    record
+                                                                        .created_by
+                                                                        ?.name
                                                                     ?? "—"
                                                                 }
                                                             </td>
@@ -1343,7 +1769,8 @@ export default function WastagePage() {
                                                                     className="wastage-small-button"
                                                                     disabled={
                                                                         busyRecordId
-                                                                        !== null
+                                                                        !==
+                                                                        null
                                                                     }
                                                                     onClick={
                                                                         () =>
@@ -1354,7 +1781,8 @@ export default function WastagePage() {
                                                                 >
                                                                     {
                                                                         busyRecordId
-                                                                            === record.id
+                                                                            ===
+                                                                            record.id
                                                                             ? "Loading..."
                                                                             : "View"
                                                                     }
@@ -1370,8 +1798,16 @@ export default function WastagePage() {
                             )
                 }
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Pagination
+                |--------------------------------------------------------------------------
+                */}
+
                 {
-                    pagination.last_page > 1
+                    pagination.last_page
+                    >
+                    1
                     && (
                         <div className="wastage-pagination">
                             <span>
@@ -1389,7 +1825,8 @@ export default function WastagePage() {
                                         loading
                                         ||
                                         pagination.current_page
-                                        <= 1
+                                        <=
+                                        1
                                     }
                                     onClick={
                                         () => {
@@ -1431,7 +1868,8 @@ export default function WastagePage() {
                                         loading
                                         ||
                                         pagination.current_page
-                                        >= pagination.last_page
+                                        >=
+                                        pagination.last_page
                                     }
                                     onClick={
                                         () => {
@@ -1456,29 +1894,51 @@ export default function WastagePage() {
                 }
             </section>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Create Wastage Modal
+            |--------------------------------------------------------------------------
+            */}
+
             {
                 createOpen
                 && (
                     <WastageFormModal
-                        ingredients={ingredients}
-                        units={units}
-                        reasonCodes={reasonCodes}
+                        ingredients={
+                            ingredients
+                        }
+                        units={
+                            units
+                        }
+                        reasonCodes={
+                            reasonCodes
+                        }
                         onClose={
                             () =>
                                 setCreateOpen(
                                     false
                                 )
                         }
-                        onSubmit={submitCreate}
+                        onSubmit={
+                            submitCreate
+                        }
                     />
                 )
             }
+
+            {/*
+            |--------------------------------------------------------------------------
+            | Wastage Details Modal
+            |--------------------------------------------------------------------------
+            */}
 
             {
                 selectedWastage
                 && (
                     <WastageDetailsModal
-                        wastage={selectedWastage}
+                        wastage={
+                            selectedWastage
+                        }
                         onClose={
                             () =>
                                 setSelectedWastage(

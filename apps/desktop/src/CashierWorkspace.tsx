@@ -35,6 +35,17 @@ import TablesModule
 import PosModule
     from './cashier/pos/PosModule';
 
+import {
+    connectStaffRealtime,
+    type OrderRealtimePayload,
+    type RealtimeConnectionState,
+} from './realtime/staffRealtime';
+
+import {
+    publishRealtimeReconnect,
+    publishStaffRealtime,
+} from './realtime/realtimeBus';
+
 import SettingsModule
     from './cashier/settings/SettingsModule';
 
@@ -58,6 +69,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from 'react';
@@ -340,6 +352,56 @@ const makeLocalId =
         `${Date.now()}-${Math.random()
             .toString(36)
             .slice(2)}`;
+
+const realtimeConnectionLabel =
+    (
+        state:
+            RealtimeConnectionState,
+    ): string => {
+        switch (
+        state
+        ) {
+            case 'connected':
+                return 'Realtime Live';
+
+            case 'initialized':
+            case 'connecting':
+                return 'Realtime Connecting';
+
+            case 'unavailable':
+                return 'Realtime Reconnecting';
+
+            case 'failed':
+            case 'disconnected':
+                return 'Realtime Offline';
+
+            default:
+                return `Realtime ${state}`;
+        }
+    };
+
+const realtimeConnectionClass =
+    (
+        state:
+            RealtimeConnectionState,
+    ): string => {
+        switch (
+        state
+        ) {
+            case 'connected':
+                return 'is-online';
+
+            case 'initialized':
+            case 'connecting':
+            case 'unavailable':
+                return 'is-connecting';
+
+            case 'failed':
+            case 'disconnected':
+            default:
+                return 'is-offline';
+        }
+    };
 
 /*
 |--------------------------------------------------------------------------
@@ -972,12 +1034,56 @@ export default function CashierWorkspace(
         );
 
     const [
+        realtimeState,
+        setRealtimeState,
+    ] =
+        useState<RealtimeConnectionState>(
+            'initialized',
+        );
+
+    const [
+        realtimeNotice,
+        setRealtimeNotice,
+    ] =
+        useState<string | null>(
+            null,
+        );
+
+    const [
         selectedOrder,
         setSelectedOrder,
     ] =
         useState<Order | null>(
             null,
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Selected Order Ref
+    |--------------------------------------------------------------------------
+    |
+    | Realtime callbacks are intentionally connected once for the workspace.
+    |
+    | Keep the latest selected order in a ref so realtime reconciliation can
+    | refresh the open order without reconnecting Echo every time the selected
+    | order changes.
+    |--------------------------------------------------------------------------
+    */
+
+    const selectedOrderRef =
+        useRef<Order | null>(
+            null,
+        );
+
+    useEffect(
+        () => {
+            selectedOrderRef.current =
+                selectedOrder;
+        },
+        [
+            selectedOrder,
+        ],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -1050,7 +1156,9 @@ export default function CashierWorkspace(
 
     const loadTables =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 try {
                     const response =
                         await api.get<unknown>(
@@ -1073,6 +1181,31 @@ export default function CashierWorkspace(
                         false,
                     );
 
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status
+                        ===
+                        401
+                    ) {
+                        handleError(
+                            exception,
+                        );
+
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.warn(
+                            'Realtime table reconciliation failed.',
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     handleError(
                         exception,
                     );
@@ -1091,7 +1224,9 @@ export default function CashierWorkspace(
 
     const loadOrders =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 try {
                     const response =
                         await api.get<unknown>(
@@ -1119,6 +1254,31 @@ export default function CashierWorkspace(
                         false,
                     );
 
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status
+                        ===
+                        401
+                    ) {
+                        handleError(
+                            exception,
+                        );
+
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.warn(
+                            'Realtime order reconciliation failed.',
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     handleError(
                         exception,
                     );
@@ -1137,7 +1297,9 @@ export default function CashierWorkspace(
 
     const loadMenu =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 try {
                     const [
                         categoryResponse,
@@ -1199,6 +1361,127 @@ export default function CashierWorkspace(
                         false,
                     );
 
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status
+                        ===
+                        401
+                    ) {
+                        handleError(
+                            exception,
+                        );
+
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.warn(
+                            'Realtime menu reconciliation failed.',
+                            exception,
+                        );
+
+                        return;
+                    }
+
+                    handleError(
+                        exception,
+                    );
+                }
+            },
+            [
+                handleError,
+            ],
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Selected Order Snapshot
+    |--------------------------------------------------------------------------
+    |
+    | Order list events can change the order currently open in Current Order,
+    | Payment or Corrections.
+    |
+    | Reload that order from Laravel without forcing a module remount.
+    |
+    | The functional state update prevents a late REST response from replacing
+    | a different order selected by the cashier while the request was in
+    | flight.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedOrderSnapshot =
+        useCallback(
+            async (
+                silent = true,
+            ): Promise<void> => {
+                const selectedId =
+                    selectedOrderRef.current
+                        ?.id
+                    ??
+                    null;
+
+                if (
+                    selectedId
+                    ===
+                    null
+                ) {
+                    return;
+                }
+
+                try {
+                    const response =
+                        await api.get<ApiOrderResponse>(
+                            `/orders/${selectedId}`,
+                        );
+
+                    const current =
+                        normalizeOrder(
+                            response.data,
+                        );
+
+                    setSelectedOrder(
+                        (
+                            existing,
+                        ) =>
+                            existing
+                                &&
+                                existing.id
+                                ===
+                                selectedId
+                                ? current
+                                : existing,
+                    );
+                } catch (
+                exception
+                ) {
+                    if (
+                        exception instanceof ApiError
+                        &&
+                        exception.status
+                        ===
+                        401
+                    ) {
+                        handleError(
+                            exception,
+                        );
+
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.warn(
+                            'Realtime selected-order reconciliation failed.',
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     handleError(
                         exception,
                     );
@@ -1231,6 +1514,9 @@ export default function CashierWorkspace(
                         loadTables(),
                         loadOrders(),
                         loadMenu(),
+                        refreshSelectedOrderSnapshot(
+                            false,
+                        ),
                     ]);
                 } finally {
                     setLoading(
@@ -1242,8 +1528,609 @@ export default function CashierWorkspace(
                 loadMenu,
                 loadOrders,
                 loadTables,
+                refreshSelectedOrderSnapshot,
             ],
         );
+
+    /*
+|--------------------------------------------------------------------------
+| Real-Time Workspace Synchronization
+|--------------------------------------------------------------------------
+|
+| CashierWorkspace owns exactly one Echo / Reverb connection.
+|
+| Reverb events are invalidation signals only.
+| Laravel REST remains authoritative for every business state.
+|
+| Rich order events:
+|     -> show new-order notification when appropriate
+|     -> reconcile orders, tables and selected order
+|
+| Generic staff events:
+|     -> publish to the in-app realtime bus
+|     -> active child modules silently reconcile their own REST state
+|     -> workspace-level order/table/menu state is also reconciled
+|
+| Reconnect:
+|     -> events may have been missed while offline
+|     -> publish reconnect to every mounted realtime consumer
+|     -> perform a complete workspace REST reconciliation
+|
+| Rich order broadcasts and generic observer broadcasts can represent the
+| same mutation. A small keyed debounce coalesces those duplicate refreshes.
+|--------------------------------------------------------------------------
+*/
+
+    useEffect(
+        () => {
+            let disposed =
+                false;
+
+            let disconnectRealtime:
+                (() => void)
+                | null =
+                null;
+
+            let noticeTimer:
+                number
+                | null =
+                null;
+
+            const refreshTimers =
+                new Map<
+                    string,
+                    number
+                >();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Debounced Reconciliation Scheduler
+            |--------------------------------------------------------------------------
+            */
+
+            const scheduleRealtimeRefresh =
+                (
+                    key:
+                        string,
+
+                    refresh:
+                        () => Promise<void>,
+                ): void => {
+                    const existingTimer =
+                        refreshTimers.get(
+                            key,
+                        );
+
+                    if (
+                        existingTimer
+                        !==
+                        undefined
+                    ) {
+                        window.clearTimeout(
+                            existingTimer,
+                        );
+                    }
+
+                    const timer =
+                        window.setTimeout(
+                            () => {
+                                refreshTimers.delete(
+                                    key,
+                                );
+
+                                if (
+                                    disposed
+                                ) {
+                                    return;
+                                }
+
+                                void refresh()
+                                    .catch(
+                                        (
+                                            exception,
+                                        ) => {
+                                            console.warn(
+                                                `Realtime reconciliation failed for ${key}.`,
+                                                exception,
+                                            );
+                                        },
+                                    );
+                            },
+                            200,
+                        );
+
+                    refreshTimers.set(
+                        key,
+                        timer,
+                    );
+                };
+
+            /*
+            |--------------------------------------------------------------------------
+            | New Order Notification
+            |--------------------------------------------------------------------------
+            */
+
+            const showOrderNotification =
+                (
+                    payload:
+                        OrderRealtimePayload,
+                ): void => {
+                    const sourceLabel =
+                        payload.order_source
+                            === 'QR_CUSTOMER'
+                            ? 'Customer QR'
+                            : payload.order_source
+                                === 'WAITER'
+                                ? 'Waiter'
+                                : 'Order';
+
+                    const actionLabel =
+                        payload.action
+                            === 'ITEMS_ADDED'
+                            ? 'added more items'
+                            : 'created a new order';
+
+                    const location =
+                        payload.table_name
+                            ? ` • ${payload.table_name}`
+                            : '';
+
+                    const message =
+                        `${sourceLabel} ${actionLabel}: ${payload.order_number}${location}`;
+
+                    setRealtimeNotice(
+                        message,
+                    );
+
+                    /*
+                     * Electron renderer supports browser notifications.
+                     *
+                     * Notification failure must never affect order
+                     * synchronization or restaurant operations.
+                     */
+                    try {
+                        if (
+                            'Notification'
+                            in window
+                        ) {
+                            if (
+                                Notification.permission
+                                ===
+                                'granted'
+                            ) {
+                                new Notification(
+                                    'New Restaurant Order',
+                                    {
+                                        body:
+                                            message,
+                                    },
+                                );
+                            } else if (
+                                Notification.permission
+                                ===
+                                'default'
+                            ) {
+                                void Notification
+                                    .requestPermission()
+                                    .then(
+                                        (
+                                            permission,
+                                        ) => {
+                                            if (
+                                                permission
+                                                ===
+                                                'granted'
+                                            ) {
+                                                new Notification(
+                                                    'New Restaurant Order',
+                                                    {
+                                                        body:
+                                                            message,
+                                                    },
+                                                );
+                                            }
+                                        },
+                                    );
+                            }
+                        }
+                    } catch (
+                    exception
+                    ) {
+                        console.warn(
+                            'Desktop notification could not be displayed.',
+                            exception,
+                        );
+                    }
+
+                    if (
+                        noticeTimer
+                        !==
+                        null
+                    ) {
+                        window.clearTimeout(
+                            noticeTimer,
+                        );
+                    }
+
+                    noticeTimer =
+                        window.setTimeout(
+                            () => {
+                                setRealtimeNotice(
+                                    null,
+                                );
+
+                                noticeTimer =
+                                    null;
+                            },
+                            5000,
+                        );
+                };
+
+            /*
+            |--------------------------------------------------------------------------
+            | Workspace Reconciliation Jobs
+            |--------------------------------------------------------------------------
+            */
+
+            const refreshOrderState =
+                async (): Promise<void> => {
+                    await Promise.all([
+                        loadOrders(
+                            true,
+                        ),
+
+                        loadTables(
+                            true,
+                        ),
+
+                        refreshSelectedOrderSnapshot(
+                            true,
+                        ),
+                    ]);
+                };
+
+            const refreshTableState =
+                async (): Promise<void> => {
+                    /*
+                     * Table transfers / merges can change the table snapshot
+                     * attached to orders, so reconcile both collections.
+                     */
+                    await Promise.all([
+                        loadTables(
+                            true,
+                        ),
+
+                        loadOrders(
+                            true,
+                        ),
+
+                        refreshSelectedOrderSnapshot(
+                            true,
+                        ),
+                    ]);
+                };
+
+            const refreshBillingState =
+                async (): Promise<void> => {
+                    /*
+                     * Billing/refund changes may affect the currently selected
+                     * order and its available lifecycle actions.
+                     *
+                     * PaymentModule/CorrectionsModule receive the same generic
+                     * event through the realtime bus and reconcile their own
+                     * invoice/refund state.
+                     */
+                    await Promise.all([
+                        loadOrders(
+                            true,
+                        ),
+
+                        refreshSelectedOrderSnapshot(
+                            true,
+                        ),
+                    ]);
+                };
+
+            const refreshMenuState =
+                async (): Promise<void> => {
+                    await loadMenu(
+                        true,
+                    );
+                };
+
+            const refreshBusinessDayState =
+                async (): Promise<void> => {
+                    /*
+                     * Business-day transitions can invalidate which restaurant
+                     * orders/tables are currently actionable.
+                     *
+                     * The mounted BusinessDayModule receives the generic event
+                     * separately through the realtime bus.
+                     */
+                    await Promise.all([
+                        loadOrders(
+                            true,
+                        ),
+
+                        loadTables(
+                            true,
+                        ),
+
+                        refreshSelectedOrderSnapshot(
+                            true,
+                        ),
+                    ]);
+                };
+
+            const refreshCompleteWorkspace =
+                async (): Promise<void> => {
+                    await Promise.all([
+                        loadOrders(
+                            true,
+                        ),
+
+                        loadTables(
+                            true,
+                        ),
+
+                        loadMenu(
+                            true,
+                        ),
+
+                        refreshSelectedOrderSnapshot(
+                            true,
+                        ),
+                    ]);
+                };
+
+            /*
+            |--------------------------------------------------------------------------
+            | Connect
+            |--------------------------------------------------------------------------
+            */
+
+            const startRealtime =
+                async (): Promise<void> => {
+                    const token =
+                        await window
+                            .posBridge
+                            .getAuthToken();
+
+                    if (
+                        disposed
+                        ||
+                        !token
+                    ) {
+                        return;
+                    }
+
+                    disconnectRealtime =
+                        connectStaffRealtime({
+                            token,
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Rich Order Event
+                            |--------------------------------------------------------------------------
+                            */
+
+                            onOrder:
+                                (
+                                    payload,
+                                ) => {
+                                    if (
+                                        disposed
+                                    ) {
+                                        return;
+                                    }
+
+                                    /*
+                                     * Rich and generic broadcasts can both be
+                                     * emitted for one order mutation.
+                                     *
+                                     * Use the same "orders" debounce key so
+                                     * they collapse into one REST refresh.
+                                     */
+                                    scheduleRealtimeRefresh(
+                                        'orders',
+                                        refreshOrderState,
+                                    );
+
+                                    if (
+                                        payload.action
+                                        ===
+                                        'CREATED'
+                                        ||
+                                        payload.action
+                                        ===
+                                        'ITEMS_ADDED'
+                                    ) {
+                                        showOrderNotification(
+                                            payload,
+                                        );
+                                    }
+                                },
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Generic Staff Event
+                            |--------------------------------------------------------------------------
+                            */
+
+                            onStaffUpdate:
+                                (
+                                    payload,
+                                ) => {
+                                    if (
+                                        disposed
+                                    ) {
+                                        return;
+                                    }
+
+                                    /*
+                                     * Publish every generic event to mounted
+                                     * cashier child modules.
+                                     *
+                                     * Examples:
+                                     *
+                                     * PaymentModule       -> billing/orders
+                                     * CorrectionsModule   -> billing/orders/inventory
+                                     * CashDrawerModule    -> cash/billing/expenses
+                                     * CashierShiftModule  -> cash/billing/expenses
+                                     * BusinessDayModule   -> business_day + operational domains
+                                     */
+                                    publishStaffRealtime(
+                                        payload,
+                                    );
+
+                                    switch (
+                                    payload.domain
+                                    ) {
+                                        case 'orders':
+                                            scheduleRealtimeRefresh(
+                                                'orders',
+                                                refreshOrderState,
+                                            );
+                                            break;
+
+                                        case 'tables':
+                                            scheduleRealtimeRefresh(
+                                                'tables',
+                                                refreshTableState,
+                                            );
+                                            break;
+
+                                        case 'menu':
+                                            scheduleRealtimeRefresh(
+                                                'menu',
+                                                refreshMenuState,
+                                            );
+                                            break;
+
+                                        case 'billing':
+                                            scheduleRealtimeRefresh(
+                                                'billing',
+                                                refreshBillingState,
+                                            );
+                                            break;
+
+                                        case 'business_day':
+                                            scheduleRealtimeRefresh(
+                                                'business-day',
+                                                refreshBusinessDayState,
+                                            );
+                                            break;
+
+                                        /*
+                                         * Other domains are intentionally not
+                                         * reloaded at workspace level.
+                                         *
+                                         * They are still published above and
+                                         * the active child module decides
+                                         * exactly which authoritative REST
+                                         * state it needs.
+                                         */
+                                        default:
+                                            break;
+                                    }
+                                },
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Reconnect
+                            |--------------------------------------------------------------------------
+                            */
+
+                            onReconnect:
+                                () => {
+                                    if (
+                                        disposed
+                                    ) {
+                                        return;
+                                    }
+
+                                    /*
+                                     * Any mounted child module may have missed
+                                     * events while Reverb was disconnected.
+                                     */
+                                    publishRealtimeReconnect();
+
+                                    /*
+                                     * Reconcile workspace-owned state too.
+                                     */
+                                    scheduleRealtimeRefresh(
+                                        'workspace',
+                                        refreshCompleteWorkspace,
+                                    );
+                                },
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Connection State
+                            |--------------------------------------------------------------------------
+                            */
+
+                            onStateChange:
+                                (
+                                    state,
+                                ) => {
+                                    if (
+                                        disposed
+                                    ) {
+                                        return;
+                                    }
+
+                                    setRealtimeState(
+                                        state,
+                                    );
+                                },
+                        });
+                };
+
+            void startRealtime();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Cleanup
+            |--------------------------------------------------------------------------
+            */
+
+            return () => {
+                disposed =
+                    true;
+
+                if (
+                    noticeTimer
+                    !==
+                    null
+                ) {
+                    window.clearTimeout(
+                        noticeTimer,
+                    );
+                }
+
+                for (
+                    const timer
+                    of refreshTimers.values()
+                ) {
+                    window.clearTimeout(
+                        timer,
+                    );
+                }
+
+                refreshTimers.clear();
+
+                disconnectRealtime?.();
+            };
+        },
+        [
+            loadMenu,
+            loadOrders,
+            loadTables,
+            refreshSelectedOrderSnapshot,
+        ],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -2240,6 +3127,9 @@ export default function CashierWorkspace(
                             loading={
                                 loading
                             }
+                            realtimeState={
+                                realtimeState
+                            }
                             onView={
                                 loadOrderDetail
                             }
@@ -2656,6 +3546,25 @@ export default function CashierWorkspace(
                             }
                         </div>
 
+                        <div
+                            className={
+                                `connection-pill ${realtimeConnectionClass(
+                                    realtimeState,
+                                )}`
+                            }
+                            title={
+                                realtimeState
+                            }
+                        >
+                            <span />
+
+                            {
+                                realtimeConnectionLabel(
+                                    realtimeState,
+                                )
+                            }
+                        </div>
+
                         <button
                             type="button"
                             className="secondary-button"
@@ -2746,6 +3655,74 @@ export default function CashierWorkspace(
 
                 {/*
                 |--------------------------------------------------------------------------
+                | Real-Time Order Notice
+                |--------------------------------------------------------------------------
+                */}
+
+                {
+                    realtimeNotice
+                        ? (
+                            <div
+                                className="realtime-order-notice"
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <div className="realtime-order-notice-icon">
+                                    !
+                                </div>
+
+                                <div className="realtime-order-notice-content">
+                                    <strong>
+                                        New Order Update
+                                    </strong>
+
+                                    <span>
+                                        {
+                                            realtimeNotice
+                                        }
+                                    </span>
+                                </div>
+
+                                <div className="realtime-order-notice-actions">
+                                    <button
+                                        type="button"
+                                        className="realtime-order-notice-view"
+                                        onClick={
+                                            () => {
+                                                setRealtimeNotice(
+                                                    null,
+                                                );
+
+                                                setActiveModule(
+                                                    'incoming',
+                                                );
+                                            }
+                                        }
+                                    >
+                                        View Orders
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="realtime-order-notice-close"
+                                        aria-label="Close notification"
+                                        onClick={
+                                            () =>
+                                                setRealtimeNotice(
+                                                    null,
+                                                )
+                                        }
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                        )
+                        : null
+                }
+
+                {/*
+                |--------------------------------------------------------------------------
                 | Active Module
                 |--------------------------------------------------------------------------
                 */}
@@ -2783,10 +3760,20 @@ export default function CashierWorkspace(
                     </span>
 
                     <span>
+                        API:
+                        {' '}
                         {
                             online
                                 ? 'Connected'
                                 : 'Disconnected'
+                        }
+                    </span>
+
+                    <span>
+                        {
+                            realtimeConnectionLabel(
+                                realtimeState,
+                            )
                         }
                     </span>
                 </footer>

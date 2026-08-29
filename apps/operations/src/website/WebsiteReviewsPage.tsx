@@ -2,10 +2,15 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ChangeEvent,
     type FormEvent,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     useAuth,
@@ -301,18 +306,45 @@ export default function WebsiteReviewsPage() {
             ReviewVisibility
         >("");
 
+    /*
+    |--------------------------------------------------------------------------
+    | Review Request Sequencing
+    |--------------------------------------------------------------------------
+    |
+    | Filter changes and realtime invalidations can overlap. The sequence keeps
+    | an older REST response from replacing a newer review result.
+    |--------------------------------------------------------------------------
+    */
+
+    const reviewRequestRef =
+        useRef(0);
+
     const loadReviews =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 if (
                     !canModerateReviews
                 ) {
                     return;
                 }
 
-                setReviewLoading(
-                    true,
-                );
+                const requestVersion =
+                    reviewRequestRef.current
+                    +
+                    1;
+
+                reviewRequestRef.current =
+                    requestVersion;
+
+                if (
+                    !silent
+                ) {
+                    setReviewLoading(
+                        true,
+                    );
+                }
 
                 try {
                     const result =
@@ -325,6 +357,14 @@ export default function WebsiteReviewsPage() {
                             perPage: 20,
                         });
 
+                    if (
+                        requestVersion
+                        !==
+                        reviewRequestRef.current
+                    ) {
+                        return;
+                    }
+
                     setReviews(
                         result.reviews,
                     );
@@ -335,15 +375,40 @@ export default function WebsiteReviewsPage() {
                 } catch (
                 exception
                 ) {
+                    if (
+                        requestVersion
+                        !==
+                        reviewRequestRef.current
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime review data.",
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             exception,
                         ),
                     );
                 } finally {
-                    setReviewLoading(
-                        false,
-                    );
+                    if (
+                        requestVersion
+                        ===
+                        reviewRequestRef.current
+                    ) {
+                        setReviewLoading(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -707,22 +772,57 @@ export default function WebsiteReviewsPage() {
     ] =
         useState(false);
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gallery Request Sequencing
+    |--------------------------------------------------------------------------
+    |
+    | Realtime events can arrive while an explicit gallery reload is still in
+    | flight. Only the newest authoritative REST response may replace the grid.
+    |--------------------------------------------------------------------------
+    */
+
+    const galleryRequestRef =
+        useRef(0);
+
     const loadGallery =
         useCallback(
-            async (): Promise<void> => {
+            async (
+                silent = false,
+            ): Promise<void> => {
                 if (
                     !canManageGallery
                 ) {
                     return;
                 }
 
-                setGalleryLoading(
-                    true,
-                );
+                const requestVersion =
+                    galleryRequestRef.current
+                    +
+                    1;
+
+                galleryRequestRef.current =
+                    requestVersion;
+
+                if (
+                    !silent
+                ) {
+                    setGalleryLoading(
+                        true,
+                    );
+                }
 
                 try {
                     const images =
                         await getGalleryImages();
+
+                    if (
+                        requestVersion
+                        !==
+                        galleryRequestRef.current
+                    ) {
+                        return;
+                    }
 
                     setGallery(
                         images,
@@ -730,15 +830,40 @@ export default function WebsiteReviewsPage() {
                 } catch (
                 exception
                 ) {
+                    if (
+                        requestVersion
+                        !==
+                        galleryRequestRef.current
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        silent
+                    ) {
+                        console.error(
+                            "Unable to reconcile realtime gallery data.",
+                            exception,
+                        );
+
+                        return;
+                    }
+
                     setError(
                         errorMessage(
                             exception,
                         ),
                     );
                 } finally {
-                    setGalleryLoading(
-                        false,
-                    );
+                    if (
+                        requestVersion
+                        ===
+                        galleryRequestRef.current
+                    ) {
+                        setGalleryLoading(
+                            false,
+                        );
+                    }
                 }
             },
             [
@@ -772,7 +897,7 @@ export default function WebsiteReviewsPage() {
             loadGallery,
         ],
     );
-    
+
     function closeUpload():
         void {
         if (
@@ -1028,6 +1153,67 @@ export default function WebsiteReviewsPage() {
             );
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Review and gallery writes are published by Laravel under the private
+    | `website` staff realtime domain. Reverb is only an invalidation signal;
+    | this page always re-queries the authoritative REST API.
+    |
+    | Realtime refreshes are silent:
+    |
+    | - no review loading placeholder flash
+    | - no gallery loading placeholder flash
+    | - no browser reload
+    | - current review filters/page remain selected
+    | - upload form input is preserved
+    | - gallery edit form input is preserved
+    |
+    | The edit/upload modals are deliberately not remounted or populated from
+    | refreshed list data. This prevents remote updates from destroying local
+    | unsaved caption, alt text, sort order, file, or publish-state input.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "website",
+        ],
+        async () => {
+            const jobs:
+                Array<
+                    Promise<void>
+                > =
+                [];
+
+            if (
+                canModerateReviews
+            ) {
+                jobs.push(
+                    loadReviews(
+                        true,
+                    ),
+                );
+            }
+
+            if (
+                canManageGallery
+            ) {
+                jobs.push(
+                    loadGallery(
+                        true,
+                    ),
+                );
+            }
+
+            await Promise.all(
+                jobs,
+            );
+        },
+    );
 
     /*
     |--------------------------------------------------------------------------

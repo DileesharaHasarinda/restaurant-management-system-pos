@@ -1,4 +1,5 @@
 import {
+    useEffect,
     useMemo,
     useState,
 } from 'react';
@@ -20,6 +21,19 @@ import {
 import {
     useAuth,
 } from '../auth/useAuth';
+
+import {
+    authTokenStorage,
+} from '../lib/api';
+
+import {
+    connectStaffRealtime,
+} from '../realtime/staffRealtime';
+
+import {
+    publishRealtimeReconnect,
+    publishStaffRealtime,
+} from '../realtime/realtimeBus';
 
 /*
 |--------------------------------------------------------------------------
@@ -100,6 +114,7 @@ export default function OperationsLayout() {
     const {
         user,
         logout,
+        refreshUser,
     } =
         useAuth();
 
@@ -125,14 +140,17 @@ export default function OperationsLayout() {
             false,
         );
 
+    const [
+        realtimeState,
+        setRealtimeState,
+    ] =
+        useState(
+            'initialized',
+        );
+
     /*
     |--------------------------------------------------------------------------
     | Navigation
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | Hooks must execute before conditional returns.
     |--------------------------------------------------------------------------
     */
 
@@ -151,6 +169,127 @@ export default function OperationsLayout() {
 
     /*
     |--------------------------------------------------------------------------
+    | Reverb
+    |--------------------------------------------------------------------------
+    |
+    | Exactly one Operations Reverb connection.
+    |
+    | Pages do NOT create their own Echo connection.
+    |--------------------------------------------------------------------------
+    */
+
+    useEffect(
+        () => {
+            if (
+                !user
+            ) {
+                return;
+            }
+
+            const token =
+                authTokenStorage.get();
+
+            if (
+                !token
+            ) {
+                return;
+            }
+
+            let disposed =
+                false;
+
+            const disconnect =
+                connectStaffRealtime({
+                    token,
+
+                    /*
+                     * Orders are also represented through the generic
+                     * staff invalidation stream.
+                     *
+                     * Rich order events remain available for notifications,
+                     * but Operations does not need duplicate data fetching
+                     * from this callback.
+                     */
+                    onOrder:
+                        () => {
+                            //
+                        },
+
+                    onStaffUpdate:
+                        (
+                            payload,
+                        ) => {
+                            if (
+                                disposed
+                            ) {
+                                return;
+                            }
+
+                            publishStaffRealtime(
+                                payload,
+                            );
+
+                            /*
+                             * Role / permission / user-status changes can
+                             * affect the currently logged-in Operations user.
+                             */
+                            if (
+                                payload.domain
+                                ===
+                                'users'
+                            ) {
+                                void refreshUser();
+                            }
+                        },
+
+                    onReconnect:
+                        () => {
+                            if (
+                                disposed
+                            ) {
+                                return;
+                            }
+
+                            publishRealtimeReconnect();
+
+                            /*
+                             * Authentication/permissions may also have
+                             * changed while disconnected.
+                             */
+                            void refreshUser();
+                        },
+
+                    onStateChange:
+                        (
+                            state,
+                        ) => {
+                            if (
+                                disposed
+                            ) {
+                                return;
+                            }
+
+                            setRealtimeState(
+                                state,
+                            );
+                        },
+                });
+
+            return () => {
+                disposed =
+                    true;
+
+                disconnect();
+            };
+        },
+        [
+            refreshUser,
+            user,
+        ],
+    );
+
+    /*
+    |--------------------------------------------------------------------------
     | ProtectedRoute Normally Prevents This
     |--------------------------------------------------------------------------
     */
@@ -160,12 +299,6 @@ export default function OperationsLayout() {
     ) {
         return null;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Current Page
-    |--------------------------------------------------------------------------
-    */
 
     const pageTitle =
         PAGE_TITLES[
@@ -203,11 +336,20 @@ export default function OperationsLayout() {
             )
             .toUpperCase();
 
-    /*
-    |--------------------------------------------------------------------------
-    | Logout
-    |--------------------------------------------------------------------------
-    */
+    const realtimeLabel =
+        realtimeState
+            ===
+            'connected'
+            ? 'Realtime Live'
+            : realtimeState
+                ===
+                'connecting'
+                ||
+                realtimeState
+                ===
+                'initialized'
+                ? 'Connecting'
+                : 'Reconnecting';
 
     const handleLogout =
         async (): Promise<void> => {
@@ -232,20 +374,8 @@ export default function OperationsLayout() {
             );
         };
 
-    /*
-    |--------------------------------------------------------------------------
-    | Render
-    |--------------------------------------------------------------------------
-    */
-
     return (
         <div className="ops-shell">
-            {/*
-            |--------------------------------------------------------------------------
-            | Mobile Backdrop
-            |--------------------------------------------------------------------------
-            */}
-
             {
                 sidebarOpen
                     ? (
@@ -263,12 +393,6 @@ export default function OperationsLayout() {
                     )
                     : null
             }
-
-            {/*
-            |--------------------------------------------------------------------------
-            | Sidebar
-            |--------------------------------------------------------------------------
-            */}
 
             <aside
                 className={
@@ -307,12 +431,6 @@ export default function OperationsLayout() {
                     </button>
                 </header>
 
-                {/*
-                |--------------------------------------------------------------------------
-                | User
-                |--------------------------------------------------------------------------
-                */}
-
                 <section className="ops-sidebar-user">
                     <div className="ops-user-avatar">
                         {
@@ -334,12 +452,6 @@ export default function OperationsLayout() {
                         </span>
                     </div>
                 </section>
-
-                {/*
-                |--------------------------------------------------------------------------
-                | Navigation
-                |--------------------------------------------------------------------------
-                */}
 
                 <nav
                     className="ops-navigation"
@@ -418,12 +530,6 @@ export default function OperationsLayout() {
                     }
                 </nav>
 
-                {/*
-                |--------------------------------------------------------------------------
-                | Footer
-                |--------------------------------------------------------------------------
-                */}
-
                 <footer className="ops-sidebar-footer">
                     <button
                         type="button"
@@ -448,12 +554,6 @@ export default function OperationsLayout() {
                     </small>
                 </footer>
             </aside>
-
-            {/*
-            |--------------------------------------------------------------------------
-            | Main
-            |--------------------------------------------------------------------------
-            */}
 
             <div className="ops-main">
                 <header className="ops-topbar">
@@ -489,11 +589,15 @@ export default function OperationsLayout() {
                         <div>
                             <strong>
                                 {
-                                    user.name
+                                    realtimeLabel
                                 }
                             </strong>
 
                             <span>
+                                {
+                                    user.name
+                                }
+                                {' • '}
                                 {
                                     roleName
                                 }

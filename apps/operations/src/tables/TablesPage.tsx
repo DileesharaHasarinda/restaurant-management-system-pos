@@ -2,9 +2,14 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type FormEvent,
 } from "react";
+
+import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
 
 import {
     useAuth,
@@ -427,6 +432,48 @@ export default function TablesPage() {
         useState(
             false
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Race Guards
+    |--------------------------------------------------------------------------
+    |
+    | These refs let an in-flight realtime reconciliation verify that the
+    | same table / QR modal is still active before applying its result.
+    |--------------------------------------------------------------------------
+    */
+
+    const selectedIdRef =
+        useRef<number | null>(
+            null
+        );
+
+    const qrOpenRef =
+        useRef(
+            false
+        );
+
+    useEffect(
+        () => {
+            selectedIdRef.current =
+                selected?.id
+                ??
+                null;
+        },
+        [
+            selected?.id,
+        ]
+    );
+
+    useEffect(
+        () => {
+            qrOpenRef.current =
+                qrOpen;
+        },
+        [
+            qrOpen,
+        ]
+    );
 
     const loadTables =
         useCallback(
@@ -1507,6 +1554,229 @@ export default function TablesPage() {
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is only an invalidation signal.
+    |
+    | Laravel REST remains authoritative.
+    |
+    | The table list, open table drawer, transfer/merge history and open QR
+    | modal are reconciled without reloading the browser or requiring the
+    | manager to press Refresh.
+    |--------------------------------------------------------------------------
+    */
+
+    const refreshSelectedTableContext =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !selected
+                ) {
+                    return;
+                }
+
+                const tableId =
+                    selected.id;
+
+                try {
+                    const [
+                        fresh,
+                        transferResult,
+                        mergeResult,
+                    ] =
+                        await Promise.all([
+                            getTable(
+                                tableId
+                            ),
+
+                            getTransferHistory(
+                                tableId
+                            ),
+
+                            getMergeHistory(
+                                tableId
+                            ),
+                        ]);
+
+                    /*
+                     * The user may have closed the drawer or opened another
+                     * table while these requests were running.
+                     */
+                    if (
+                        selectedIdRef.current
+                        !==
+                        tableId
+                    ) {
+                        return;
+                    }
+
+                    setTables(
+                        (
+                            current
+                        ) =>
+                            current.map(
+                                (
+                                    item
+                                ) =>
+                                    item.id
+                                        ===
+                                        fresh.id
+                                        ? fresh
+                                        : item
+                            )
+                    );
+
+                    setSelected(
+                        (
+                            current
+                        ) => {
+                            if (
+                                !current
+                                ||
+                                current.id
+                                !==
+                                tableId
+                            ) {
+                                return current;
+                            }
+
+                            return fresh;
+                        }
+                    );
+
+                    setTransfers(
+                        transferResult.items
+                    );
+
+                    setMerges(
+                        mergeResult.items
+                    );
+                } catch (
+                caught
+                ) {
+                    /*
+                     * A realtime read failure must never break the page.
+                     * A later event, reconnect or manual refresh can
+                     * reconcile the state again.
+                     */
+                    console.error(
+                        "Unable to reconcile realtime table details.",
+                        caught
+                    );
+                }
+            },
+            [
+                selected,
+            ]
+        );
+
+    const refreshOpenQr =
+        useCallback(
+            async (): Promise<void> => {
+                if (
+                    !qrOpen
+                    ||
+                    !selected
+                ) {
+                    return;
+                }
+
+                const tableId =
+                    selected.id;
+
+                try {
+                    const [
+                        token,
+                        svg,
+                    ] =
+                        await Promise.all([
+                            getTableQr(
+                                tableId
+                            ),
+
+                            getTableQrSvg(
+                                tableId
+                            ),
+                        ]);
+
+                    /*
+                     * Do not apply an old response after the QR modal was
+                     * closed or the user moved to another table.
+                     */
+                    if (
+                        !qrOpenRef.current
+                        ||
+                        selectedIdRef.current
+                        !==
+                        tableId
+                    ) {
+                        return;
+                    }
+
+                    setQrToken(
+                        token
+                    );
+
+                    setQrSvg(
+                        svg
+                    );
+                } catch (
+                caught
+                ) {
+                    console.error(
+                        "Unable to reconcile realtime table QR data.",
+                        caught
+                    );
+                }
+            },
+            [
+                qrOpen,
+                selected,
+            ]
+        );
+
+    useStaffRealtimeRefresh(
+        [
+            "tables",
+            "orders",
+            "billing",
+            "business_day",
+        ],
+        async () => {
+            if (
+                !canView
+            ) {
+                return;
+            }
+
+            /*
+             * loadTables(false) is intentionally silent:
+             * it does not show the manual Refresh spinner.
+             */
+            await Promise.all([
+                loadTables(
+                    false
+                ),
+
+                refreshSelectedTableContext(),
+
+                refreshOpenQr(),
+            ]);
+        }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Access Guard
+    |--------------------------------------------------------------------------
+    |
+    | Keep this after every hook so React hook ordering remains stable.
+    |--------------------------------------------------------------------------
+    */
 
     if (
         !canView

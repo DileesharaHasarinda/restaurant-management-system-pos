@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from "../../realtime/realtimeBus";
+
+import {
     ApiError,
     api,
 } from "../../api";
@@ -248,6 +252,31 @@ export default function CashDrawerModule(
             },
             []
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | CashierWorkspace owns the single Reverb/Echo connection.
+    |
+    | This module only listens to internal realtime invalidation events and
+    | silently reloads the authoritative current shift from Laravel.
+    |
+    | No drawer hardware action, payment operation or manual-open POST is
+    | repeated because of realtime.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "cash",
+            "billing",
+            "expenses",
+        ],
+        () =>
+            loadCurrentShift(),
+    );
 
     /*
     |--------------------------------------------------------------------------

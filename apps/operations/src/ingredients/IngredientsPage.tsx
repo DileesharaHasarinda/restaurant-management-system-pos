@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import {
+    useStaffRealtimeRefresh,
+} from '../realtime/realtimeBus';
+
+import {
     Link,
 } from "react-router-dom";
 
@@ -680,6 +684,57 @@ export default function IngredientsPage() {
                 );
             }
         };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is used only as an invalidation signal.
+    |
+    | The Laravel API remains the authoritative source for ingredient
+    | configuration, stock quantity, stock value and unit information.
+    |
+    | Realtime refreshes are intentionally silent:
+    |
+    | - no full-page loading screen
+    | - no Refresh button spinner
+    | - no browser/page reload
+    | - no closing or resetting an open ingredient editor
+    |
+    | This means unsaved manager input inside IngredientFormModal is
+    | preserved while the list behind the modal is reconciled.
+    |--------------------------------------------------------------------------
+    */
+
+    useStaffRealtimeRefresh(
+        [
+            "inventory",
+            "recipes",
+        ],
+        async () => {
+            try {
+                await Promise.all([
+                    loadUnits(),
+                    loadIngredients(),
+                ]);
+            } catch (
+            exception
+            ) {
+                /*
+                 * A realtime synchronization failure must not break the page
+                 * or overwrite the user's current editing workflow.
+                 *
+                 * A later event, reconnect or manual Refresh can reconcile
+                 * the authoritative state again.
+                 */
+                console.error(
+                    "Unable to reconcile realtime ingredient data.",
+                    exception
+                );
+            }
+        }
+    );
 
     /*
     |--------------------------------------------------------------------------
