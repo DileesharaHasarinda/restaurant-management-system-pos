@@ -40,6 +40,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import ReportsPage
+  from './reports/ReportsPage';
+
 import TablesPage
   from "./tables/TablesPage";
 
@@ -268,11 +271,7 @@ export default function App() {
               <Route
                 path="/reports"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="REPORTING"
-                    title="Reports"
-                    description="Sales, profit, inventory, expenses, purchases and operational reporting."
-                  />
+                  <ReportsPage />
                 }
               />
 

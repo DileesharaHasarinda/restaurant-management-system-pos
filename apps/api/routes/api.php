@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
 use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\StockCancellationReversalController;
@@ -3233,6 +3234,141 @@ Route::middleware(
             )
             ->name(
                 'v1.supplier-payment-batches.show'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 34 - Reports
+        |--------------------------------------------------------------------------
+        |
+        | Central reporting endpoints.
+        |
+        | All report endpoints require reports.view.
+        | Expense and inventory reports retain their domain-specific
+        | visibility permissions as well.
+        |
+        */
+
+        Route::prefix(
+            'reports'
+        )
+            ->middleware(
+                'permission:reports.view'
+            )
+            ->name(
+                'v1.reports.'
+            )
+            ->group(
+                function (): void {
+
+                    Route::get(
+                        '/overview',
+                        [
+                            ReportController::class,
+                            'overview',
+                        ]
+                    )->name(
+                        'overview'
+                    );
+
+                    Route::get(
+                        '/sales',
+                        [
+                            ReportController::class,
+                            'sales',
+                        ]
+                    )->name(
+                        'sales'
+                    );
+
+                    Route::get(
+                        '/items',
+                        [
+                            ReportController::class,
+                            'items',
+                        ]
+                    )->name(
+                        'items'
+                    );
+
+                    Route::get(
+                        '/profit',
+                        [
+                            ReportController::class,
+                            'profit',
+                        ]
+                    )->name(
+                        'profit'
+                    );
+
+                    Route::get(
+                        '/payments',
+                        [
+                            ReportController::class,
+                            'payments',
+                        ]
+                    )->name(
+                        'payments'
+                    );
+
+                    Route::get(
+                        '/expenses',
+                        [
+                            ReportController::class,
+                            'expenses',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:expenses.view'
+                        )
+                        ->name(
+                            'expenses'
+                        );
+
+                    Route::get(
+                        '/inventory',
+                        [
+                            ReportController::class,
+                            'inventory',
+                        ]
+                    )
+                        ->middleware(
+                            'permission:inventory.view'
+                        )
+                        ->name(
+                            'inventory'
+                        );
+
+                    Route::get(
+                        '/purchases',
+                        [
+                            ReportController::class,
+                            'purchases',
+                        ]
+                    )->name(
+                        'purchases'
+                    );
+
+                    Route::get(
+                        '/orders',
+                        [
+                            ReportController::class,
+                            'orders',
+                        ]
+                    )->name(
+                        'orders'
+                    );
+
+                    Route::get(
+                        '/cashier',
+                        [
+                            ReportController::class,
+                            'cashier',
+                        ]
+                    )->name(
+                        'cashier'
+                    );
+                }
             );
 
         /*
