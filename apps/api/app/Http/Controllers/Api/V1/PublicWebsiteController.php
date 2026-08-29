@@ -18,6 +18,9 @@ class PublicWebsiteController extends Controller
     |--------------------------------------------------------------------------
     | Public Gallery
     |--------------------------------------------------------------------------
+    |
+    | Only enabled gallery images are exposed publicly.
+    |
     */
 
     public function gallery(
@@ -62,8 +65,16 @@ class PublicWebsiteController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Approved Reviews
+    | Approved Public Reviews
     |--------------------------------------------------------------------------
+    |
+    | A review is public only when:
+    |
+    | status = APPROVED
+    | is_visible = true
+    |
+    | Rejected, pending and hidden reviews are never returned.
+    |
     */
 
     public function reviews(
@@ -96,6 +107,10 @@ class PublicWebsiteController extends Controller
             ->where(
                 'status',
                 Review::STATUS_APPROVED
+            )
+            ->where(
+                'is_visible',
+                true
             );
 
         if (
@@ -148,13 +163,19 @@ class PublicWebsiteController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Submit Review
+    | Submit Public Review
     |--------------------------------------------------------------------------
     |
-    | Public reviews are NEVER published immediately.
+    | Customers submit:
     |
-    | Every new review begins as PENDING and must later be approved
-    | through the restaurant moderation workflow.
+    | - customer_name
+    | - rating
+    | - review
+    |
+    | customer_email remains optional for backwards compatibility.
+    |
+    | Every new review starts as PENDING and hidden from the public website.
+    | The moderation endpoint must explicitly approve it before publication.
     |
     */
 
@@ -191,6 +212,16 @@ class PublicWebsiteController extends Controller
                 null,
 
                 'is_featured' =>
+                false,
+
+                /*
+                     * Defense in depth:
+                     *
+                     * Even if somebody changes status directly in the
+                     * database, a new review does not become public until
+                     * moderation explicitly enables visibility.
+                     */
+                'is_visible' =>
                 false,
             ]);
 

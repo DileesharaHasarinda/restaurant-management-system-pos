@@ -25,6 +25,7 @@ class Review extends Model
         'reviewed_by',
         'reviewed_at',
         'is_featured',
+        'is_visible',
     ];
 
     protected function casts(): array
@@ -37,6 +38,9 @@ class Review extends Model
             'datetime',
 
             'is_featured' =>
+            'boolean',
+
+            'is_visible' =>
             'boolean',
         ];
     }

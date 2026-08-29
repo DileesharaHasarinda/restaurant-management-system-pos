@@ -58,6 +58,9 @@ import BusinessDayPage
 import ExpensesPage
   from "./expenses/ExpensesPage";
 
+import WebsiteReviewsPage
+  from "./website/WebsiteReviewsPage";
+
 import WastagePage
   from "./wastage/WastagePage";
 
@@ -299,11 +302,7 @@ export default function App() {
               <Route
                 path="/website"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="ADMINISTRATION"
-                    title="Website & Reviews"
-                    description="Manage website content, gallery and customer review moderation."
-                  />
+                  <WebsiteReviewsPage />
                 }
               />
 

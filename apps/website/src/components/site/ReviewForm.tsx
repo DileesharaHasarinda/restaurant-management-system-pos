@@ -7,6 +7,7 @@ import {
 
 interface ReviewResponse {
     success?: boolean;
+
     message?: string;
 
     data?: {
@@ -20,63 +21,53 @@ export default function ReviewForm() {
         name,
         setName,
     ] =
-        useState(
-            "",
-        );
-
-    const [
-        email,
-        setEmail,
-    ] =
-        useState(
-            "",
-        );
+        useState("");
 
     const [
         rating,
         setRating,
     ] =
-        useState(
-            5,
-        );
+        useState(5);
 
     const [
         review,
         setReview,
     ] =
-        useState(
-            "",
-        );
+        useState("");
 
     const [
         submitting,
         setSubmitting,
     ] =
-        useState(
-            false,
-        );
+        useState(false);
 
     const [
         message,
         setMessage,
     ] =
-        useState<string | null>(
-            null,
-        );
+        useState<
+            string | null
+        >(null);
 
     const [
         error,
         setError,
     ] =
-        useState<string | null>(
-            null,
-        );
+        useState<
+            string | null
+        >(null);
 
     async function submit(
         event:
             FormEvent<HTMLFormElement>,
     ): Promise<void> {
         event.preventDefault();
+
+        if (
+            submitting
+        ) {
+            return;
+        }
 
         setSubmitting(
             true,
@@ -111,11 +102,6 @@ export default function ReviewForm() {
                                 customer_name:
                                     name.trim(),
 
-                                customer_email:
-                                    email.trim()
-                                    ||
-                                    null,
-
                                 rating,
 
                                 review:
@@ -124,7 +110,8 @@ export default function ReviewForm() {
                     },
                 );
 
-            const body: ReviewResponse =
+            const body:
+                ReviewResponse =
                 await response.json();
 
             if (
@@ -147,10 +134,6 @@ export default function ReviewForm() {
             );
 
             setName(
-                "",
-            );
-
-            setEmail(
                 "",
             );
 
@@ -184,61 +167,36 @@ export default function ReviewForm() {
                 submit
             }
         >
-            <div
-                className="site-form-grid"
-            >
-                <label>
-                    <span>
-                        Your Name *
-                    </span>
+            <label>
+                <span>
+                    Your Name *
+                </span>
 
-                    <input
-                        required
-                        maxLength={
-                            150
-                        }
-                        value={
-                            name
-                        }
-                        onChange={
-                            (
-                                event,
-                            ) =>
-                                setName(
-                                    event
-                                        .target
-                                        .value,
-                                )
-                        }
-                    />
-                </label>
-
-                <label>
-                    <span>
-                        Email
-                    </span>
-
-                    <input
-                        type="email"
-                        maxLength={
-                            190
-                        }
-                        value={
-                            email
-                        }
-                        onChange={
-                            (
-                                event,
-                            ) =>
-                                setEmail(
-                                    event
-                                        .target
-                                        .value,
-                                )
-                        }
-                    />
-                </label>
-            </div>
+                <input
+                    type="text"
+                    required
+                    minLength={
+                        1
+                    }
+                    maxLength={
+                        150
+                    }
+                    autoComplete="name"
+                    value={
+                        name
+                    }
+                    onChange={
+                        (
+                            event,
+                        ) =>
+                            setName(
+                                event
+                                    .target
+                                    .value,
+                            )
+                    }
+                />
+            </label>
 
             <label>
                 <span>
@@ -246,6 +204,7 @@ export default function ReviewForm() {
                 </span>
 
                 <select
+                    required
                     value={
                         rating
                     }
@@ -262,23 +221,43 @@ export default function ReviewForm() {
                             )
                     }
                 >
-                    <option value={5}>
+                    <option
+                        value={
+                            5
+                        }
+                    >
                         ★★★★★ — Excellent
                     </option>
 
-                    <option value={4}>
+                    <option
+                        value={
+                            4
+                        }
+                    >
                         ★★★★☆ — Very Good
                     </option>
 
-                    <option value={3}>
+                    <option
+                        value={
+                            3
+                        }
+                    >
                         ★★★☆☆ — Good
                     </option>
 
-                    <option value={2}>
+                    <option
+                        value={
+                            2
+                        }
+                    >
                         ★★☆☆☆ — Fair
                     </option>
 
-                    <option value={1}>
+                    <option
+                        value={
+                            1
+                        }
+                    >
                         ★☆☆☆☆ — Poor
                     </option>
                 </select>
@@ -329,6 +308,7 @@ export default function ReviewForm() {
                     ? (
                         <div
                             className="site-form-message error"
+                            role="alert"
                         >
                             {error}
                         </div>
@@ -341,6 +321,7 @@ export default function ReviewForm() {
                     ? (
                         <div
                             className="site-form-message success"
+                            role="status"
                         >
                             {message}
                         </div>

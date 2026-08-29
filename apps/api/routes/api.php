@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FoundationController;
+use App\Http\Controllers\Api\V1\GalleryManagementController;
 use App\Http\Controllers\Api\V1\ExpenseCategoryController;
 use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\ExpenseReportController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
 use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\RestaurantSettingsController;
+use App\Http\Controllers\Api\V1\ReviewModerationController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
@@ -697,6 +699,175 @@ Route::middleware(
             )
             ->name(
                 'v1.restaurant.settings.logo.remove'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 38 - Review Moderation
+        |--------------------------------------------------------------------------
+        |
+        | Only authorized staff may moderate customer reviews.
+        |
+        | Public visibility still requires:
+        |
+        | status = APPROVED
+        | is_visible = true
+        |
+        */
+
+        Route::get(
+            '/reviews',
+            [
+                ReviewModerationController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:reviews.moderate'
+            )
+            ->name(
+                'v1.reviews.index'
+            );
+
+        Route::patch(
+            '/reviews/{review}/approve',
+            [
+                ReviewModerationController::class,
+                'approve',
+            ]
+        )
+            ->whereNumber(
+                'review'
+            )
+            ->middleware(
+                'permission:reviews.moderate'
+            )
+            ->name(
+                'v1.reviews.approve'
+            );
+
+        Route::patch(
+            '/reviews/{review}/reject',
+            [
+                ReviewModerationController::class,
+                'reject',
+            ]
+        )
+            ->whereNumber(
+                'review'
+            )
+            ->middleware(
+                'permission:reviews.moderate'
+            )
+            ->name(
+                'v1.reviews.reject'
+            );
+
+        Route::patch(
+            '/reviews/{review}/visibility',
+            [
+                ReviewModerationController::class,
+                'visibility',
+            ]
+        )
+            ->whereNumber(
+                'review'
+            )
+            ->middleware(
+                'permission:reviews.moderate'
+            )
+            ->name(
+                'v1.reviews.visibility'
+            );
+
+        Route::delete(
+            '/reviews/{review}',
+            [
+                ReviewModerationController::class,
+                'destroy',
+            ]
+        )
+            ->whereNumber(
+                'review'
+            )
+            ->middleware(
+                'permission:reviews.moderate'
+            )
+            ->name(
+                'v1.reviews.destroy'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 38 - Gallery Management
+        |--------------------------------------------------------------------------
+        |
+        | Authorized staff can upload gallery images, edit captions / sort
+        | order, and enable or disable public visibility.
+        |
+        */
+
+        Route::get(
+            '/gallery',
+            [
+                GalleryManagementController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:website.manage'
+            )
+            ->name(
+                'v1.gallery.index'
+            );
+
+        Route::post(
+            '/gallery',
+            [
+                GalleryManagementController::class,
+                'store',
+            ]
+        )
+            ->middleware(
+                'permission:website.manage'
+            )
+            ->name(
+                'v1.gallery.store'
+            );
+
+        Route::put(
+            '/gallery/{galleryImage}',
+            [
+                GalleryManagementController::class,
+                'update',
+            ]
+        )
+            ->whereNumber(
+                'galleryImage'
+            )
+            ->middleware(
+                'permission:website.manage'
+            )
+            ->name(
+                'v1.gallery.update'
+            );
+
+        Route::patch(
+            '/gallery/{galleryImage}/state',
+            [
+                GalleryManagementController::class,
+                'updateState',
+            ]
+        )
+            ->whereNumber(
+                'galleryImage'
+            )
+            ->middleware(
+                'permission:website.manage'
+            )
+            ->name(
+                'v1.gallery.state'
             );
 
         /*
