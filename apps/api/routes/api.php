@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\PublicMenuController;
 use App\Http\Controllers\Api\V1\PublicQrOrderController;
 use App\Http\Controllers\Api\V1\PublicTableQrController;
+use App\Http\Controllers\Api\V1\PublicWebsiteController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\RecipeConsumptionController;
 use App\Http\Controllers\Api\V1\RecipeController;
@@ -123,6 +124,46 @@ Route::middleware(
         'v1.public.menu.qr'
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Website
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/public/gallery',
+        [
+            PublicWebsiteController::class,
+            'gallery',
+        ]
+    )->name(
+        'v1.public.gallery'
+    );
+
+    Route::get(
+        '/public/reviews',
+        [
+            PublicWebsiteController::class,
+            'reviews',
+        ]
+    )->name(
+        'v1.public.reviews'
+    );
+
+    Route::post(
+        '/public/reviews',
+        [
+            PublicWebsiteController::class,
+            'storeReview',
+        ]
+    )
+        ->middleware(
+            'throttle:10,1'
+        )
+        ->name(
+            'v1.public.reviews.store'
+        );
 
     /*
     |--------------------------------------------------------------------------

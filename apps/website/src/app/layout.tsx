@@ -1,28 +1,28 @@
 import type {
   Metadata,
   Viewport,
-} from 'next';
+} from "next";
 
-import './globals.css';
+import "./globals.css";
 
 export const metadata:
   Metadata = {
   title: {
     default:
-      'Restaurant',
+      "Restaurant",
 
     template:
-      '%s | Restaurant',
+      "%s | Restaurant",
   },
 
   description:
-    'Restaurant menu and table ordering.',
+    "Restaurant menu, dining information and table ordering.",
 };
 
 export const viewport:
   Viewport = {
   width:
-    'device-width',
+    "device-width",
 
   initialScale:
     1,
@@ -31,20 +31,18 @@ export const viewport:
     1,
 
   viewportFit:
-    'cover',
+    "cover",
 
   themeColor:
-    '#183f23',
+    "#173c2b",
 };
 
-export default function RootLayout(
-  {
-    children,
-  }: Readonly<{
-    children:
-    React.ReactNode;
-  }>,
-) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children:
+  React.ReactNode;
+}>) {
   return (
     <html
       lang="en"
