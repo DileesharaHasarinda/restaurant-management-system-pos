@@ -28,6 +28,9 @@ import LoginPage
 import AccessDeniedPage
   from './pages/AccessDeniedPage';
 
+import OrdersPage
+  from './orders/OrdersPage';
+
 import InventoryPage
   from './inventory/InventoryPage';
 
@@ -182,11 +185,7 @@ export default function App() {
               <Route
                 path="/orders"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="RESTAURANT"
-                    title="Orders"
-                    description="Review waiter, customer and operational restaurant orders."
-                  />
+                  <OrdersPage />
                 }
               />
 
