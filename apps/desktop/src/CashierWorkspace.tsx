@@ -1790,22 +1790,34 @@ export default function CashierWorkspace(
 
     /*
     |--------------------------------------------------------------------------
-    | Finalize Orders After Full Payment
+    | Finalize Sale After Full Payment
     |--------------------------------------------------------------------------
     |
     | PaymentModule calls this only after Laravel confirms that the invoice
     | is fully PAID.
     |
-    | Single-order invoice:
-    |     complete invoice.order_id
+    | Direct-order invoice:
+    |     complete the related order
     |
     | Table-session invoice:
     |     complete every SERVED order belonging to that billed session
+    |     close the table session
+    |     Laravel releases the table from OCCUPIED to AVAILABLE
     |
-    | The financial payment has already been committed at this point. If an
-    | order completion request fails, the error is allowed to propagate back
-    | to PaymentModule so it can clearly tell the cashier that the payment
-    | itself was saved and only lifecycle finalization needs recovery.
+    | IMPORTANT:
+    |
+    | We never PATCH a table directly to AVAILABLE here.
+    | TableSessionService::close() remains authoritative for:
+    |
+    | - blocking close while active orders remain
+    | - blocking close while an unpaid invoice remains
+    | - closing the session
+    | - changing an active table to AVAILABLE
+    | - changing an inactive table to OUT_OF_SERVICE
+    |
+    | The financial payment has already been committed before this callback
+    | runs. If lifecycle finalization fails, the error propagates back to
+    | PaymentModule. The payment must never be repeated automatically.
     |--------------------------------------------------------------------------
     */
 
@@ -1821,6 +1833,11 @@ export default function CashierWorkspace(
                 /*
                 |--------------------------------------------------------------------------
                 | Direct Order Invoice
+                |--------------------------------------------------------------------------
+                |
+                | OrderLifecycleService::complete() is idempotent when the
+                | order has already reached COMPLETED, so keeping this ID is
+                | safe during recovery.
                 |--------------------------------------------------------------------------
                 */
 
@@ -1839,8 +1856,9 @@ export default function CashierWorkspace(
                 | Table Session Invoice
                 |--------------------------------------------------------------------------
                 |
-                | A final dine-in invoice can represent several SERVED orders
-                | in the same table session.
+                | A dine-in table session can contain multiple orders.
+                | Complete every locally known SERVED order in the billed
+                | session before asking Laravel to close the table session.
                 |--------------------------------------------------------------------------
                 */
 
@@ -1889,24 +1907,6 @@ export default function CashierWorkspace(
                     }
                 }
 
-                /*
-                 * If the order was already finalized elsewhere, there may be
-                 * no local SERVED session candidates left. Refresh the lists
-                 * so Incoming Orders and Sales History still synchronize.
-                 */
-                if (
-                    candidateIds.size
-                    ===
-                    0
-                ) {
-                    await Promise.all([
-                        loadOrders(),
-                        loadTables(),
-                    ]);
-
-                    return;
-                }
-
                 setLoading(
                     true,
                 );
@@ -1916,6 +1916,12 @@ export default function CashierWorkspace(
                 );
 
                 try {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Complete Orders
+                    |--------------------------------------------------------------------------
+                    */
+
                     for (
                         const orderId
                         of candidateIds
@@ -1944,9 +1950,72 @@ export default function CashierWorkspace(
                     }
 
                     /*
-                     * COMPLETED orders leave Incoming Orders and become part
-                     * of Sales History through the existing derived filters.
-                     */
+                    |--------------------------------------------------------------------------
+                    | Close Paid Dine-In Table Session
+                    |--------------------------------------------------------------------------
+                    |
+                    | This is the missing step that releases an occupied table
+                    | after full payment.
+                    |
+                    | Do not manually update the table status. Laravel's
+                    | TableSessionService::close() owns that transition.
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        invoice.table_session_id
+                        !==
+                        null
+                    ) {
+                        try {
+                            await api.post(
+                                `/table-sessions/${invoice.table_session_id}/close`,
+                                {
+                                    reason:
+                                        'Automatically closed after full payment.',
+                                },
+                            );
+                        } catch (
+                        exception
+                        ) {
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Idempotent Recovery
+                            |--------------------------------------------------------------------------
+                            |
+                            | A paid invoice can be reopened in the Payment
+                            | module for recovery. If a previous attempt already
+                            | closed the session, that is the desired state.
+                            |--------------------------------------------------------------------------
+                            */
+
+                            if (
+                                !(
+                                    exception instanceof ApiError
+                                    &&
+                                    exception.code
+                                    ===
+                                    'TABLE_SESSION_NOT_OPEN'
+                                )
+                            ) {
+                                throw exception;
+                            }
+                        }
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Synchronize Workspace
+                    |--------------------------------------------------------------------------
+                    |
+                    | After session close:
+                    |
+                    | order(s)        -> COMPLETED
+                    | table session   -> CLOSED
+                    | active table    -> AVAILABLE
+                    |--------------------------------------------------------------------------
+                    */
+
                     await Promise.all([
                         loadOrders(),
                         loadTables(),

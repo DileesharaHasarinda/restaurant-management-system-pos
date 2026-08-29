@@ -10,7 +10,6 @@ import {
     appendQrOrderItems,
     getPublicOrderStatus,
     getQrMenu,
-    openTableSession,
     PublicApiError,
     resolveTableQr,
     submitQrOrder,
@@ -706,9 +705,16 @@ export default function CustomerOrderingPage(
     |
     | 1. Validate QR
     | 2. Detect table
-    | 3. Open/reuse session
-    | 4. Load menu
-    | 5. Restore existing active customer order
+    | 3. Load menu
+    | 4. Restore existing active customer order
+    |
+    | IMPORTANT:
+    |
+    | Merely scanning the permanent table QR and browsing the menu must
+    | NEVER create a table session or mark the table as OCCUPIED.
+    |
+    | The backend creates/reuses the table session only when the customer
+    | successfully submits the first order.
     |
     */
 
@@ -762,18 +768,20 @@ export default function CustomerOrderingPage(
 
                     /*
                     |--------------------------------------------------------------------------
-                    | Table Session
-                    |--------------------------------------------------------------------------
-                    */
-
-                    await openTableSession(
-                        token,
-                    );
-
-                    /*
-                    |--------------------------------------------------------------------------
                     | Public Menu
                     |--------------------------------------------------------------------------
+                    |
+                    | IMPORTANT:
+                    |
+                    | Do NOT open a table session here.
+                    |
+                    | A customer may scan the permanent QR only to browse the
+                    | menu and then leave. In that case the table must remain
+                    | AVAILABLE and no OPEN table session should be created.
+                    |
+                    | The first successful order submission is responsible for
+                    | creating/reusing the table session on the backend.
+                    |
                     */
 
                     const menu =
@@ -792,6 +800,14 @@ export default function CustomerOrderingPage(
                     /*
                     |--------------------------------------------------------------------------
                     | Restore Existing Customer Order
+                    |--------------------------------------------------------------------------
+                    |
+                    | The printed table QR token is permanent and reusable.
+                    |
+                    | localStorage only remembers the CURRENT customer's active
+                    | order. A terminal order belongs to a previous visit and
+                    | must never take over the table QR page for the next
+                    | customer.
                     |--------------------------------------------------------------------------
                     */
 
@@ -818,60 +834,144 @@ export default function CustomerOrderingPage(
                                 return;
                             }
 
-                            setActiveOrder(
-                                existingOrder,
-                            );
+                            const isTerminalOrder =
+                                [
+                                    'COMPLETED',
+                                    'CANCELLED',
+                                    'REJECTED',
+                                ].includes(
+                                    existingOrder.status,
+                                );
 
                             /*
-                             * If an additional cart was
-                             * saved before refresh, return
-                             * customer to menu mode.
-                             */
-                            const savedCart =
+                            |--------------------------------------------------------------------------
+                            | Previous Customer / Closed Order
+                            |--------------------------------------------------------------------------
+                            |
+                            | The QR belongs to the table, not to one historical
+                            | order. Remove only the browser's stale pointer.
+                            | The backend order remains untouched.
+                            |--------------------------------------------------------------------------
+                            */
+
+                            if (
+                                isTerminalOrder
+                            ) {
                                 window.localStorage
-                                    .getItem(
+                                    .removeItem(
+                                        activeOrderStorageKey(
+                                            token,
+                                        ),
+                                    );
+
+                                window.localStorage
+                                    .removeItem(
                                         cartStorageKey(
                                             token,
                                         ),
                                     );
 
-                            let hasSavedItems =
-                                false;
+                                window.sessionStorage
+                                    .removeItem(
+                                        submissionStorageKey(
+                                            token,
+                                        ),
+                                    );
 
-                            if (savedCart) {
-                                try {
-                                    const parsed =
-                                        JSON.parse(
-                                            savedCart,
+                                window.sessionStorage
+                                    .removeItem(
+                                        additionalSubmissionStorageKey(
+                                            savedStatusToken,
+                                        ),
+                                    );
+
+                                setActiveOrder(
+                                    null,
+                                );
+
+                                setOrderingMore(
+                                    false,
+                                );
+
+                                setCart(
+                                    [],
+                                );
+                            } else {
+                                /*
+                                |--------------------------------------------------------------------------
+                                | Current Active Order
+                                |--------------------------------------------------------------------------
+                                */
+
+                                setActiveOrder(
+                                    existingOrder,
+                                );
+
+                                /*
+                                 * If an additional cart was saved before
+                                 * refresh, return the customer to menu mode.
+                                 */
+                                const savedCart =
+                                    window.localStorage
+                                        .getItem(
+                                            cartStorageKey(
+                                                token,
+                                            ),
                                         );
 
-                                    hasSavedItems =
-                                        Array.isArray(
-                                            parsed,
-                                        )
-                                        && parsed.length
-                                        > 0;
-                                } catch {
-                                    hasSavedItems =
-                                        false;
-                                }
-                            }
+                                let hasSavedItems =
+                                    false;
 
-                            setOrderingMore(
-                                hasSavedItems,
-                            );
+                                if (savedCart) {
+                                    try {
+                                        const parsed =
+                                            JSON.parse(
+                                                savedCart,
+                                            );
+
+                                        hasSavedItems =
+                                            Array.isArray(
+                                                parsed,
+                                            )
+                                            && parsed.length
+                                            > 0;
+                                    } catch {
+                                        hasSavedItems =
+                                            false;
+                                    }
+                                }
+
+                                setOrderingMore(
+                                    hasSavedItems,
+                                );
+                            }
                         } catch {
                             /*
-                             * Old/invalid status token.
-                             */
+                            |--------------------------------------------------------------------------
+                            | Invalid / Expired Previous Order
+                            |--------------------------------------------------------------------------
+                            */
+
                             window.localStorage
                                 .removeItem(
                                     activeOrderStorageKey(
                                         token,
                                     ),
                                 );
+
+                            window.sessionStorage
+                                .removeItem(
+                                    additionalSubmissionStorageKey(
+                                        savedStatusToken,
+                                    ),
+                                );
+
+                            setActiveOrder(
+                                null,
+                            );
                         }
                     }
+
                 } catch (error) {
                     if (
                         cancelled
@@ -908,14 +1008,16 @@ export default function CustomerOrderingPage(
     );
 
     /*
- |--------------------------------------------------------------------------
- | Poll Cumulative Order Status
- |--------------------------------------------------------------------------
- |
- | Continues even while the customer is
- | browsing for additional items.
- |
- */
+    |--------------------------------------------------------------------------
+    | Poll Cumulative Order Status
+    |--------------------------------------------------------------------------
+    |
+    | The current customer may keep seeing the terminal confirmation in React
+    | state, but once the order becomes COMPLETED / CANCELLED / REJECTED we
+    | remove the persisted status token. The next visit to the permanent table
+    | QR therefore starts from the menu instead of restoring the old order.
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(
         () => {
@@ -926,12 +1028,8 @@ export default function CustomerOrderingPage(
             }
 
             /*
-             * Copy the narrowed value into a local
-             * string constant.
-             *
-             * This prevents TypeScript from treating
-             * the captured value as string | null
-             * inside the async function.
+             * Copy the narrowed value into a local string constant so
+             * TypeScript does not widen it inside the async function.
              */
             const statusToken:
                 string =
@@ -939,6 +1037,14 @@ export default function CustomerOrderingPage(
 
             let active =
                 true;
+
+            const timer =
+                window.setInterval(
+                    () => {
+                        void refreshStatus();
+                    },
+                    5000,
+                );
 
             async function refreshStatus():
                 Promise<void> {
@@ -948,26 +1054,96 @@ export default function CustomerOrderingPage(
                             statusToken,
                         );
 
-                    if (active) {
-                        setActiveOrder(
-                            latest,
+                    if (
+                        !active
+                    ) {
+                        return;
+                    }
+
+                    const isTerminalOrder =
+                        [
+                            'COMPLETED',
+                            'CANCELLED',
+                            'REJECTED',
+                        ].includes(
+                            latest.status,
+                        );
+
+                    /*
+                     * Keep the final order visible to the customer currently
+                     * using this page.
+                     */
+                    setActiveOrder(
+                        latest,
+                    );
+
+                    if (
+                        isTerminalOrder
+                    ) {
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Release Browser Ownership Of Terminal Order
+                        |--------------------------------------------------------------------------
+                        |
+                        | Do not delete or alter the backend order. Only remove
+                        | browser persistence so the same permanent table QR can
+                        | be reused by the next customer.
+                        |--------------------------------------------------------------------------
+                        */
+
+                        window.localStorage
+                            .removeItem(
+                                activeOrderStorageKey(
+                                    token,
+                                ),
+                            );
+
+                        window.localStorage
+                            .removeItem(
+                                cartStorageKey(
+                                    token,
+                                ),
+                            );
+
+                        window.sessionStorage
+                            .removeItem(
+                                submissionStorageKey(
+                                    token,
+                                ),
+                            );
+
+                        window.sessionStorage
+                            .removeItem(
+                                additionalSubmissionStorageKey(
+                                    statusToken,
+                                ),
+                            );
+
+                        setCart(
+                            [],
+                        );
+
+                        setOrderingMore(
+                            false,
+                        );
+
+                        /*
+                         * Terminal orders do not change again, so stop polling.
+                         */
+                        active =
+                            false;
+
+                        window.clearInterval(
+                            timer,
                         );
                     }
                 } catch {
                     /*
-                     * Temporary polling errors should
-                     * never destroy the confirmed order.
+                     * Temporary polling errors should never destroy the
+                     * confirmed order or its browser association.
                      */
                 }
             }
-
-            const timer =
-                window.setInterval(
-                    () => {
-                        void refreshStatus();
-                    },
-                    5000,
-                );
 
             return () => {
                 active =
@@ -980,8 +1156,10 @@ export default function CustomerOrderingPage(
         },
         [
             activeOrderStatusToken,
+            token,
         ],
     );
+
     /*
     |--------------------------------------------------------------------------
     | Filter Menu

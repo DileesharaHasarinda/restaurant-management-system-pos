@@ -569,7 +569,7 @@ export default function PaymentModule(
 
     /*
     |--------------------------------------------------------------------------
-    | Finalize Order(s) After Full Payment
+    | Finalize Sale After Full Payment
     |--------------------------------------------------------------------------
     |
     | Payment is authoritative and already committed by Laravel before this
@@ -629,8 +629,8 @@ export default function PaymentModule(
                     }
 
                     return exception instanceof Error
-                        ? `Payment was SAVED successfully, but the order could not be finalized: ${exception.message}`
-                        : "Payment was SAVED successfully, but the order could not be finalized.";
+                        ? `Payment was SAVED successfully, but the sale could not be fully finalized: ${exception.message}`
+                        : "Payment was SAVED successfully, but the sale could not be fully finalized.";
                 }
             },
             [
@@ -761,27 +761,38 @@ export default function PaymentModule(
 
     /*
     |--------------------------------------------------------------------------
-    | Recover A Paid Invoice That Is Still Attached To A SERVED Order
+    | Recover A Paid Invoice With Incomplete Sale Finalization
     |--------------------------------------------------------------------------
     |
-    | This also repairs the exact failure mode that existed before this fix:
+    | This repairs both recovery states:
     |
     | invoice = PAID
     | order   = SERVED
     |
-    | Opening the Payment module again will safely retry only the order
-    | lifecycle completion. It does not create another payment.
+    | and:
+    |
+    | invoice       = PAID
+    | order         = COMPLETED
+    | table session = OPEN
+    |
+    | Opening the Payment module again safely retries lifecycle finalization.
+    | It does not create another financial payment.
     |--------------------------------------------------------------------------
     */
 
     useEffect(
         () => {
+            const recoverablePaidOrder =
+                order?.status === "SERVED"
+                ||
+                order?.status === "COMPLETED";
+
             if (
                 !invoice
                 ||
                 !order
                 ||
-                order.status !== "SERVED"
+                !recoverablePaidOrder
                 ||
                 !isPaid
                 ||
@@ -1403,7 +1414,7 @@ export default function PaymentModule(
 
                 /*
                 |--------------------------------------------------------------------------
-                | Finalize Fully Paid Order(s)
+                | Finalize Fully Paid Sale
                 |--------------------------------------------------------------------------
                 |
                 | Do this after Laravel has committed the payment and before

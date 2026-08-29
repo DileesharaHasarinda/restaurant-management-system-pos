@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\StockCancellationReversalController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\SupplierPaymentController;
 use App\Http\Controllers\Api\V1\TableController;
+use App\Http\Controllers\Api\V1\TableHistoryController;
 use App\Http\Controllers\Api\V1\TableQrController;
 use App\Http\Controllers\Api\V1\TableSessionController;
 use App\Http\Controllers\Api\V1\TakeawayOrderController;
@@ -120,6 +121,7 @@ Route::middleware(
     )->name(
         'v1.public.menu.qr'
     );
+
 
     /*
     |--------------------------------------------------------------------------
@@ -801,6 +803,51 @@ Route::middleware(
             )
             ->name(
                 'v1.tables.merge'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Table Transfer / Merge History
+        |--------------------------------------------------------------------------
+        |
+        | These routes must stay inside the authenticated API group so they
+        | inherit auth:sanctum and active-user middleware, just like the
+        | rest of the protected table-management endpoints.
+        |
+        */
+
+        Route::get(
+            '/tables/{table}/transfers',
+            [
+                TableHistoryController::class,
+                'transfers',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.transfers.index'
+            );
+
+        Route::get(
+            '/tables/{table}/merges',
+            [
+                TableHistoryController::class,
+                'merges',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware(
+                'permission:tables.view'
+            )
+            ->name(
+                'v1.tables.merges.index'
             );
 
         /*

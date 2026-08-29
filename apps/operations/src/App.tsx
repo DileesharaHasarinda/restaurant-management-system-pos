@@ -37,6 +37,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import TablesPage
+  from "./tables/TablesPage";
+
 import StockAdjustmentsPage
   from "./stockAdjustments/StockAdjustmentsPage";
 
@@ -172,11 +175,7 @@ export default function App() {
               <Route
                 path="/tables"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="RESTAURANT"
-                    title="Tables"
-                    description="Manage restaurant tables, sessions, capacity and QR ordering."
-                  />
+                  <TablesPage />
                 }
               />
 
