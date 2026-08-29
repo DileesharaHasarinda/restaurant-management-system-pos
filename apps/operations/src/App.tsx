@@ -43,6 +43,9 @@ import PurchasesPage from "./purchases/PurchasesPage";
 import ReportsPage
   from './reports/ReportsPage';
 
+import UsersPage
+  from './users/UsersPage';
+
 import TablesPage
   from "./tables/TablesPage";
 
@@ -278,11 +281,7 @@ export default function App() {
               <Route
                 path="/users"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="ADMINISTRATION"
-                    title="Users & Roles"
-                    description="Manage staff accounts, roles, status and active sessions."
-                  />
+                  <UsersPage />
                 }
               />
 

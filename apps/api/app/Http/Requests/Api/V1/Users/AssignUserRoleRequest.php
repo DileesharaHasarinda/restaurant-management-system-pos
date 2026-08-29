@@ -2,28 +2,54 @@
 
 namespace App\Http\Requests\Api\V1\Users;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AssignUserRoleRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | Authorization
+    |--------------------------------------------------------------------------
+    |
+    | Route middleware already checks:
+    |
+    | users.role
+    |
+    | RoleHierarchyService performs the important business-level hierarchy
+    | authorization before the role is actually changed.
+    |
+    */
+
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
     public function rules(): array
     {
         return [
-            //
+            'role_id' => [
+                'required',
+                'integer',
+
+                Rule::exists(
+                    'roles',
+                    'id'
+                )->where(
+                    fn($query) =>
+                    $query->where(
+                        'is_active',
+                        true
+                    )
+                ),
+            ],
         ];
     }
 }
