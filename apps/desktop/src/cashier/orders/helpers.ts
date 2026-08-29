@@ -1,6 +1,11 @@
 import type { Order } from "../../types";
 
-import type { OrderDisplayItem, OrderDisplayMeta } from "./types";
+import type {
+  OrderActionPermissions,
+  OrderDisplayItem,
+  OrderDisplayMeta,
+  OrderItemKitchenState,
+} from "./types";
 
 interface RawAddon {
   id?: number;
@@ -41,7 +46,27 @@ interface RawOrderItem {
 
   special_notes?: string | null;
 
+  status?: string | null;
+
+  sent_to_kitchen_at?: string | null;
+
+  cancelled_at?: string | null;
+
   addons?: RawAddon[];
+}
+
+interface RawOrderActions {
+  can_confirm?: boolean;
+
+  can_reject?: boolean;
+
+  can_send_to_kitchen?: boolean;
+
+  can_serve?: boolean;
+
+  can_complete?: boolean;
+
+  can_cancel?: boolean;
 }
 
 interface RawOrderMeta {
@@ -68,6 +93,10 @@ interface RawOrderMeta {
   customer_phone?: string | null;
 
   created_at?: string | null;
+
+  pending_kitchen_item_count?: number | string;
+
+  actions?: RawOrderActions | null;
 
   items?: RawOrderItem[];
 }
@@ -139,6 +168,18 @@ export const orderStatusClass = (status: string): string => {
   }
 };
 
+const kitchenStateForItem = (item: RawOrderItem): OrderItemKitchenState => {
+  if (item.status === "CANCELLED" || item.cancelled_at) {
+    return "CANCELLED";
+  }
+
+  if (item.sent_to_kitchen_at) {
+    return "SENT";
+  }
+
+  return "WAITING";
+};
+
 export const getOrderDisplayItems = (order: Order): OrderDisplayItem[] => {
   const rawOrder = order as unknown as RawOrderMeta;
 
@@ -155,7 +196,15 @@ export const getOrderDisplayItems = (order: Order): OrderDisplayItem[] => {
     lineTotal: numberValue(item.line_total ?? item.total),
 
     notes: item.special_notes ?? item.notes ?? null,
-    
+
+    status: item.status ?? "ACTIVE",
+
+    sentToKitchenAt: item.sent_to_kitchen_at ?? null,
+
+    cancelledAt: item.cancelled_at ?? null,
+
+    kitchenState: kitchenStateForItem(item),
+
     addons: (item.addons ?? []).map((addon) => ({
       id: addon.id ?? addon.addon_id,
 
@@ -191,4 +240,43 @@ export const getOrderDisplayMeta = (order: Order): OrderDisplayMeta => {
 
     createdAt: raw.created_at ?? null,
   };
+};
+
+export const getOrderActions = (order: Order): OrderActionPermissions => {
+  const raw = order as unknown as RawOrderMeta;
+
+  return {
+    can_confirm: Boolean(raw.actions?.can_confirm),
+
+    can_reject: Boolean(raw.actions?.can_reject),
+
+    can_send_to_kitchen: Boolean(raw.actions?.can_send_to_kitchen),
+
+    can_serve: Boolean(raw.actions?.can_serve),
+
+    can_complete: Boolean(raw.actions?.can_complete),
+
+    can_cancel: Boolean(raw.actions?.can_cancel),
+  };
+};
+
+export const getPendingKitchenItemCount = (order: Order): number => {
+  const raw = order as unknown as RawOrderMeta;
+
+  if (
+    raw.pending_kitchen_item_count !== undefined &&
+    raw.pending_kitchen_item_count !== null
+  ) {
+    return Math.max(0, numberValue(raw.pending_kitchen_item_count));
+  }
+
+  /*
+   * Display-only fallback.
+   *
+   * Lifecycle permissions still come from
+   * Laravel's actions object.
+   */
+  return (raw.items ?? []).filter(
+    (item) => (item.status ?? "ACTIVE") === "ACTIVE" && !item.sent_to_kitchen_at
+  ).length;
 };

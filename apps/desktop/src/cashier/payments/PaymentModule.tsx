@@ -427,9 +427,14 @@ export default function PaymentModule(
                 );
 
                 try {
+                    const invoiceEndpoint =
+                        order.table_session_id
+                            ? `/table-sessions/${order.table_session_id}/invoice`
+                            : `/orders/${order.id}/invoice`;
+
                     const response =
                         await api.post<GeneratedInvoiceResponse>(
-                            `/orders/${order.id}/invoice`,
+                            invoiceEndpoint,
                             {},
                         );
 

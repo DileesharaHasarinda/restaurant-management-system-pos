@@ -4,7 +4,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Cross-Origin Resource Sharing
+    | Cross-Origin Resource Sharing (CORS)
     |--------------------------------------------------------------------------
     */
 
@@ -18,8 +18,8 @@ return [
     ],
 
     'allowed_origins' => [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5174',
     ],
 
     'allowed_origins_patterns' => [],
@@ -32,13 +32,6 @@ return [
 
     'max_age' => 0,
 
-    /*
-     * The Electron POS authenticates using
-     * Laravel Sanctum Bearer tokens.
-     *
-     * We are not using browser cookie/session
-     * authentication for the desktop POS.
-     */
     'supports_credentials' => false,
 
 ];

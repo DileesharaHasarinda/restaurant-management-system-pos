@@ -497,6 +497,163 @@
   font-weight: 900;
 }
 
+.current-order-pending-kitchen {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  margin-bottom: 16px;
+  padding: 14px 16px;
+
+  color: #92400e;
+  background: #fffbeb;
+
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+}
+
+.current-order-pending-kitchen-icon {
+  display: grid;
+
+  width: 38px;
+  height: 38px;
+
+  flex: 0 0 38px;
+
+  place-items: center;
+
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+
+  background: #d97706;
+  border-radius: 50%;
+}
+
+.current-order-pending-kitchen > div:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.current-order-pending-kitchen strong {
+  font-size: 14px;
+}
+
+.current-order-pending-kitchen span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.current-order-item-title-row {
+  display: flex;
+  min-width: 0;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.current-order-kitchen-badge {
+  display: inline-flex;
+
+  min-height: 24px;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 8px;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  line-height: 1.2;
+
+  border-radius: 999px;
+
+  white-space: nowrap;
+}
+
+.current-order-kitchen-badge.sent {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.current-order-kitchen-badge.waiting {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+}
+
+.current-order-kitchen-badge.cancelled {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fda29b;
+}
+
+.current-order-kitchen-time {
+  display: block;
+
+  margin-top: 6px;
+
+  color: #667085;
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.current-order-item.is-cancelled {
+  opacity: 0.7;
+}
+
+.current-order-item.is-cancelled .current-order-item-main > strong,
+.current-order-item.is-cancelled .current-order-item-title-row > strong {
+  text-decoration: line-through;
+}
+
+.current-order-danger {
+  min-height: 46px;
+
+  padding: 9px 16px;
+
+  color: #b42318;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  background: #ffffff;
+
+  border: 1px solid #f04438;
+  border-radius: 9px;
+
+  cursor: pointer;
+}
+
+.current-order-danger:hover:not(:disabled) {
+  color: #ffffff;
+  background: #b42318;
+}
+
+.current-order-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .current-order-item-title-row {
+    flex-direction: column;
+  }
+
+  .current-order-kitchen-badge {
+    align-self: flex-start;
+  }
+}
+
 @media (max-width: 1200px) {
   .current-order-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));

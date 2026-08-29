@@ -1,25 +1,27 @@
 import {
     useMemo,
-} from "react";
+} from 'react';
 
 import type {
     Order,
-} from "../../types";
+} from '../../types';
 
 import {
     currentOrderMoney,
     formatOrderDateTime,
+    getOrderActions,
     getOrderDisplayItems,
     getOrderDisplayMeta,
+    getPendingKitchenItemCount,
     orderStatusClass,
     orderStatusLabel,
-} from "./helpers";
+} from './helpers';
 
 import type {
     OrderTransitionAction,
-} from "./types";
+} from './types';
 
-import "./CurrentOrderModule.css";
+import './CurrentOrderModule.css';
 
 interface CurrentOrderModuleProps {
     order:
@@ -35,10 +37,17 @@ interface CurrentOrderModuleProps {
 
         action:
             OrderTransitionAction,
-    ) => Promise<void>
+    ) =>
+        Promise<void>
         | void;
 
     onOpenPayment:
+    (
+        order:
+            Order,
+    ) => void;
+
+    onOpenCorrections?:
     (
         order:
             Order,
@@ -51,6 +60,7 @@ export default function CurrentOrderModule(
         loading = false,
         onTransition,
         onOpenPayment,
+        onOpenCorrections,
     }: CurrentOrderModuleProps,
 ) {
     const items =
@@ -79,6 +89,50 @@ export default function CurrentOrderModule(
             ],
         );
 
+    const actions =
+        useMemo(
+            () =>
+                order
+                    ? getOrderActions(
+                        order,
+                    )
+                    : {
+                        can_confirm:
+                            false,
+
+                        can_reject:
+                            false,
+
+                        can_send_to_kitchen:
+                            false,
+
+                        can_serve:
+                            false,
+
+                        can_complete:
+                            false,
+
+                        can_cancel:
+                            false,
+                    },
+            [
+                order,
+            ],
+        );
+
+    const pendingKitchenCount =
+        useMemo(
+            () =>
+                order
+                    ? getPendingKitchenItemCount(
+                        order,
+                    )
+                    : 0,
+            [
+                order,
+            ],
+        );
+
     if (
         !order
         ||
@@ -97,8 +151,8 @@ export default function CurrentOrderModule(
                         </h1>
 
                         <p>
-                            Select an order to view its details
-                            and continue processing.
+                            Select an incoming or active
+                            order to continue processing.
                         </p>
                     </div>
                 </header>
@@ -113,8 +167,9 @@ export default function CurrentOrderModule(
                     </h2>
 
                     <p>
-                        Open an incoming or active order to
-                        continue the order lifecycle.
+                        Open an order from Incoming Orders
+                        to review items and continue the
+                        restaurant workflow.
                     </p>
                 </section>
             </div>
@@ -125,7 +180,7 @@ export default function CurrentOrderModule(
         String(
             order.status
             ??
-            "",
+            '',
         );
 
     const quantity =
@@ -139,7 +194,6 @@ export default function CurrentOrderModule(
                 Number(
                     item.quantity,
                 ),
-
             0,
         );
 
@@ -151,11 +205,27 @@ export default function CurrentOrderModule(
         );
 
     const terminal =
-        status === "COMPLETED"
+        status
+        ===
+        'COMPLETED'
         ||
-        status === "CANCELLED"
+        status
+        ===
+        'CANCELLED'
         ||
-        status === "REJECTED";
+        status
+        ===
+        'REJECTED';
+
+    const sentItemCount =
+        items.filter(
+            (
+                item,
+            ) =>
+                item.kitchenState
+                ===
+                'SENT',
+        ).length;
 
     return (
         <div className="current-order-page">
@@ -181,7 +251,7 @@ export default function CurrentOrderModule(
                                 ? ` • ${formatOrderDateTime(
                                     meta.createdAt,
                                 )}`
-                                : ""
+                                : ''
                         }
                     </p>
                 </div>
@@ -190,8 +260,7 @@ export default function CurrentOrderModule(
                     className={
                         `current-order-status ${orderStatusClass(
                             status,
-                        )
-                        }`
+                        )}`
                     }
                 >
                     {
@@ -202,6 +271,44 @@ export default function CurrentOrderModule(
                 </div>
             </header>
 
+            {
+                pendingKitchenCount
+                    >
+                    0
+                    ? (
+                        <section className="current-order-pending-kitchen">
+                            <div className="current-order-pending-kitchen-icon">
+                                !
+                            </div>
+
+                            <div>
+                                <strong>
+                                    {
+                                        pendingKitchenCount
+                                    }
+                                    {' '}
+                                    {
+                                        pendingKitchenCount
+                                            ===
+                                            1
+                                            ? 'item is'
+                                            : 'items are'
+                                    }
+                                    {' '}
+                                    waiting for the kitchen
+                                </strong>
+
+                                <span>
+                                    These are newly added items
+                                    that have not yet been included
+                                    in a kitchen ticket.
+                                </span>
+                            </div>
+                        </section>
+                    )
+                    : null
+            }
+
             <section className="current-order-summary">
                 <SummaryItem
                     label="Order Type"
@@ -209,10 +316,10 @@ export default function CurrentOrderModule(
                         meta.orderType
                             ?.replace(
                                 /_/g,
-                                " ",
+                                ' ',
                             )
                         ??
-                        "-"
+                        '-'
                     }
                 />
 
@@ -222,9 +329,11 @@ export default function CurrentOrderModule(
                         meta.tableName
                         ??
                         (
-                            meta.orderType === "TAKEAWAY"
-                                ? "TAKEAWAY"
-                                : "-"
+                            meta.orderType
+                                ===
+                                'TAKEAWAY'
+                                ? 'TAKEAWAY'
+                                : '-'
                         )
                     }
                 />
@@ -234,7 +343,7 @@ export default function CurrentOrderModule(
                     value={
                         meta.token
                         ??
-                        "-"
+                        '-'
                     }
                 />
 
@@ -248,15 +357,19 @@ export default function CurrentOrderModule(
                 />
 
                 <SummaryItem
-                    label="Order Source"
+                    label="Kitchen"
                     value={
-                        meta.orderSource
-                            ?.replace(
-                                /_/g,
-                                " ",
+                        pendingKitchenCount
+                            >
+                            0
+                            ? `${pendingKitchenCount} waiting`
+                            : (
+                                sentItemCount
+                                    >
+                                    0
+                                    ? 'All sent'
+                                    : 'Not sent'
                             )
-                        ??
-                        "-"
                     }
                 />
 
@@ -285,18 +398,28 @@ export default function CurrentOrderModule(
                         </div>
 
                         <span className="current-order-item-count">
-                            {items.length}
-                            {" "}
-                            lines
+                            {
+                                items.length
+                            }
+                            {' '}
+                            {
+                                items.length
+                                    ===
+                                    1
+                                    ? 'line'
+                                    : 'lines'
+                            }
                         </span>
                     </div>
 
                     {
-                        items.length === 0
+                        items.length
+                            ===
+                            0
                             ? (
                                 <div className="current-order-no-items">
-                                    No item details are available
-                                    for this order.
+                                    No item details are
+                                    available for this order.
                                 </div>
                             )
                             : (
@@ -307,7 +430,13 @@ export default function CurrentOrderModule(
                                                 item,
                                             ) => (
                                                 <article
-                                                    className="current-order-item"
+                                                    className={
+                                                        item.kitchenState
+                                                            ===
+                                                            'CANCELLED'
+                                                            ? 'current-order-item is-cancelled'
+                                                            : 'current-order-item'
+                                                    }
                                                     key={
                                                         item.id
                                                     }
@@ -320,11 +449,19 @@ export default function CurrentOrderModule(
                                                     </div>
 
                                                     <div className="current-order-item-main">
-                                                        <strong>
-                                                            {
-                                                                item.name
-                                                            }
-                                                        </strong>
+                                                        <div className="current-order-item-title-row">
+                                                            <strong>
+                                                                {
+                                                                    item.name
+                                                                }
+                                                            </strong>
+
+                                                            <KitchenBadge
+                                                                state={
+                                                                    item.kitchenState
+                                                                }
+                                                            />
+                                                        </div>
 
                                                         {
                                                             item.variant
@@ -339,7 +476,9 @@ export default function CurrentOrderModule(
                                                         }
 
                                                         {
-                                                            item.addons.length > 0
+                                                            item.addons.length
+                                                                >
+                                                                0
                                                                 ? (
                                                                     <div className="current-order-addons">
                                                                         {
@@ -356,10 +495,13 @@ export default function CurrentOrderModule(
                                                                                         }
                                                                                     >
                                                                                         + {addon.name}
+
                                                                                         {
-                                                                                            addon.quantity !== 1
+                                                                                            addon.quantity
+                                                                                                !==
+                                                                                                1
                                                                                                 ? ` × ${addon.quantity}`
-                                                                                                : ""
+                                                                                                : ''
                                                                                         }
                                                                                     </span>
                                                                                 ),
@@ -374,12 +516,32 @@ export default function CurrentOrderModule(
                                                             item.notes
                                                                 ? (
                                                                     <div className="current-order-note">
-                                                                        Note:
-                                                                        {" "}
+                                                                        <strong>
+                                                                            Note:
+                                                                        </strong>
+
+                                                                        {' '}
+
                                                                         {
                                                                             item.notes
                                                                         }
                                                                     </div>
+                                                                )
+                                                                : null
+                                                        }
+
+                                                        {
+                                                            item.sentToKitchenAt
+                                                                ? (
+                                                                    <span className="current-order-kitchen-time">
+                                                                        Kitchen:
+                                                                        {' '}
+                                                                        {
+                                                                            formatOrderDateTime(
+                                                                                item.sentToKitchenAt,
+                                                                            )
+                                                                        }
+                                                                    </span>
                                                                 )
                                                                 : null
                                                         }
@@ -455,7 +617,7 @@ export default function CurrentOrderModule(
                                             {
                                                 meta.customerName
                                                 ??
-                                                "-"
+                                                '-'
                                             }
                                         </strong>
                                     </div>
@@ -469,7 +631,7 @@ export default function CurrentOrderModule(
                                             {
                                                 meta.customerPhone
                                                 ??
-                                                "-"
+                                                '-'
                                             }
                                         </strong>
                                     </div>
@@ -493,6 +655,7 @@ export default function CurrentOrderModule(
                                     {
                                         nextActionDescription(
                                             status,
+                                            pendingKitchenCount,
                                         )
                                     }
                                 </strong>
@@ -500,7 +663,7 @@ export default function CurrentOrderModule(
 
                             <div className="current-order-actions">
                                 {
-                                    status === "PENDING"
+                                    actions.can_confirm
                                         ? (
                                             <button
                                                 type="button"
@@ -512,15 +675,15 @@ export default function CurrentOrderModule(
                                                     () => {
                                                         void onTransition(
                                                             order,
-                                                            "confirm",
+                                                            'confirm',
                                                         );
                                                     }
                                                 }
                                             >
                                                 {
                                                     loading
-                                                        ? "Processing..."
-                                                        : "Confirm Order"
+                                                        ? 'Processing...'
+                                                        : 'Confirm Order'
                                                 }
                                             </button>
                                         )
@@ -528,7 +691,7 @@ export default function CurrentOrderModule(
                                 }
 
                                 {
-                                    status === "CONFIRMED"
+                                    actions.can_send_to_kitchen
                                         ? (
                                             <button
                                                 type="button"
@@ -540,15 +703,30 @@ export default function CurrentOrderModule(
                                                     () => {
                                                         void onTransition(
                                                             order,
-                                                            "send-to-kitchen",
+                                                            'send-to-kitchen',
                                                         );
                                                     }
                                                 }
                                             >
                                                 {
                                                     loading
-                                                        ? "Sending..."
-                                                        : "Send to Kitchen"
+                                                        ? 'Sending...'
+                                                        : (
+                                                            pendingKitchenCount
+                                                                >
+                                                                0
+                                                                &&
+                                                                status
+                                                                ===
+                                                                'SENT_TO_KITCHEN'
+                                                                ? `Send ${pendingKitchenCount} New ${pendingKitchenCount
+                                                                    ===
+                                                                    1
+                                                                    ? 'Item'
+                                                                    : 'Items'
+                                                                }`
+                                                                : 'Send to Kitchen'
+                                                        )
                                                 }
                                             </button>
                                         )
@@ -556,7 +734,7 @@ export default function CurrentOrderModule(
                                 }
 
                                 {
-                                    status === "SENT_TO_KITCHEN"
+                                    actions.can_serve
                                         ? (
                                             <button
                                                 type="button"
@@ -568,15 +746,15 @@ export default function CurrentOrderModule(
                                                     () => {
                                                         void onTransition(
                                                             order,
-                                                            "serve",
+                                                            'serve',
                                                         );
                                                     }
                                                 }
                                             >
                                                 {
                                                     loading
-                                                        ? "Processing..."
-                                                        : "Mark as Served"
+                                                        ? 'Processing...'
+                                                        : 'Mark as Served'
                                                 }
                                             </button>
                                         )
@@ -584,7 +762,9 @@ export default function CurrentOrderModule(
                                 }
 
                                 {
-                                    status === "SERVED"
+                                    status
+                                        ===
+                                        'SERVED'
                                         ? (
                                             <button
                                                 type="button"
@@ -604,21 +784,49 @@ export default function CurrentOrderModule(
                                         )
                                         : null
                                 }
+
+                                {
+                                    actions.can_cancel
+                                        &&
+                                        onOpenCorrections
+                                        ? (
+                                            <button
+                                                type="button"
+                                                className="current-order-danger"
+                                                disabled={
+                                                    loading
+                                                }
+                                                onClick={
+                                                    () =>
+                                                        onOpenCorrections(
+                                                            order,
+                                                        )
+                                                }
+                                            >
+                                                Cancel / Correct
+                                            </button>
+                                        )
+                                        : null
+                                }
                             </div>
                         </section>
                     )
                     : (
                         <section
                             className={
-                                status === "COMPLETED"
-                                    ? "current-order-terminal completed"
-                                    : "current-order-terminal cancelled"
+                                status
+                                    ===
+                                    'COMPLETED'
+                                    ? 'current-order-terminal completed'
+                                    : 'current-order-terminal cancelled'
                             }
                         >
                             <strong>
                                 {
-                                    status === "COMPLETED"
-                                        ? "Order Completed"
+                                    status
+                                        ===
+                                        'COMPLETED'
+                                        ? 'Order Completed'
                                         : `Order ${orderStatusLabel(
                                             status,
                                         )}`
@@ -627,9 +835,11 @@ export default function CurrentOrderModule(
 
                             <span>
                                 {
-                                    status === "COMPLETED"
-                                        ? "This order has finished its operational lifecycle."
-                                        : "No further processing is available for this order."
+                                    status
+                                        ===
+                                        'COMPLETED'
+                                        ? 'This order has finished its operational lifecycle.'
+                                        : 'No further lifecycle processing is available for this order.'
                                 }
                             </span>
                         </section>
@@ -637,7 +847,9 @@ export default function CurrentOrderModule(
             }
 
             {
-                status === "SERVED"
+                status
+                    ===
+                    'SERVED'
                     ? (
                         <div className="current-order-billing-note">
                             <strong>
@@ -645,15 +857,57 @@ export default function CurrentOrderModule(
                             </strong>
 
                             <span>
-                                The order is served. Complete customer billing
-                                in the Payment module before completing the
-                                order lifecycle.
+                                The order is served. Complete
+                                customer billing in the Payment
+                                module before final order
+                                completion.
                             </span>
                         </div>
                     )
                     : null
             }
         </div>
+    );
+}
+
+function KitchenBadge(
+    {
+        state,
+    }: {
+        state:
+        'WAITING'
+        | 'SENT'
+        | 'CANCELLED';
+    },
+) {
+    if (
+        state
+        ===
+        'CANCELLED'
+    ) {
+        return (
+            <span className="current-order-kitchen-badge cancelled">
+                Cancelled
+            </span>
+        );
+    }
+
+    if (
+        state
+        ===
+        'SENT'
+    ) {
+        return (
+            <span className="current-order-kitchen-badge sent">
+                ✓ Sent to Kitchen
+            </span>
+        );
+    }
+
+    return (
+        <span className="current-order-kitchen-badge waiting">
+            Waiting for Kitchen
+        </span>
     );
 }
 
@@ -677,16 +931,20 @@ function SummaryItem(
         <div
             className={
                 primary
-                    ? "current-order-summary-item primary"
-                    : "current-order-summary-item"
+                    ? 'current-order-summary-item primary'
+                    : 'current-order-summary-item'
             }
         >
             <span>
-                {label}
+                {
+                    label
+                }
             </span>
 
             <strong>
-                {value}
+                {
+                    value
+                }
             </strong>
         </div>
     );
@@ -702,11 +960,11 @@ function OrderProgress(
 ) {
     const normalFlow =
         [
-            "PENDING",
-            "CONFIRMED",
-            "SENT_TO_KITCHEN",
-            "SERVED",
-            "COMPLETED",
+            'PENDING',
+            'CONFIRMED',
+            'SENT_TO_KITCHEN',
+            'SERVED',
+            'COMPLETED',
         ];
 
     const currentIndex =
@@ -715,9 +973,13 @@ function OrderProgress(
         );
 
     const terminalFailure =
-        status === "CANCELLED"
+        status
+        ===
+        'CANCELLED'
         ||
-        status === "REJECTED";
+        status
+        ===
+        'REJECTED';
 
     return (
         <div className="current-order-progress">
@@ -730,28 +992,34 @@ function OrderProgress(
                         const complete =
                             !terminalFailure
                             &&
-                            currentIndex >= index;
+                            currentIndex
+                            >=
+                            index;
 
                         const active =
-                            status === stage;
+                            status
+                            ===
+                            stage;
 
                         return (
                             <div
                                 className={
                                     [
-                                        "current-order-progress-row",
+                                        'current-order-progress-row',
+
                                         complete
-                                            ? "complete"
-                                            : "",
+                                            ? 'complete'
+                                            : '',
+
                                         active
-                                            ? "active"
-                                            : "",
+                                            ? 'active'
+                                            : '',
                                     ]
                                         .filter(
                                             Boolean,
                                         )
                                         .join(
-                                            " ",
+                                            ' ',
                                         )
                                 }
                                 key={
@@ -761,8 +1029,8 @@ function OrderProgress(
                                 <span className="current-order-progress-dot">
                                     {
                                         complete
-                                            ? "✓"
-                                            : ""
+                                            ? '✓'
+                                            : ''
                                     }
                                 </span>
 
@@ -800,23 +1068,44 @@ const nextActionDescription =
     (
         status:
             string,
+
+        pendingKitchenCount:
+            number,
     ): string => {
         switch (
         status
         ) {
-            case "PENDING":
-                return "Review and confirm the customer order.";
+            case 'PENDING':
+                return 'Review and confirm the customer order.';
 
-            case "CONFIRMED":
-                return "Send approved items to the kitchen.";
+            case 'CONFIRMED':
+                return pendingKitchenCount
+                    >
+                    0
+                    ? `${pendingKitchenCount} ${pendingKitchenCount
+                        ===
+                        1
+                        ? 'item is'
+                        : 'items are'
+                    } ready to send to the kitchen.`
+                    : 'The confirmed order is ready for kitchen processing.';
 
-            case "SENT_TO_KITCHEN":
-                return "Mark the order served when food is delivered.";
+            case 'SENT_TO_KITCHEN':
+                return pendingKitchenCount
+                    >
+                    0
+                    ? `Send the ${pendingKitchenCount} newly added ${pendingKitchenCount
+                        ===
+                        1
+                        ? 'item'
+                        : 'items'
+                    } to the kitchen.`
+                    : 'Mark the order served when all food has been delivered.';
 
-            case "SERVED":
-                return "Generate invoice and collect customer payment.";
+            case 'SERVED':
+                return 'Generate the final invoice and collect customer payment.';
 
             default:
-                return "No operational action required.";
+                return 'No operational action is currently required.';
         }
     };

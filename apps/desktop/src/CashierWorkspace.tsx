@@ -205,6 +205,26 @@ interface ApiOrderItem {
     ApiOrderAddon[];
 }
 
+interface ApiOrderActions {
+    can_confirm?:
+    boolean;
+
+    can_reject?:
+    boolean;
+
+    can_send_to_kitchen?:
+    boolean;
+
+    can_serve?:
+    boolean;
+
+    can_complete?:
+    boolean;
+
+    can_cancel?:
+    boolean;
+}
+
 interface ApiOrderResponse {
     id?:
     number;
@@ -289,6 +309,9 @@ interface ApiOrderResponse {
 
     rejection_reason?:
     string | null;
+
+    actions?:
+    ApiOrderActions | null;
 
     pending_kitchen_item_count?:
     number;
@@ -413,6 +436,11 @@ const normalizeOrder =
 
                     sent_to_kitchen_at:
                         item.sent_to_kitchen_at
+                        ??
+                        null,
+
+                    cancelled_at:
+                        item.cancelled_at
                         ??
                         null,
 
@@ -601,8 +629,73 @@ const normalizeOrder =
                 ??
                 null,
 
+            cancelled_at:
+                raw.cancelled_at
+                ??
+                null,
+
+            rejected_at:
+                raw.rejected_at
+                ??
+                null,
+
+            cancellation_reason:
+                raw.cancellation_reason
+                ??
+                null,
+
+            rejection_reason:
+                raw.rejection_reason
+                ??
+                null,
+
+            pending_kitchen_item_count:
+                Number(
+                    raw.pending_kitchen_item_count
+                    ??
+                    0,
+                ),
+
+            actions: {
+                can_confirm:
+                    Boolean(
+                        raw.actions
+                            ?.can_confirm,
+                    ),
+
+                can_reject:
+                    Boolean(
+                        raw.actions
+                            ?.can_reject,
+                    ),
+
+                can_send_to_kitchen:
+                    Boolean(
+                        raw.actions
+                            ?.can_send_to_kitchen,
+                    ),
+
+                can_serve:
+                    Boolean(
+                        raw.actions
+                            ?.can_serve,
+                    ),
+
+                can_complete:
+                    Boolean(
+                        raw.actions
+                            ?.can_complete,
+                    ),
+
+                can_cancel:
+                    Boolean(
+                        raw.actions
+                            ?.can_cancel,
+                    ),
+            },
+
             items,
-        };
+        } as Order;
     };
 
 const normalizeOrders =
@@ -2000,6 +2093,20 @@ export default function CashierWorkspace(
             }
         };
 
+    const openCorrectionsForOrder =
+        (
+            order:
+                Order,
+        ): void => {
+            setSelectedOrder(
+                order,
+            );
+
+            setActiveModule(
+                'corrections',
+            );
+        };
+
     /*
     |--------------------------------------------------------------------------
     | Open Payment
@@ -2168,6 +2275,9 @@ export default function CashierWorkspace(
                             }
                             onOpenPayment={
                                 openPayment
+                            }
+                            onOpenCorrections={
+                                openCorrectionsForOrder
                             }
                         />
                     );
