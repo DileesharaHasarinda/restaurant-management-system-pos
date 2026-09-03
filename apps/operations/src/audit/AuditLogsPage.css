@@ -1,0 +1,1060 @@
+/*
+|--------------------------------------------------------------------------
+| Audit Page
+|--------------------------------------------------------------------------
+*/
+
+.audit-page {
+  width: 100%;
+  min-width: 0;
+
+  /*
+    |--------------------------------------------------------------------------
+    | Important
+    |--------------------------------------------------------------------------
+    |
+    | Let the Operations layout remain the main page scroller.
+    | Do not create a second nested vertical scrollbar here.
+    |--------------------------------------------------------------------------
+    */
+
+  min-height: 100%;
+
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 14px;
+
+  color: #0f172a;
+
+  overflow: visible;
+
+  padding-bottom: 24px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Header
+|--------------------------------------------------------------------------
+*/
+
+.audit-header {
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 18px;
+}
+
+.audit-eyebrow {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.audit-header h1 {
+  margin: 3px 0;
+
+  font-size: 27px;
+  line-height: 1.1;
+}
+
+.audit-header p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+.audit-refresh-button {
+  min-height: 46px;
+
+  padding: 0 18px;
+
+  flex-shrink: 0;
+
+  color: #334155;
+  background: #ffffff;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+.audit-refresh-button:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.audit-refresh-button:disabled {
+  opacity: 0.5;
+
+  cursor: not-allowed;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Metrics
+|--------------------------------------------------------------------------
+*/
+
+.audit-metrics {
+  flex-shrink: 0;
+
+  display: grid;
+
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+.audit-metrics article {
+  min-height: 68px;
+
+  padding: 12px 14px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.audit-metrics article span {
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.audit-metrics article strong {
+  margin-top: 3px;
+
+  color: #1e293b;
+
+  font-size: 20px;
+}
+
+.audit-metrics article.critical strong {
+  color: #b45309;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filters
+|--------------------------------------------------------------------------
+*/
+
+.audit-filters {
+  flex-shrink: 0;
+
+  padding: 11px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(220px, 1.7fr)
+    minmax(150px, 1fr)
+    minmax(130px, 0.8fr)
+    140px
+    140px
+    auto;
+
+  gap: 8px;
+
+  align-items: end;
+
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+}
+
+.audit-filters label {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+}
+
+.audit-filters label > span {
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.audit-filters input,
+.audit-filters select {
+  width: 100%;
+  min-height: 46px;
+
+  box-sizing: border-box;
+
+  padding: 0 11px;
+
+  color: #334155;
+  background: #ffffff;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+
+  font: inherit;
+  font-size: 12px;
+
+  outline: none;
+
+  touch-action: manipulation;
+}
+
+.audit-filters input:focus,
+.audit-filters select:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.audit-filter-actions {
+  display: flex;
+
+  gap: 6px;
+}
+
+.audit-filter-actions button {
+  min-height: 46px;
+
+  padding: 0 13px;
+
+  color: #475569;
+  background: #f8fafc;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+.audit-filter-actions button:hover {
+  background: #f1f5f9;
+}
+
+.audit-filter-actions button.primary {
+  color: #ffffff;
+  background: #2563eb;
+
+  border-color: #2563eb;
+}
+
+.audit-filter-actions button.primary:hover {
+  background: #1d4ed8;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Error
+|--------------------------------------------------------------------------
+*/
+
+.audit-error {
+  flex-shrink: 0;
+
+  padding: 10px 13px;
+
+  color: #991b1b;
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Audit Table Container
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| This container must NOT create its own vertical scrollbar.
+|
+| Mouse-wheel events from this table are forwarded by AuditLogsPage.tsx
+| to the real Operations page scroll container.
+|--------------------------------------------------------------------------
+*/
+
+.audit-list-card {
+  width: 100%;
+  min-width: 0;
+
+  flex: 0 0 auto;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+
+  overflow: visible;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Audit List
+|--------------------------------------------------------------------------
+*/
+
+.audit-list {
+  width: 100%;
+  min-width: 0;
+
+  overflow: visible;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Audit Row
+|--------------------------------------------------------------------------
+*/
+
+.audit-row {
+  width: 100%;
+  min-height: 72px;
+
+  padding: 10px 14px;
+
+  box-sizing: border-box;
+
+  display: grid;
+
+  grid-template-columns:
+    9px
+    minmax(0, 1fr)
+    minmax(110px, 150px)
+    155px
+    50px;
+
+  align-items: center;
+
+  gap: 12px;
+
+  color: inherit;
+
+  text-align: left;
+
+  background: #ffffff;
+
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+
+  cursor: pointer;
+
+  /*
+    |--------------------------------------------------------------------------
+    | Touchscreen scrolling
+    |--------------------------------------------------------------------------
+    |
+    | Allows vertical finger movement to remain a scroll gesture even
+    | when the user starts dragging directly on an audit row/button.
+    |--------------------------------------------------------------------------
+    */
+
+  touch-action: pan-y;
+}
+
+.audit-row:last-child {
+  border-bottom: 0;
+}
+
+.audit-row:hover {
+  background: #f8fafc;
+}
+
+.audit-row:focus-visible {
+  position: relative;
+
+  z-index: 1;
+
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Action Dot
+|--------------------------------------------------------------------------
+*/
+
+.audit-action-dot {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: #94a3b8;
+}
+
+.audit-action-dot.success {
+  background: #16a34a;
+}
+
+.audit-action-dot.warning {
+  background: #d97706;
+}
+
+.audit-action-dot.danger {
+  background: #dc2626;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Row Content
+|--------------------------------------------------------------------------
+*/
+
+.audit-row-main {
+  min-width: 0;
+}
+
+.audit-row-title {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+}
+
+.audit-row-title > strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  font-size: 13px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-tone {
+  flex-shrink: 0;
+
+  padding: 4px 7px;
+
+  color: #475569;
+  background: #f1f5f9;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.audit-tone.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.audit-tone.warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.audit-tone.danger {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.audit-summary {
+  display: block;
+
+  margin-top: 4px;
+
+  overflow: hidden;
+
+  color: #64748b;
+
+  font-size: 11px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Actor
+|--------------------------------------------------------------------------
+*/
+
+.audit-row-actor {
+  min-width: 0;
+}
+
+.audit-row-actor strong,
+.audit-row-actor span {
+  display: block;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-row-actor strong {
+  color: #334155;
+
+  font-size: 11px;
+}
+
+.audit-row-actor span {
+  margin-top: 2px;
+
+  color: #94a3b8;
+
+  font-size: 9px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Time
+|--------------------------------------------------------------------------
+*/
+
+.audit-row time {
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| View
+|--------------------------------------------------------------------------
+*/
+
+.audit-view {
+  color: #2563eb;
+
+  text-align: right;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Loading / Empty
+|--------------------------------------------------------------------------
+*/
+
+.audit-state {
+  min-height: 260px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  color: #64748b;
+
+  text-align: center;
+}
+
+.audit-state strong {
+  color: #334155;
+
+  font-size: 14px;
+}
+
+.audit-state span {
+  margin-top: 4px;
+
+  font-size: 11px;
+}
+
+.audit-spinner {
+  width: 28px;
+  height: 28px;
+
+  margin-bottom: 12px;
+
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+
+  animation: audit-spin 0.8s linear infinite;
+}
+
+@keyframes audit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pagination
+|--------------------------------------------------------------------------
+*/
+
+.audit-pagination {
+  flex-shrink: 0;
+
+  min-height: 55px;
+
+  padding: 8px 13px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.audit-pagination > span {
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.audit-pagination > div {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+}
+
+.audit-pagination strong {
+  color: #475569;
+
+  font-size: 10px;
+}
+
+.audit-pagination button {
+  min-height: 42px;
+
+  padding: 0 12px;
+
+  color: #334155;
+  background: #f8fafc;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+.audit-pagination button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.audit-pagination button:disabled {
+  opacity: 0.4;
+
+  cursor: not-allowed;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Drawer Backdrop
+|--------------------------------------------------------------------------
+*/
+
+.audit-drawer-backdrop {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 2000;
+
+  display: flex;
+  justify-content: flex-end;
+
+  background: rgba(15, 23, 42, 0.38);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Drawer
+|--------------------------------------------------------------------------
+*/
+
+.audit-drawer {
+  width: min(600px, 92vw);
+
+  height: 100%;
+
+  box-sizing: border-box;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior-y: contain;
+
+  -webkit-overflow-scrolling: touch;
+
+  padding: 20px;
+
+  background: #ffffff;
+
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.16);
+}
+
+.audit-drawer > header {
+  margin-bottom: 18px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 15px;
+}
+
+.audit-drawer > header span {
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.audit-drawer > header h2 {
+  margin: 4px 0 0;
+
+  font-size: 21px;
+}
+
+.audit-drawer > header button {
+  width: 46px;
+  height: 46px;
+
+  flex-shrink: 0;
+
+  color: #475569;
+  background: #f1f5f9;
+
+  border: 0;
+  border-radius: 10px;
+
+  font-size: 25px;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Drawer Details
+|--------------------------------------------------------------------------
+*/
+
+.audit-detail-loading {
+  margin-bottom: 12px;
+
+  padding: 9px 11px;
+
+  color: #1d4ed8;
+  background: #eff6ff;
+
+  border-radius: 8px;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.audit-detail-grid {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.audit-detail-grid > div {
+  min-width: 0;
+
+  padding: 11px;
+
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.audit-detail-grid span,
+.audit-detail-grid strong {
+  display: block;
+}
+
+.audit-detail-grid span {
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.audit-detail-grid strong {
+  margin-top: 4px;
+
+  overflow-wrap: anywhere;
+
+  color: #334155;
+
+  font-size: 11px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| JSON
+|--------------------------------------------------------------------------
+*/
+
+.audit-json-section,
+.audit-agent {
+  margin-top: 15px;
+}
+
+.audit-json-section h3,
+.audit-agent h3 {
+  margin: 0 0 7px;
+
+  color: #475569;
+
+  font-size: 11px;
+}
+
+.audit-json-section pre {
+  max-height: 330px;
+
+  margin: 0;
+
+  padding: 12px;
+
+  overflow: auto;
+
+  color: #334155;
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  font-size: 10px;
+  line-height: 1.5;
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.audit-agent p {
+  margin: 0;
+
+  padding: 11px;
+
+  color: #64748b;
+  background: #f8fafc;
+
+  border-radius: 9px;
+
+  font-size: 10px;
+  line-height: 1.5;
+
+  overflow-wrap: anywhere;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Touch Controls
+|--------------------------------------------------------------------------
+*/
+
+.audit-page input,
+.audit-page select,
+.audit-refresh-button,
+.audit-filter-actions button,
+.audit-pagination button,
+.audit-drawer button {
+  touch-action: manipulation;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Medium Screen
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 1200px) {
+  .audit-filters {
+    grid-template-columns:
+      minmax(200px, 1.4fr)
+      minmax(150px, 1fr)
+      minmax(130px, 1fr)
+      130px
+      130px;
+  }
+
+  .audit-filter-actions {
+    grid-column: 1 / -1;
+
+    justify-content: flex-end;
+  }
+
+  .audit-row {
+    grid-template-columns:
+      9px
+      minmax(0, 1fr)
+      120px
+      145px
+      42px;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Tablet / POS Touchscreen
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 850px) {
+  .audit-page {
+    min-height: 100%;
+
+    padding-bottom: 28px;
+  }
+
+  .audit-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-search {
+    grid-column: 1 / -1;
+  }
+
+  .audit-list-card {
+    min-height: 400px;
+  }
+
+  .audit-row {
+    min-height: 82px;
+
+    grid-template-columns:
+      9px
+      minmax(0, 1fr)
+      auto;
+  }
+
+  .audit-row-actor,
+  .audit-row time {
+    display: none;
+  }
+
+  .audit-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Small Screen
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 560px) {
+  .audit-header {
+    align-items: flex-start;
+  }
+
+  .audit-header h1 {
+    font-size: 24px;
+  }
+
+  .audit-header p {
+    display: none;
+  }
+
+  .audit-refresh-button {
+    min-height: 42px;
+
+    padding: 0 12px;
+  }
+
+  .audit-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-search,
+  .audit-filter-actions {
+    grid-column: auto;
+  }
+
+  .audit-filter-actions button {
+    flex: 1;
+  }
+
+  .audit-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .audit-pagination > div {
+    width: 100%;
+
+    justify-content: space-between;
+  }
+
+  .audit-drawer {
+    width: 100vw;
+
+    padding: 15px;
+  }
+}

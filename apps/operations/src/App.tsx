@@ -40,6 +40,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import AuditLogsPage
+  from "./audit/AuditLogsPage";
+
 import ReportsPage
   from './reports/ReportsPage';
 
@@ -309,11 +312,7 @@ export default function App() {
               <Route
                 path="/audit-logs"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="ADMINISTRATION"
-                    title="Audit Logs"
-                    description="Review sensitive administrative and financial activity history."
-                  />
+                  <AuditLogsPage />
                 }
               />
             </Route>

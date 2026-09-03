@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonController;
 use App\Http\Controllers\Api\V1\AddonRecipeController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\BusinessDayClosingController;
 use App\Http\Controllers\Api\V1\CashDrawerController;
 use App\Http\Controllers\Api\V1\CashierShiftController;
@@ -3581,6 +3582,50 @@ Route::middleware(
                         'cashier'
                     );
                 }
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase 39 - Audit Logs
+        |--------------------------------------------------------------------------
+        |
+        | Immutable, read-only administrative and financial activity history.
+        |
+        | Audit records are created by the existing AuditLogger service.
+        | This API only exposes authorized GET access for remote owner/admin
+        | review. No create, update or delete audit-log routes are provided.
+        |
+        */
+
+        Route::get(
+            '/audit-logs',
+            [
+                AuditLogController::class,
+                'index',
+            ]
+        )
+            ->middleware(
+                'permission:audit.view'
+            )
+            ->name(
+                'v1.audit-logs.index'
+            );
+
+        Route::get(
+            '/audit-logs/{auditLog}',
+            [
+                AuditLogController::class,
+                'show',
+            ]
+        )
+            ->whereNumber(
+                'auditLog'
+            )
+            ->middleware(
+                'permission:audit.view'
+            )
+            ->name(
+                'v1.audit-logs.show'
             );
 
         /*
