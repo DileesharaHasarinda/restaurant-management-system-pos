@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\WebsiteRealtimeUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ReviewResource;
 use App\Models\Review;
@@ -11,6 +12,7 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class ReviewModerationController extends Controller
 {
@@ -80,7 +82,9 @@ class ReviewModerationController extends Controller
                 );
 
             $query->where(
-                function ($query) use ($search) {
+                function ($query) use (
+                    $search
+                ): void {
                     $query
                         ->where(
                             'customer_name',
@@ -175,6 +179,12 @@ class ReviewModerationController extends Controller
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Approve Review
+    |--------------------------------------------------------------------------
+    */
+
     public function approve(
         Request $request,
         Review $review
@@ -203,12 +213,32 @@ class ReviewModerationController extends Controller
             'REVIEW_APPROVED'
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Public Website Invalidation
+        |--------------------------------------------------------------------------
+        |
+        | The review has now become publicly eligible.
+        |--------------------------------------------------------------------------
+        */
+
+        $this->broadcastReviewUpdate(
+            $review->id,
+            'REVIEW_APPROVED'
+        );
+
         return $this->response(
             $request,
             $review,
             'Review approved successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reject Review
+    |--------------------------------------------------------------------------
+    */
 
     public function reject(
         Request $request,
@@ -238,12 +268,23 @@ class ReviewModerationController extends Controller
             'REVIEW_REJECTED'
         );
 
+        $this->broadcastReviewUpdate(
+            $review->id,
+            'REVIEW_REJECTED'
+        );
+
         return $this->response(
             $request,
             $review,
             'Review rejected successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Review Visibility
+    |--------------------------------------------------------------------------
+    */
 
     public function visibility(
         Request $request,
@@ -267,12 +308,20 @@ class ReviewModerationController extends Controller
             $validated['is_visible'],
         ])->save();
 
+        $action =
+            $review->is_visible
+            ? 'REVIEW_SHOWN'
+            : 'REVIEW_HIDDEN';
+
         $this->audit(
             $actor,
             $review,
-            $review->is_visible
-                ? 'REVIEW_SHOWN'
-                : 'REVIEW_HIDDEN'
+            $action
+        );
+
+        $this->broadcastReviewUpdate(
+            $review->id,
+            $action
         );
 
         return $this->response(
@@ -283,6 +332,12 @@ class ReviewModerationController extends Controller
                 : 'Review hidden successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Delete Review
+    |--------------------------------------------------------------------------
+    */
 
     public function destroy(
         Request $request,
@@ -315,11 +370,32 @@ class ReviewModerationController extends Controller
             userId: $actor->id
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Public Website Invalidation
+        |--------------------------------------------------------------------------
+        |
+        | The model is already deleted, so only its former ID is broadcast.
+        |--------------------------------------------------------------------------
+        */
+
+        $this->broadcastReviewUpdate(
+            $reviewId,
+            'REVIEW_DELETED'
+        );
+
         return ApiResponse::success(
             data: null,
+
             message: 'Review deleted successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
 
     private function response(
         Request $request,
@@ -343,6 +419,12 @@ class ReviewModerationController extends Controller
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Audit
+    |--------------------------------------------------------------------------
+    */
+
     private function audit(
         User $actor,
         Review $review,
@@ -365,5 +447,38 @@ class ReviewModerationController extends Controller
 
             userId: $actor->id
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Review Realtime Invalidation
+    |--------------------------------------------------------------------------
+    |
+    | Broadcasting failure must never turn a successfully completed moderation
+    | action into a failed API response.
+    |
+    | No review text, customer name, phone number or other private content is
+    | placed in the public WebSocket payload.
+    |--------------------------------------------------------------------------
+    */
+
+    private function broadcastReviewUpdate(
+        int $reviewId,
+        string $action
+    ): void {
+        try {
+            WebsiteRealtimeUpdated::dispatch(
+                resource: 'review',
+                action: $action,
+                entityId: $reviewId,
+                eventName: 'reviews.updated'
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+        }
     }
 }

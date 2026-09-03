@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\WebsiteRealtimeUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Website\StoreGalleryImageRequest;
 use App\Http\Requests\Api\V1\Website\UpdateGalleryImageRequest;
@@ -13,12 +14,19 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class GalleryManagementController extends Controller
 {
     public function __construct(
         private readonly AuditLogger $auditLogger
     ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gallery Index
+    |--------------------------------------------------------------------------
+    */
 
     public function index(
         Request $request
@@ -51,9 +59,16 @@ class GalleryManagementController extends Controller
 
         return ApiResponse::success(
             data: $data,
+
             message: 'Gallery images retrieved successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Gallery Image
+    |--------------------------------------------------------------------------
+    */
 
     public function store(
         StoreGalleryImageRequest $request
@@ -64,7 +79,9 @@ class GalleryManagementController extends Controller
 
         $path =
             $request
-            ->file('image')
+            ->file(
+                'image'
+            )
             ->store(
                 'website/gallery',
                 'public'
@@ -108,7 +125,9 @@ class GalleryManagementController extends Controller
                     'uploaded_by' =>
                     $actor->id,
                 ]);
-        } catch (\Throwable $exception) {
+        } catch (
+            Throwable $exception
+        ) {
             Storage::disk(
                 'public'
             )->delete(
@@ -133,6 +152,17 @@ class GalleryManagementController extends Controller
             userId: $actor->id
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Public Website Realtime Invalidation
+        |--------------------------------------------------------------------------
+        */
+
+        $this->broadcastGalleryUpdate(
+            $image->id,
+            'GALLERY_IMAGE_UPLOADED'
+        );
+
         return ApiResponse::success(
             data: (
                 new GalleryImageResource(
@@ -147,6 +177,19 @@ class GalleryManagementController extends Controller
             status: 201
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Gallery Image
+    |--------------------------------------------------------------------------
+    |
+    | Handles:
+    |
+    | - caption
+    | - alt text
+    | - sort order
+    |--------------------------------------------------------------------------
+    */
 
     public function update(
         UpdateGalleryImageRequest $request,
@@ -188,6 +231,11 @@ class GalleryManagementController extends Controller
             userId: $actor->id
         );
 
+        $this->broadcastGalleryUpdate(
+            $galleryImage->id,
+            'GALLERY_IMAGE_UPDATED'
+        );
+
         return ApiResponse::success(
             data: (
                 new GalleryImageResource(
@@ -200,6 +248,12 @@ class GalleryManagementController extends Controller
             message: 'Gallery image updated successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gallery Visibility / State
+    |--------------------------------------------------------------------------
+    */
 
     public function updateState(
         Request $request,
@@ -223,10 +277,13 @@ class GalleryManagementController extends Controller
             $validated['is_active'],
         ])->save();
 
+        $action =
+            $galleryImage->is_active
+            ? 'GALLERY_IMAGE_ENABLED'
+            : 'GALLERY_IMAGE_DISABLED';
+
         $this->auditLogger->record(
-            action: $galleryImage->is_active
-                ? 'GALLERY_IMAGE_ENABLED'
-                : 'GALLERY_IMAGE_DISABLED',
+            action: $action,
 
             entityType: 'gallery_image',
 
@@ -238,6 +295,11 @@ class GalleryManagementController extends Controller
             ],
 
             userId: $actor->id
+        );
+
+        $this->broadcastGalleryUpdate(
+            $galleryImage->id,
+            $action
         );
 
         return ApiResponse::success(
@@ -253,5 +315,44 @@ class GalleryManagementController extends Controller
                 ? 'Gallery image enabled successfully.'
                 : 'Gallery image disabled successfully.'
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Gallery Realtime Invalidation
+    |--------------------------------------------------------------------------
+    |
+    | No image metadata or private management information is pushed through
+    | Reverb.
+    |
+    | The public Website receives only an invalidation notification and then
+    | retrieves the authoritative gallery from Laravel REST.
+    |--------------------------------------------------------------------------
+    */
+
+    private function broadcastGalleryUpdate(
+        int $galleryImageId,
+        string $action
+    ): void {
+        try {
+            WebsiteRealtimeUpdated::dispatch(
+                resource: 'gallery_image',
+                action: $action,
+                entityId: $galleryImageId,
+                eventName: 'gallery.updated'
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            /*
+             * Gallery mutation has already completed successfully.
+             *
+             * A temporary broadcasting problem must not convert the completed
+             * management action into a failed API response.
+             */
+            report(
+                $exception
+            );
+        }
     }
 }

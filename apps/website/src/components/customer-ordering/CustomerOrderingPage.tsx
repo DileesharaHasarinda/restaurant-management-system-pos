@@ -1,8 +1,10 @@
 'use client';
 
 import {
+    useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 
@@ -14,6 +16,10 @@ import {
     resolveTableQr,
     submitQrOrder,
 } from '@/lib/public-ordering-api';
+
+import {
+    usePublicRealtimeRefresh,
+} from '@/realtime/publicRealtimeBus';
 
 import type {
     AppendQrOrderPayload,
@@ -579,6 +585,246 @@ export default function CustomerOrderingPage(
         ?? null;
 
     /*
+    |--------------------------------------------------------------------------
+    | QR Menu Realtime Reconciliation
+    |--------------------------------------------------------------------------
+    |
+    | Reverb is only an invalidation signal.
+    |
+    | When Laravel broadcasts restaurant.menu / .menu.updated, refetch the
+    | authoritative public QR menu and replace ONLY the menu state.
+    |
+    | IMPORTANT:
+    |
+    | This intentionally does NOT change:
+    |
+    | - cart
+    | - customer name
+    | - customer phone
+    | - order notes
+    | - active order
+    | - ordering-more state
+    | - submission/idempotency IDs
+    |
+    | Therefore a realtime menu update cannot clear or recreate a customer's
+    | in-progress order.
+    |--------------------------------------------------------------------------
+    */
+
+    const menuRequestVersionRef =
+        useRef(
+            0,
+        );
+
+    const reconcileQrMenu =
+        useCallback(
+            async (): Promise<void> => {
+                const requestVersion =
+                    ++menuRequestVersionRef
+                        .current;
+
+                const menu =
+                    await getQrMenu();
+
+                /*
+                 * Ignore an older request if a newer menu reconciliation
+                 * finished or started while this request was in flight.
+                 */
+                if (
+                    requestVersion
+                    !== menuRequestVersionRef
+                        .current
+                ) {
+                    return;
+                }
+
+                setCategories(
+                    menu,
+                );
+
+                /*
+                 * Preserve the customer's selected category whenever that
+                 * category still exists. If it was removed or hidden, fall
+                 * back to All so the page does not appear empty.
+                 */
+                setActiveCategory(
+                    (current) => {
+                        if (
+                            current
+                            === 'all'
+                        ) {
+                            return current;
+                        }
+
+                        const stillExists =
+                            menu.some(
+                                (category) =>
+                                    category.id
+                                    === current,
+                            );
+
+                        return stillExists
+                            ? current
+                            : 'all';
+                    },
+                );
+
+                /*
+                 * If the customer currently has an item configurator open,
+                 * keep that configurator synchronized too.
+                 *
+                 * This still does not touch the cart.
+                 */
+                if (
+                    selectedItem
+                ) {
+                    const latestItem =
+                        menu
+                            .flatMap(
+                                (category) =>
+                                    category.items,
+                            )
+                            .find(
+                                (item) =>
+                                    item.id
+                                    === selectedItem.id,
+                            )
+                        ?? null;
+
+                    if (
+                        !latestItem
+                    ) {
+                        setSelectedItem(
+                            null,
+                        );
+
+                        setSelectedVariantId(
+                            null,
+                        );
+
+                        setSelectedAddons(
+                            {},
+                        );
+
+                        setItemQuantity(
+                            1,
+                        );
+
+                        setActionError(
+                            `${selectedItem.name} is no longer available. Your existing cart has been kept unchanged.`,
+                        );
+                    } else {
+                        setSelectedItem(
+                            latestItem,
+                        );
+
+                        setSelectedVariantId(
+                            (current) => {
+                                if (
+                                    !latestItem
+                                        .hasVariants
+                                ) {
+                                    return null;
+                                }
+
+                                if (
+                                    current
+                                    !== null
+                                    &&
+                                    latestItem
+                                        .variants
+                                        .some(
+                                            (variant) =>
+                                                variant.id
+                                                === current,
+                                        )
+                                ) {
+                                    return current;
+                                }
+
+                                const defaultVariant =
+                                    latestItem
+                                        .variants
+                                        .find(
+                                            (variant) =>
+                                                variant.isDefault,
+                                        )
+                                    ??
+                                    latestItem
+                                        .variants[0]
+                                    ??
+                                    null;
+
+                                return defaultVariant
+                                    ?.id
+                                    ?? null;
+                            },
+                        );
+
+                        setSelectedAddons(
+                            (current) => {
+                                const availableAddonIds =
+                                    new Set(
+                                        latestItem
+                                            .addons
+                                            .map(
+                                                (addon) =>
+                                                    addon.id,
+                                            ),
+                                    );
+
+                                const next:
+                                    Record<
+                                        number,
+                                        number
+                                    > = {};
+
+                                for (
+                                    const [
+                                        addonId,
+                                        quantity,
+                                    ]
+                                    of Object.entries(
+                                        current,
+                                    )
+                                ) {
+                                    const numericAddonId =
+                                        Number(
+                                            addonId,
+                                        );
+
+                                    if (
+                                        availableAddonIds
+                                            .has(
+                                                numericAddonId,
+                                            )
+                                    ) {
+                                        next[
+                                            numericAddonId
+                                        ] =
+                                            quantity;
+                                    }
+                                }
+
+                                return next;
+                            },
+                        );
+                    }
+                }
+            },
+            [
+                selectedItem,
+            ],
+        );
+
+    usePublicRealtimeRefresh(
+        [
+            'menu',
+        ],
+        reconcileQrMenu,
+    );
+
+    /*
  |--------------------------------------------------------------------------
  | Load Saved Cart
  |--------------------------------------------------------------------------
@@ -784,6 +1030,10 @@ export default function CustomerOrderingPage(
                     |
                     */
 
+                    const menuRequestVersion =
+                        ++menuRequestVersionRef
+                            .current;
+
                     const menu =
                         await getQrMenu();
 
@@ -793,9 +1043,20 @@ export default function CustomerOrderingPage(
                         return;
                     }
 
-                    setCategories(
-                        menu,
-                    );
+                    /*
+                     * A realtime menu reconciliation may have started while
+                     * bootstrap was waiting for this response. Never allow an
+                     * older bootstrap response to overwrite newer menu data.
+                     */
+                    if (
+                        menuRequestVersion
+                        === menuRequestVersionRef
+                            .current
+                    ) {
+                        setCategories(
+                            menu,
+                        );
+                    }
 
                     /*
                     |--------------------------------------------------------------------------

@@ -1,57 +1,51 @@
 import type {
   Metadata,
-  Viewport,
 } from "next";
 
 import "./globals.css";
 
+import WebsiteRealtimeProvider
+  from "@/realtime/WebsiteRealtimeProvider";
+
 export const metadata:
   Metadata = {
-  title: {
-    default:
-      "Restaurant",
-
-    template:
-      "%s | Restaurant",
-  },
+  title:
+    "Palmyrah Hotel",
 
   description:
-    "Restaurant menu, dining information and table ordering.",
+    "Palmyrah Hotel Kalpitiya",
 };
 
-export const viewport:
-  Viewport = {
-  width:
-    "device-width",
-
-  initialScale:
-    1,
-
-  maximumScale:
-    1,
-
-  viewportFit:
-    "cover",
-
-  themeColor:
-    "#173c2b",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children:
-  React.ReactNode;
-}>) {
+export default function RootLayout(
+  {
+    children,
+  }: Readonly<{
+    children:
+    React.ReactNode;
+  }>
+) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-    >
-      <body
-        suppressHydrationWarning
-      >
-        {children}
+    <html lang="en">
+      <body>
+        {/*
+        |--------------------------------------------------------------------------
+        | Website Realtime Provider
+        |--------------------------------------------------------------------------
+        |
+        | This is the Website's single Echo / Reverb connection.
+        |
+        | It is intentionally mounted at the root so both:
+        |
+        | - normal Website pages
+        | - QR ordering pages
+        |
+        | can receive public realtime invalidation events.
+        |--------------------------------------------------------------------------
+        */}
+
+        <WebsiteRealtimeProvider>
+          {children}
+        </WebsiteRealtimeProvider>
       </body>
     </html>
   );

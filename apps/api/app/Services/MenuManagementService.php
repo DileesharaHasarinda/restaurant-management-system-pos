@@ -10,6 +10,7 @@ use App\Models\MenuItem;
 use App\Models\MenuItemVariant;
 use App\Models\User;
 use App\Support\DatabaseTransaction;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -33,61 +34,69 @@ final class MenuManagementService
         User $actor,
         array $data
     ): Category {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $data
-            ): Category {
-                $category =
-                    Category::query()
-                    ->create([
-                        'name' =>
-                        trim(
-                            $data['name']
-                        ),
+        $created =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $data
+                ): Category {
+                    $category =
+                        Category::query()
+                        ->create([
+                            'name' =>
+                            trim(
+                                $data['name']
+                            ),
 
-                        'slug' =>
-                        $this->uniqueCategorySlug(
-                            $data['name']
-                        ),
+                            'slug' =>
+                            $this->uniqueCategorySlug(
+                                $data['name']
+                            ),
 
-                        'description' =>
-                        $data['description']
-                            ?? null,
+                            'description' =>
+                            $data['description']
+                                ?? null,
 
-                        'sort_order' =>
-                        $data['sort_order']
-                            ?? 0,
+                            'sort_order' =>
+                            $data['sort_order']
+                                ?? 0,
 
-                        'is_active' =>
-                        $data['is_active']
-                            ?? true,
+                            'is_active' =>
+                            $data['is_active']
+                                ?? true,
 
-                        'is_visible_on_website' =>
-                        $data['is_visible_on_website']
-                            ?? true,
+                            'is_visible_on_website' =>
+                            $data['is_visible_on_website']
+                                ?? true,
 
-                        'is_visible_on_qr' =>
-                        $data['is_visible_on_qr']
-                            ?? true,
-                    ]);
+                            'is_visible_on_qr' =>
+                            $data['is_visible_on_qr']
+                                ?? true,
+                        ]);
 
-                $this->auditLogger->record(
-                    action: 'MENU_CATEGORY_CREATED',
+                    $this->auditLogger->record(
+                        action: 'MENU_CATEGORY_CREATED',
 
-                    entityType: 'category',
+                        entityType: 'category',
 
-                    entityId: $category->id,
+                        entityId: $category->id,
 
-                    newValues: $category
-                        ->toArray(),
+                        newValues: $category
+                            ->toArray(),
 
-                    userId: $actor->id
-                );
+                        userId: $actor->id
+                    );
 
-                return $category;
-            }
+                    return $category;
+                }
+            );
+
+        $this->broadcastMenuUpdate(
+            $created,
+            'CATEGORY_CREATED'
         );
+
+        return $created;
     }
 
     public function updateCategory(
@@ -95,64 +104,72 @@ final class MenuManagementService
         Category $category,
         array $data
     ): Category {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $category,
-                $data
-            ): Category {
-                $locked =
-                    Category::query()
-                    ->lockForUpdate()
-                    ->findOrFail(
-                        $category->id
+        $updated =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $category,
+                    $data
+                ): Category {
+                    $locked =
+                        Category::query()
+                        ->lockForUpdate()
+                        ->findOrFail(
+                            $category->id
+                        );
+
+                    $old =
+                        $locked
+                        ->toArray();
+
+                    $locked->fill([
+                        'name' =>
+                        trim(
+                            $data['name']
+                        ),
+
+                        'slug' =>
+                        $this->uniqueCategorySlug(
+                            $data['name'],
+                            $locked->id
+                        ),
+
+                        'description' =>
+                        $data['description']
+                            ?? null,
+
+                        'sort_order' =>
+                        $data['sort_order'],
+                    ]);
+
+                    $locked->save();
+
+                    $this->auditLogger->record(
+                        action: 'MENU_CATEGORY_UPDATED',
+
+                        entityType: 'category',
+
+                        entityId: $locked->id,
+
+                        oldValues: $old,
+
+                        newValues: $locked
+                            ->fresh()
+                            ->toArray(),
+
+                        userId: $actor->id
                     );
 
-                $old =
-                    $locked
-                    ->toArray();
+                    return $locked->refresh();
+                }
+            );
 
-                $locked->fill([
-                    'name' =>
-                    trim(
-                        $data['name']
-                    ),
-
-                    'slug' =>
-                    $this->uniqueCategorySlug(
-                        $data['name'],
-                        $locked->id
-                    ),
-
-                    'description' =>
-                    $data['description']
-                        ?? null,
-
-                    'sort_order' =>
-                    $data['sort_order'],
-                ]);
-
-                $locked->save();
-
-                $this->auditLogger->record(
-                    action: 'MENU_CATEGORY_UPDATED',
-
-                    entityType: 'category',
-
-                    entityId: $locked->id,
-
-                    oldValues: $old,
-
-                    newValues: $locked
-                        ->fresh()
-                        ->toArray(),
-
-                    userId: $actor->id
-                );
-
-                return $locked->refresh();
-            }
+        $this->broadcastMenuUpdate(
+            $updated,
+            'CATEGORY_UPDATED'
         );
+
+        return $updated;
     }
 
     public function updateCategoryState(
@@ -160,63 +177,71 @@ final class MenuManagementService
         Category $category,
         array $data
     ): Category {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $category,
-                $data
-            ): Category {
-                $locked =
-                    Category::query()
-                    ->lockForUpdate()
-                    ->findOrFail(
-                        $category->id
-                    );
+        $updated =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $category,
+                    $data
+                ): Category {
+                    $locked =
+                        Category::query()
+                        ->lockForUpdate()
+                        ->findOrFail(
+                            $category->id
+                        );
 
-                $old =
-                    $locked->only([
-                        'is_active',
-                        'is_visible_on_website',
-                        'is_visible_on_qr',
-                        'sort_order',
-                    ]);
-
-                $locked->fill(
-                    array_intersect_key(
-                        $data,
-                        array_flip([
+                    $old =
+                        $locked->only([
                             'is_active',
                             'is_visible_on_website',
                             'is_visible_on_qr',
                             'sort_order',
-                        ])
-                    )
-                );
+                        ]);
 
-                $locked->save();
+                    $locked->fill(
+                        array_intersect_key(
+                            $data,
+                            array_flip([
+                                'is_active',
+                                'is_visible_on_website',
+                                'is_visible_on_qr',
+                                'sort_order',
+                            ])
+                        )
+                    );
 
-                $this->auditLogger->record(
-                    action: 'MENU_CATEGORY_STATE_UPDATED',
+                    $locked->save();
 
-                    entityType: 'category',
+                    $this->auditLogger->record(
+                        action: 'MENU_CATEGORY_STATE_UPDATED',
 
-                    entityId: $locked->id,
+                        entityType: 'category',
 
-                    oldValues: $old,
+                        entityId: $locked->id,
 
-                    newValues: $locked->only([
-                        'is_active',
-                        'is_visible_on_website',
-                        'is_visible_on_qr',
-                        'sort_order',
-                    ]),
+                        oldValues: $old,
 
-                    userId: $actor->id
-                );
+                        newValues: $locked->only([
+                            'is_active',
+                            'is_visible_on_website',
+                            'is_visible_on_qr',
+                            'sort_order',
+                        ]),
 
-                return $locked->refresh();
-            }
+                        userId: $actor->id
+                    );
+
+                    return $locked->refresh();
+                }
+            );
+
+        $this->broadcastMenuUpdate(
+            $updated,
+            'CATEGORY_STATE_UPDATED'
         );
+
+        return $updated;
     }
 
     /*
@@ -229,31 +254,193 @@ final class MenuManagementService
         User $actor,
         array $data
     ): MenuItem {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $data
-            ): MenuItem {
-                $variants =
-                    $data['variants']
-                    ?? [];
+        $created =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $data
+                ): MenuItem {
+                    $variants =
+                        $data['variants']
+                        ?? [];
 
-                $addons =
-                    $data['addons']
-                    ?? [];
+                    $addons =
+                        $data['addons']
+                        ?? [];
 
-                $this->validateVariantDefaults(
-                    $variants
-                );
+                    $this->validateVariantDefaults(
+                        $variants
+                    );
 
-                $item =
-                    MenuItem::query()
-                    ->create([
+                    $item =
+                        MenuItem::query()
+                        ->create([
+                            'category_id' =>
+                            $data['category_id'],
+
+                            'sku' =>
+                            null,
+
+                            'name' =>
+                            trim(
+                                $data['name']
+                            ),
+
+                            'slug' =>
+                            $this->uniqueMenuItemSlug(
+                                $data['name']
+                            ),
+
+                            'description' =>
+                            $data['description']
+                                ?? null,
+
+                            'price' =>
+                            round(
+                                (float)
+                                $data['price'],
+                                2
+                            ),
+
+                            'tax_rate' =>
+                            round(
+                                (float)
+                                (
+                                    $data['tax_rate']
+                                    ?? 0
+                                ),
+                                4
+                            ),
+
+                            'is_available' =>
+                            $data['is_available']
+                                ?? true,
+
+                            'is_active' =>
+                            $data['is_active']
+                                ?? true,
+
+                            'is_visible_on_website' =>
+                            $data['is_visible_on_website']
+                                ?? true,
+
+                            'is_visible_on_qr' =>
+                            $data['is_visible_on_qr']
+                                ?? true,
+
+                            'has_variants' =>
+                            $variants !== [],
+
+                            'sort_order' =>
+                            $data['sort_order']
+                                ?? 0,
+
+                            'metadata' =>
+                            [],
+                        ]);
+
+                    /*
+                     * Stable menu SKU.
+                     */
+                    $item->sku =
+                        sprintf(
+                            'MENU-%06d',
+                            $item->id
+                        );
+
+                    $item->save();
+
+                    $this->syncVariants(
+                        $item,
+                        $variants
+                    );
+
+                    $this->syncAddons(
+                        $item,
+                        $addons
+                    );
+
+                    $this->auditLogger->record(
+                        action: 'MENU_ITEM_CREATED',
+
+                        entityType: 'menu_item',
+
+                        entityId: $item->id,
+
+                        newValues: [
+                            'name' =>
+                            $item->name,
+
+                            'price' =>
+                            $item->price,
+
+                            'category_id' =>
+                            $item->category_id,
+
+                            'has_variants' =>
+                            $item->has_variants,
+                        ],
+
+                        userId: $actor->id
+                    );
+
+                    return $this->loadMenuItem(
+                        $item
+                    );
+                }
+            );
+
+        $this->broadcastMenuUpdate(
+            $created,
+            'ITEM_CREATED'
+        );
+
+        return $created;
+    }
+
+    public function updateMenuItem(
+        User $actor,
+        MenuItem $item,
+        array $data
+    ): MenuItem {
+        $updated =
+            DatabaseTransaction::run(
+                function () use (
+                    $actor,
+                    $item,
+                    $data
+                ): MenuItem {
+                    $locked =
+                        MenuItem::query()
+                        ->lockForUpdate()
+                        ->findOrFail(
+                            $item->id
+                        );
+
+                    $variants =
+                        $data['variants'];
+
+                    $addons =
+                        $data['addons'];
+
+                    $this->validateVariantDefaults(
+                        $variants
+                    );
+
+                    $old =
+                        $locked->only([
+                            'category_id',
+                            'name',
+                            'description',
+                            'price',
+                            'tax_rate',
+                            'has_variants',
+                            'sort_order',
+                        ]);
+
+                    $locked->fill([
                         'category_id' =>
                         $data['category_id'],
-
-                        'sku' =>
-                        null,
 
                         'name' =>
                         trim(
@@ -262,7 +449,8 @@ final class MenuManagementService
 
                         'slug' =>
                         $this->uniqueMenuItemSlug(
-                            $data['name']
+                            $data['name'],
+                            $locked->id
                         ),
 
                         'description' =>
@@ -286,207 +474,60 @@ final class MenuManagementService
                             4
                         ),
 
-                        'is_available' =>
-                        $data['is_available']
-                            ?? true,
-
-                        'is_active' =>
-                        $data['is_active']
-                            ?? true,
-
-                        'is_visible_on_website' =>
-                        $data['is_visible_on_website']
-                            ?? true,
-
-                        'is_visible_on_qr' =>
-                        $data['is_visible_on_qr']
-                            ?? true,
-
                         'has_variants' =>
                         $variants !== [],
 
                         'sort_order' =>
-                        $data['sort_order']
-                            ?? 0,
-
-                        'metadata' =>
-                        [],
+                        $data['sort_order'],
                     ]);
 
-                /*
-                 * Stable menu SKU.
-                 */
-                $item->sku =
-                    sprintf(
-                        'MENU-%06d',
-                        $item->id
+                    $locked->save();
+
+                    $this->syncVariants(
+                        $locked,
+                        $variants
                     );
 
-                $item->save();
-
-                $this->syncVariants(
-                    $item,
-                    $variants
-                );
-
-                $this->syncAddons(
-                    $item,
-                    $addons
-                );
-
-                $this->auditLogger->record(
-                    action: 'MENU_ITEM_CREATED',
-
-                    entityType: 'menu_item',
-
-                    entityId: $item->id,
-
-                    newValues: [
-                        'name' =>
-                        $item->name,
-
-                        'price' =>
-                        $item->price,
-
-                        'category_id' =>
-                        $item->category_id,
-
-                        'has_variants' =>
-                        $item->has_variants,
-                    ],
-
-                    userId: $actor->id
-                );
-
-                return $this->loadMenuItem(
-                    $item
-                );
-            }
-        );
-    }
-
-    public function updateMenuItem(
-        User $actor,
-        MenuItem $item,
-        array $data
-    ): MenuItem {
-        return DatabaseTransaction::run(
-            function () use (
-                $actor,
-                $item,
-                $data
-            ): MenuItem {
-                $locked =
-                    MenuItem::query()
-                    ->lockForUpdate()
-                    ->findOrFail(
-                        $item->id
+                    $this->syncAddons(
+                        $locked,
+                        $addons
                     );
 
-                $variants =
-                    $data['variants'];
+                    $this->auditLogger->record(
+                        action: 'MENU_ITEM_UPDATED',
 
-                $addons =
-                    $data['addons'];
+                        entityType: 'menu_item',
 
-                $this->validateVariantDefaults(
-                    $variants
-                );
+                        entityId: $locked->id,
 
-                $old =
-                    $locked->only([
-                        'category_id',
-                        'name',
-                        'description',
-                        'price',
-                        'tax_rate',
-                        'has_variants',
-                        'sort_order',
-                    ]);
+                        oldValues: $old,
 
-                $locked->fill([
-                    'category_id' =>
-                    $data['category_id'],
+                        newValues: $locked->fresh()
+                            ->only([
+                                'category_id',
+                                'name',
+                                'description',
+                                'price',
+                                'tax_rate',
+                                'has_variants',
+                                'sort_order',
+                            ]),
 
-                    'name' =>
-                    trim(
-                        $data['name']
-                    ),
+                        userId: $actor->id
+                    );
 
-                    'slug' =>
-                    $this->uniqueMenuItemSlug(
-                        $data['name'],
-                        $locked->id
-                    ),
+                    return $this->loadMenuItem(
+                        $locked
+                    );
+                }
+            );
 
-                    'description' =>
-                    $data['description']
-                        ?? null,
-
-                    'price' =>
-                    round(
-                        (float)
-                        $data['price'],
-                        2
-                    ),
-
-                    'tax_rate' =>
-                    round(
-                        (float)
-                        (
-                            $data['tax_rate']
-                            ?? 0
-                        ),
-                        4
-                    ),
-
-                    'has_variants' =>
-                    $variants !== [],
-
-                    'sort_order' =>
-                    $data['sort_order'],
-                ]);
-
-                $locked->save();
-
-                $this->syncVariants(
-                    $locked,
-                    $variants
-                );
-
-                $this->syncAddons(
-                    $locked,
-                    $addons
-                );
-
-                $this->auditLogger->record(
-                    action: 'MENU_ITEM_UPDATED',
-
-                    entityType: 'menu_item',
-
-                    entityId: $locked->id,
-
-                    oldValues: $old,
-
-                    newValues: $locked->fresh()
-                        ->only([
-                            'category_id',
-                            'name',
-                            'description',
-                            'price',
-                            'tax_rate',
-                            'has_variants',
-                            'sort_order',
-                        ]),
-
-                    userId: $actor->id
-                );
-
-                return $this->loadMenuItem(
-                    $locked
-                );
-            }
+        $this->broadcastMenuUpdate(
+            $updated,
+            'ITEM_UPDATED'
         );
+
+        return $updated;
     }
 
     public function updateMenuItemState(
@@ -554,29 +595,10 @@ final class MenuManagementService
                 }
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Real-Time Menu Invalidation
-        |--------------------------------------------------------------------------
-        |
-        | This runs after the database transaction has committed.
-        | Public clients use the event as an invalidation signal and refetch
-        | the authoritative public menu from Laravel.
-        |--------------------------------------------------------------------------
-        */
-
-        try {
-            MenuRealtimeUpdated::dispatch(
-                $updated,
-                'ITEM_STATE_UPDATED'
-            );
-        } catch (
-            Throwable $exception
-        ) {
-            report(
-                $exception
-            );
-        }
+        $this->broadcastMenuUpdate(
+            $updated,
+            'ITEM_STATE_UPDATED'
+        );
 
         return $updated;
     }
@@ -660,8 +682,12 @@ final class MenuManagementService
                     ];
                 }
             );
-        } catch (Throwable $exception) {
-            Storage::disk('public')
+        } catch (
+            Throwable $exception
+        ) {
+            Storage::disk(
+                'public'
+            )
                 ->delete(
                     $newPath
                 );
@@ -669,12 +695,21 @@ final class MenuManagementService
             throw $exception;
         }
 
-        if ($oldPath) {
-            Storage::disk('public')
+        if (
+            $oldPath
+        ) {
+            Storage::disk(
+                'public'
+            )
                 ->delete(
                     $oldPath
                 );
         }
+
+        $this->broadcastMenuUpdate(
+            $updated,
+            'ITEM_PHOTO_UPDATED'
+        );
 
         return $updated;
     }
@@ -745,12 +780,21 @@ final class MenuManagementService
             }
         );
 
-        if ($oldPath) {
-            Storage::disk('public')
+        if (
+            $oldPath
+        ) {
+            Storage::disk(
+                'public'
+            )
                 ->delete(
                     $oldPath
                 );
         }
+
+        $this->broadcastMenuUpdate(
+            $updated,
+            'ITEM_PHOTO_REMOVED'
+        );
 
         return $updated;
     }
@@ -810,7 +854,9 @@ final class MenuManagementService
                     );
 
                 return $group
-                    ->load('addons');
+                    ->load(
+                        'addons'
+                    );
             }
         );
     }
@@ -881,7 +927,9 @@ final class MenuManagementService
                     );
 
                 return $addon
-                    ->load('group');
+                    ->load(
+                        'group'
+                    );
             }
         );
     }
@@ -896,7 +944,9 @@ final class MenuManagementService
         MenuItem $item,
         array $variants
     ): void {
-        if ($variants === []) {
+        if (
+            $variants === []
+        ) {
             $item->variants()
                 ->update([
                     'is_active' =>
@@ -912,17 +962,25 @@ final class MenuManagementService
             return;
         }
 
-        $seenIds = [];
+        $seenIds =
+            [];
 
         foreach (
-            $variants as $index => $data
+            $variants
+            as
+            $index => $data
         ) {
             $variantId =
-                isset($data['id'])
+                isset(
+                    $data['id']
+                )
                 ? (int) $data['id']
                 : null;
 
-            if ($variantId !== null) {
+            if (
+                $variantId
+                !== null
+            ) {
                 $variant =
                     $item->variants()
                     ->whereKey(
@@ -930,7 +988,9 @@ final class MenuManagementService
                     )
                     ->first();
 
-                if (! $variant) {
+                if (
+                    ! $variant
+                ) {
                     throw ValidationException::withMessages([
                         "variants.{$index}.id" => [
                             'The selected variant does not belong to this menu item.',
@@ -977,7 +1037,9 @@ final class MenuManagementService
 
             $variant->save();
 
-            if (! $variant->sku) {
+            if (
+                ! $variant->sku
+            ) {
                 $variant->sku =
                     sprintf(
                         '%s-V%02d',
@@ -1019,10 +1081,13 @@ final class MenuManagementService
         MenuItem $item,
         array $addons
     ): void {
-        $sync = [];
+        $sync =
+            [];
 
         foreach (
-            $addons as $index => $data
+            $addons
+            as
+            $index => $data
         ) {
             $addonId =
                 (int)
@@ -1045,7 +1110,9 @@ final class MenuManagementService
                 isset(
                     $data['price_override']
                 )
-                    && $data['price_override'] !== null
+                    &&
+                    $data['price_override']
+                    !== null
                     ? round(
                         (float)
                         $data['price_override'],
@@ -1072,12 +1139,16 @@ final class MenuManagementService
     private function validateVariantDefaults(
         array $variants
     ): void {
-        if ($variants === []) {
+        if (
+            $variants === []
+        ) {
             return;
         }
 
         $defaults =
-            collect($variants)
+            collect(
+                $variants
+            )
             ->filter(
                 fn(array $variant): bool =>
                 (bool)
@@ -1088,7 +1159,9 @@ final class MenuManagementService
             )
             ->count();
 
-        if ($defaults > 1) {
+        if (
+            $defaults > 1
+        ) {
             throw ValidationException::withMessages([
                 'variants' => [
                     'Only one variant may be the default variant.',
@@ -1129,7 +1202,9 @@ final class MenuManagementService
                 $name
             );
 
-        if ($base === '') {
+        if (
+            $base === ''
+        ) {
             $base =
                 'item';
         }
@@ -1140,7 +1215,9 @@ final class MenuManagementService
         $counter =
             2;
 
-        while (true) {
+        while (
+            true
+        ) {
             $query =
                 $modelClass::query()
                 ->where(
@@ -1148,7 +1225,10 @@ final class MenuManagementService
                     $slug
                 );
 
-            if ($ignoreId !== null) {
+            if (
+                $ignoreId
+                !== null
+            ) {
                 $query->where(
                     'id',
                     '!=',
@@ -1156,12 +1236,16 @@ final class MenuManagementService
                 );
             }
 
-            if (! $query->exists()) {
+            if (
+                ! $query->exists()
+            ) {
                 return $slug;
             }
 
             $slug =
-                $base . '-' . $counter;
+                $base
+                . '-'
+                . $counter;
 
             $counter++;
         }
@@ -1177,6 +1261,40 @@ final class MenuManagementService
                 'variants',
                 'addons.group',
             ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Menu Realtime Invalidation
+    |--------------------------------------------------------------------------
+    |
+    | This helper must only be called after DatabaseTransaction::run() has
+    | returned successfully.
+    |
+    | Reverb is never authoritative state. It only tells public clients to
+    | refetch the latest Website / QR menu through Laravel REST.
+    |
+    | Broadcasting failures are reported but must not turn an already
+    | committed menu mutation into a failed API response.
+    |--------------------------------------------------------------------------
+    */
+
+    private function broadcastMenuUpdate(
+        Model $entity,
+        string $action
+    ): void {
+        try {
+            MenuRealtimeUpdated::dispatch(
+                $entity,
+                $action
+            );
+        } catch (
+            Throwable $exception
+        ) {
+            report(
+                $exception
+            );
+        }
     }
 
     private function menuImageColumn(): string
