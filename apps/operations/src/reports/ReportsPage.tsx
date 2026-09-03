@@ -55,53 +55,77 @@ import "./ReportsPage.css";
 |--------------------------------------------------------------------------
 */
 
-function localDateString(
+const REPORT_TIME_ZONE =
+    "Asia/Colombo";
+
+function reportDateString(
+    date = new Date(),
+): string {
+    const parts =
+        new Intl.DateTimeFormat(
+            "en-CA",
+            {
+                timeZone:
+                    REPORT_TIME_ZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit",
+            },
+        ).formatToParts(
+            date,
+        );
+
+    const values =
+        new Map(
+            parts.map(
+                (
+                    part,
+                ) => [
+                        part.type,
+                        part.value,
+                    ],
+            ),
+        );
+
+    return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
+
+function calendarDate(
+    value: string,
+): Date {
+    return new Date(
+        `${value}T12:00:00Z`,
+    );
+}
+
+function calendarDateString(
     date: Date,
 ): string {
-    const year =
-        date.getFullYear();
-
-    const month =
-        String(
-            date.getMonth() + 1,
-        ).padStart(
-            2,
-            "0",
+    return date
+        .toISOString()
+        .slice(
+            0,
+            10,
         );
-
-    const day =
-        String(
-            date.getDate(),
-        ).padStart(
-            2,
-            "0",
-        );
-
-    return `${year}-${month}-${day}`;
 }
 
 function currentMonthFilters():
     ReportFilters {
     const today =
-        new Date();
-
-    const first =
-        new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            1,
-        );
+        reportDateString();
 
     return {
         dateFrom:
-            localDateString(
-                first,
-            ),
+            `${today.slice(0, 7)}-01`,
 
         dateTo:
-            localDateString(
-                today,
-            ),
+            today,
 
         businessDayId:
             "",
@@ -1113,24 +1137,24 @@ export default function ReportsPage() {
             | "week"
             | "month",
     ): void {
-        const now =
-            new Date();
+        const today =
+            reportDateString();
 
         let from =
-            new Date(
-                now,
+            calendarDate(
+                today,
             );
 
         let to =
-            new Date(
-                now,
+            calendarDate(
+                today,
             );
 
         if (
             preset === "yesterday"
         ) {
-            from.setDate(
-                from.getDate() - 1,
+            from.setUTCDate(
+                from.getUTCDate() - 1,
             );
 
             to =
@@ -1143,15 +1167,15 @@ export default function ReportsPage() {
             preset === "week"
         ) {
             const weekday =
-                now.getDay();
+                from.getUTCDay();
 
             const difference =
                 weekday === 0
                     ? 6
                     : weekday - 1;
 
-            from.setDate(
-                now.getDate()
+            from.setUTCDate(
+                from.getUTCDate()
                 -
                 difference,
             );
@@ -1161,10 +1185,8 @@ export default function ReportsPage() {
             preset === "month"
         ) {
             from =
-                new Date(
-                    now.getFullYear(),
-                    now.getMonth(),
-                    1,
+                calendarDate(
+                    `${today.slice(0, 7)}-01`,
                 );
         }
 
@@ -1172,12 +1194,12 @@ export default function ReportsPage() {
             ...draftFilters,
 
             dateFrom:
-                localDateString(
+                calendarDateString(
                     from,
                 ),
 
             dateTo:
-                localDateString(
+                calendarDateString(
                     to,
                 ),
 
@@ -1225,25 +1247,41 @@ export default function ReportsPage() {
         generatedAt: string | null;
     } {
         const report =
-            overview
-            ??
-            sales
-            ??
-            items
-            ??
-            profit
-            ??
-            payments
-            ??
-            expenses
-            ??
-            inventory
-            ??
-            purchases
-            ??
-            orders
-            ??
-            cashier;
+            (() => {
+                switch (
+                activeTab
+                ) {
+                    case "overview":
+                        return overview;
+
+                    case "sales":
+                        return sales;
+
+                    case "items":
+                        return items;
+
+                    case "profit":
+                        return profit;
+
+                    case "payments":
+                        return payments;
+
+                    case "expenses":
+                        return expenses;
+
+                    case "inventory":
+                        return inventory;
+
+                    case "purchases":
+                        return purchases;
+
+                    case "orders":
+                        return orders;
+
+                    case "cashier":
+                        return cashier;
+                }
+            })();
 
         return {
             dateFrom:
@@ -1446,7 +1484,7 @@ export default function ReportsPage() {
                 >
                     <ReportSection
                         title="Sales Trend"
-                        subtitle="Completed-order sales by business date."
+                        subtitle="Completed-order sales by active report date."
                     >
                         <div
                             className="report-bars"

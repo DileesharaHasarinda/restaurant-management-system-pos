@@ -22,6 +22,17 @@ use Illuminate\Support\Facades\DB;
 
 final class ReportService
 {
+    private const REPORT_TIMEZONE =
+    'Asia/Colombo';
+
+    /*
+     * Sri Lanka is UTC+05:30 and does not currently observe DST.
+     * Application timestamps are handled as UTC; this offset is used only
+     * when grouping UTC timestamps into Sri Lanka calendar dates in SQL.
+     */
+    private const REPORT_UTC_OFFSET_MINUTES =
+    330;
+
     /*
     |--------------------------------------------------------------------------
     | Overview
@@ -39,7 +50,8 @@ final class ReportService
         $completedOrders =
             $this->orderQuery(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope,
+                timestampColumn: 'completed_at'
             )
             ->where(
                 'status',
@@ -76,7 +88,7 @@ final class ReportService
 
         $refunds =
             $this->refundTotal(
-                $scope['business_day_ids']
+                $scope
             );
 
         $netSales =
@@ -101,7 +113,7 @@ final class ReportService
 
         $wastage =
             $this->wastageTotal(
-                $scope['business_day_ids']
+                $scope
             );
 
         $estimatedNetProfit =
@@ -139,7 +151,7 @@ final class ReportService
 
         $paymentData =
             $this->paymentSummary(
-                businessDayIds: $scope['business_day_ids'],
+                scope: $scope,
 
                 filters: $filters
             );
@@ -197,14 +209,14 @@ final class ReportService
             $this->completedOrderBreakdown(
                 field: 'order_type',
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'sales_by_source' =>
             $this->completedOrderBreakdown(
                 field: 'order_source',
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'payments' =>
@@ -213,19 +225,19 @@ final class ReportService
             'order_statuses' =>
             $this->orderStatusBreakdown(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'daily_sales' =>
             $this->dailySales(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'top_items' =>
             $this->topItems(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids'],
+                scope: $scope,
                 limit: 10
             ),
         ];
@@ -248,7 +260,8 @@ final class ReportService
         $completed =
             $this->orderQuery(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope,
+                timestampColumn: 'completed_at'
             )
             ->where(
                 'status',
@@ -301,7 +314,7 @@ final class ReportService
 
         $refunds =
             $this->refundTotal(
-                $scope['business_day_ids']
+                $scope
             );
 
         return [
@@ -351,21 +364,21 @@ final class ReportService
             'daily' =>
             $this->dailySales(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'by_type' =>
             $this->completedOrderBreakdown(
                 field: 'order_type',
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
 
             'by_source' =>
             $this->completedOrderBreakdown(
                 field: 'order_source',
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             ),
         ];
     }
@@ -394,7 +407,7 @@ final class ReportService
         $items =
             $this->topItems(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids'],
+                scope: $scope,
                 limit: $limit
             );
 
@@ -414,10 +427,6 @@ final class ReportService
                 '=',
                 'order_items.order_id'
             )
-            ->whereIn(
-                'orders.business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'orders.status',
                 Order::STATUS_COMPLETED
@@ -426,6 +435,13 @@ final class ReportService
                 'order_items.status',
                 OrderItem::STATUS_ACTIVE
             );
+
+        $this->applyTimestampScope(
+            query: $addonQuery,
+            scope: $scope,
+            timestampColumn: 'orders.completed_at',
+            businessDayColumn: 'orders.business_day_id'
+        );
 
         $this->applyOrderFiltersToQueryBuilder(
             query: $addonQuery,
@@ -536,7 +552,8 @@ final class ReportService
         $completed =
             $this->orderQuery(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope,
+                timestampColumn: 'completed_at'
             )
             ->where(
                 'status',
@@ -561,7 +578,7 @@ final class ReportService
 
         $refunds =
             $this->refundTotal(
-                $scope['business_day_ids']
+                $scope
             );
 
         $expenses =
@@ -572,7 +589,7 @@ final class ReportService
 
         $wastage =
             $this->wastageTotal(
-                $scope['business_day_ids']
+                $scope
             );
 
         $netSales =
@@ -666,7 +683,7 @@ final class ReportService
             'items' =>
             $this->topItems(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids'],
+                scope: $scope,
                 limit: (int)
                 (
                     $filters['limit']
@@ -696,7 +713,7 @@ final class ReportService
             ),
 
             ...$this->paymentSummary(
-                businessDayIds: $scope['business_day_ids'],
+                scope: $scope,
 
                 filters: $filters
             ),
@@ -724,29 +741,11 @@ final class ReportService
                 Expense::STATUS_POSTED
             );
 
-        if (
-            isset(
-                $filters['business_day_id']
-            )
-        ) {
-            $query->where(
-                'business_day_id',
-                (int)
-                $filters['business_day_id']
-            );
-        } else {
-            $query
-                ->whereDate(
-                    'expense_date',
-                    '>=',
-                    $scope['date_from']
-                )
-                ->whereDate(
-                    'expense_date',
-                    '<=',
-                    $scope['date_to']
-                );
-        }
+        $this->applyDateScope(
+            query: $query,
+            scope: $scope,
+            dateColumn: 'expense_date'
+        );
 
         if (
             isset(
@@ -997,11 +996,13 @@ final class ReportService
             );
 
         $movementQuery =
-            StockMovement::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            );
+            StockMovement::query();
+
+        $this->applyTimestampScope(
+            query: $movementQuery,
+            scope: $scope,
+            timestampColumn: 'occurred_at'
+        );
 
         if (
             isset(
@@ -1071,17 +1072,13 @@ final class ReportService
             ->values()
             ->all();
 
-        $consumption =
+        $consumptionQuery =
             StockMovement::query()
             ->join(
                 'ingredients',
                 'ingredients.id',
                 '=',
                 'stock_movements.ingredient_id'
-            )
-            ->whereIn(
-                'stock_movements.business_day_id',
-                $scope['business_day_ids']
             )
             ->where(
                 'stock_movements.movement_type',
@@ -1100,7 +1097,17 @@ final class ReportService
                     (int)
                     $filters['ingredient_id']
                 )
-            )
+            );
+
+        $this->applyTimestampScope(
+            query: $consumptionQuery,
+            scope: $scope,
+            timestampColumn: 'stock_movements.occurred_at',
+            businessDayColumn: 'stock_movements.business_day_id'
+        );
+
+        $consumption =
+            $consumptionQuery
             ->select([
                 'ingredients.id',
                 'ingredients.sku',
@@ -1174,16 +1181,21 @@ final class ReportService
             ->values()
             ->all();
 
-        $wastage =
+        $wastageQuery =
             Wastage::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'status',
                 Wastage::STATUS_POSTED
-            )
+            );
+
+        $this->applyTimestampScope(
+            query: $wastageQuery,
+            scope: $scope,
+            timestampColumn: 'wasted_at'
+        );
+
+        $wastage =
+            $wastageQuery
             ->select([
                 'reason_code',
 
@@ -1335,14 +1347,16 @@ final class ReportService
 
         $query =
             Purchase::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'status',
                 Purchase::STATUS_COMPLETED
             );
+
+        $this->applyDateScope(
+            query: $query,
+            scope: $scope,
+            dateColumn: 'purchase_date'
+        );
 
         if (
             isset(
@@ -1460,11 +1474,13 @@ final class ReportService
             ->all();
 
         $supplierPaymentQuery =
-            SupplierPayment::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            );
+            SupplierPayment::query();
+
+        $this->applyDateScope(
+            query: $supplierPaymentQuery,
+            scope: $scope,
+            dateColumn: 'payment_date'
+        );
 
         if (
             isset(
@@ -1531,7 +1547,7 @@ final class ReportService
         $query =
             $this->orderQuery(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             );
 
         $total =
@@ -1541,7 +1557,7 @@ final class ReportService
         $statusBreakdown =
             $this->orderStatusBreakdown(
                 filters: $filters,
-                businessDayIds: $scope['business_day_ids']
+                scope: $scope
             );
 
         $byType =
@@ -1813,11 +1829,13 @@ final class ReportService
             );
 
         $shiftQuery =
-            CashierShift::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            );
+            CashierShift::query();
+
+        $this->applyTimestampScope(
+            query: $shiftQuery,
+            scope: $scope,
+            timestampColumn: 'opened_at'
+        );
 
         if (
             isset(
@@ -1900,11 +1918,14 @@ final class ReportService
                 'cashier_shifts.id',
                 '=',
                 'cash_drawer_movements.cashier_shift_id'
-            )
-            ->whereIn(
-                'cashier_shifts.business_day_id',
-                $scope['business_day_ids']
             );
+
+        $this->applyTimestampScope(
+            query: $movementQuery,
+            scope: $scope,
+            timestampColumn: 'cash_drawer_movements.occurred_at',
+            businessDayColumn: 'cashier_shifts.business_day_id'
+        );
 
         if (
             isset(
@@ -2125,6 +2146,9 @@ final class ReportService
                 ->toDateString();
 
             return [
+                'mode' =>
+                'business_day',
+
                 'date_from' =>
                 $date,
 
@@ -2139,17 +2163,33 @@ final class ReportService
                     (int)
                     $businessDay->id,
                 ],
+
+                'utc_start' =>
+                null,
+
+                'utc_end_exclusive' =>
+                null,
             ];
         }
+
+        $businessNow =
+            Carbon::now(
+                self::REPORT_TIMEZONE
+            );
 
         $dateFrom =
             isset(
                 $filters['date_from']
             )
-            ? Carbon::parse(
-                $filters['date_from']
-            )->toDateString()
-            : now()
+            ? Carbon::createFromFormat(
+                'Y-m-d',
+                (string)
+                $filters['date_from'],
+                self::REPORT_TIMEZONE
+            )
+            ->toDateString()
+            : $businessNow
+            ->copy()
             ->startOfMonth()
             ->toDateString();
 
@@ -2157,38 +2197,45 @@ final class ReportService
             isset(
                 $filters['date_to']
             )
-            ? Carbon::parse(
-                $filters['date_to']
-            )->toDateString()
-            : now()
+            ? Carbon::createFromFormat(
+                'Y-m-d',
+                (string)
+                $filters['date_to'],
+                self::REPORT_TIMEZONE
+            )
+            ->toDateString()
+            : $businessNow
             ->toDateString();
 
-        $businessDayIds =
-            BusinessDay::query()
-            ->whereDate(
-                'business_date',
-                '>=',
-                $dateFrom
+        $utcStart =
+            Carbon::createFromFormat(
+                'Y-m-d',
+                $dateFrom,
+                self::REPORT_TIMEZONE
             )
-            ->whereDate(
-                'business_date',
-                '<=',
-                $dateTo
+            ->startOfDay()
+            ->utc()
+            ->format(
+                'Y-m-d H:i:s'
+            );
+
+        $utcEndExclusive =
+            Carbon::createFromFormat(
+                'Y-m-d',
+                $dateTo,
+                self::REPORT_TIMEZONE
             )
-            ->pluck(
-                'id'
-            )
-            ->map(
-                fn(
-                    mixed $id
-                ): int =>
-                (int)
-                $id
-            )
-            ->values()
-            ->all();
+            ->startOfDay()
+            ->addDay()
+            ->utc()
+            ->format(
+                'Y-m-d H:i:s'
+            );
 
         return [
+            'mode' =>
+            'calendar',
+
             'date_from' =>
             $dateFrom,
 
@@ -2198,8 +2245,20 @@ final class ReportService
             'business_day_id' =>
             null,
 
+            /*
+             * Calendar reports intentionally do not derive their scope from
+             * business_days.business_date. A business day can remain open
+             * across midnight, while owner-facing calendar reports still need
+             * to show transactions on the date they actually happened.
+             */
             'business_day_ids' =>
-            $businessDayIds,
+            [],
+
+            'utc_start' =>
+            $utcStart,
+
+            'utc_end_exclusive' =>
+            $utcEndExclusive,
         ];
     }
 
@@ -2222,6 +2281,92 @@ final class ReportService
         ];
     }
 
+    private function isBusinessDayScope(
+        array $scope
+    ): bool {
+        return $scope['business_day_id']
+            !== null;
+    }
+
+    private function applyTimestampScope(
+        mixed $query,
+        array $scope,
+        string $timestampColumn,
+        string $businessDayColumn = 'business_day_id'
+    ): void {
+        if (
+            $this->isBusinessDayScope(
+                $scope
+            )
+        ) {
+            $query->where(
+                $businessDayColumn,
+                (int)
+                $scope['business_day_id']
+            );
+
+            return;
+        }
+
+        $query
+            ->where(
+                $timestampColumn,
+                '>=',
+                $scope['utc_start']
+            )
+            ->where(
+                $timestampColumn,
+                '<',
+                $scope['utc_end_exclusive']
+            );
+    }
+
+    private function applyDateScope(
+        mixed $query,
+        array $scope,
+        string $dateColumn,
+        string $businessDayColumn = 'business_day_id'
+    ): void {
+        if (
+            $this->isBusinessDayScope(
+                $scope
+            )
+        ) {
+            $query->where(
+                $businessDayColumn,
+                (int)
+                $scope['business_day_id']
+            );
+
+            return;
+        }
+
+        $query
+            ->whereDate(
+                $dateColumn,
+                '>=',
+                $scope['date_from']
+            )
+            ->whereDate(
+                $dateColumn,
+                '<=',
+                $scope['date_to']
+            );
+    }
+
+    private function calendarDateExpression(
+        string $column
+    ): string {
+        $offsetMinutes =
+            self::REPORT_UTC_OFFSET_MINUTES;
+
+        return sprintf(
+            'DATE(DATE_ADD(%s, INTERVAL %d MINUTE))',
+            $column,
+            $offsetMinutes
+        );
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Order Base Query
@@ -2230,14 +2375,18 @@ final class ReportService
 
     private function orderQuery(
         array $filters,
-        array $businessDayIds
+        array $scope,
+        string $timestampColumn = 'created_at'
     ): Builder {
         $query =
-            Order::query()
-            ->whereIn(
-                'business_day_id',
-                $businessDayIds
-            );
+            Order::query();
+
+        $this->applyTimestampScope(
+            query: $query,
+            scope: $scope,
+            timestampColumn: $timestampColumn,
+            businessDayColumn: 'business_day_id'
+        );
 
         if (
             isset(
@@ -2299,26 +2448,50 @@ final class ReportService
 
     private function dailySales(
         array $filters,
-        array $businessDayIds
+        array $scope
     ): array {
         $query =
             DB::table(
                 'orders'
             )
-            ->join(
-                'business_days',
-                'business_days.id',
-                '=',
-                'orders.business_day_id'
-            )
-            ->whereIn(
-                'orders.business_day_id',
-                $businessDayIds
-            )
             ->where(
                 'orders.status',
                 Order::STATUS_COMPLETED
             );
+
+        if (
+            $this->isBusinessDayScope(
+                $scope
+            )
+        ) {
+            $query
+                ->join(
+                    'business_days',
+                    'business_days.id',
+                    '=',
+                    'orders.business_day_id'
+                )
+                ->where(
+                    'orders.business_day_id',
+                    (int)
+                    $scope['business_day_id']
+                );
+
+            $reportDateExpression =
+                'business_days.business_date';
+        } else {
+            $this->applyTimestampScope(
+                query: $query,
+                scope: $scope,
+                timestampColumn: 'orders.completed_at',
+                businessDayColumn: 'orders.business_day_id'
+            );
+
+            $reportDateExpression =
+                $this->calendarDateExpression(
+                    'orders.completed_at'
+                );
+        }
 
         $this->applyOrderFiltersToQueryBuilder(
             query: $query,
@@ -2326,42 +2499,38 @@ final class ReportService
         );
 
         return $query
-            ->select([
-                'business_days.business_date',
-
-                DB::raw(
-                    'COUNT(orders.id) AS order_count'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.subtotal), 0) AS subtotal'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.discount_total), 0) AS discounts'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.tax_total), 0) AS tax'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.service_charge_total), 0) AS service_charge'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.grand_total), 0) AS sales'
-                ),
-
-                DB::raw(
-                    'COALESCE(SUM(orders.estimated_cost_total), 0) AS cogs'
-                ),
-            ])
+            ->selectRaw(
+                sprintf(
+                    '%s AS report_date',
+                    $reportDateExpression
+                )
+            )
+            ->selectRaw(
+                'COUNT(orders.id) AS order_count'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.subtotal), 0) AS subtotal'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.discount_total), 0) AS discounts'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.tax_total), 0) AS tax'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.service_charge_total), 0) AS service_charge'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.grand_total), 0) AS sales'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(orders.estimated_cost_total), 0) AS cogs'
+            )
             ->groupBy(
-                'business_days.business_date'
+                'report_date'
             )
             ->orderBy(
-                'business_days.business_date'
+                'report_date'
             )
             ->get()
             ->map(
@@ -2381,10 +2550,15 @@ final class ReportService
                         );
 
                     return [
+                        /*
+                         * Keep the existing API key for frontend compatibility.
+                         * In calendar mode this is the actual Sri Lanka calendar
+                         * date of order completion, not business_day.business_date.
+                         */
                         'business_date' =>
                         Carbon::parse(
                             $row
-                                ->business_date
+                                ->report_date
                         )
                             ->toDateString(),
 
@@ -2450,196 +2624,375 @@ final class ReportService
             collect(
                 $this->dailySales(
                     filters: $filters,
-                    businessDayIds: $scope['business_day_ids']
+                    scope: $scope
                 )
             )
             ->keyBy(
                 'business_date'
             );
 
-        $days =
-            BusinessDay::query()
-            ->whereIn(
-                'id',
-                $scope['business_day_ids']
+        if (
+            $this->isBusinessDayScope(
+                $scope
             )
-            ->get([
-                'id',
-                'business_date',
-            ]);
+        ) {
+            $days =
+                BusinessDay::query()
+                ->whereKey(
+                    (int)
+                    $scope['business_day_id']
+                )
+                ->get([
+                    'id',
+                    'business_date',
+                ]);
 
-        $expenses =
+            $expenses =
+                Expense::query()
+                ->where(
+                    'business_day_id',
+                    (int)
+                    $scope['business_day_id']
+                )
+                ->where(
+                    'status',
+                    Expense::STATUS_POSTED
+                )
+                ->select([
+                    'business_day_id',
+
+                    DB::raw(
+                        'COALESCE(SUM(amount), 0) AS total'
+                    ),
+                ])
+                ->groupBy(
+                    'business_day_id'
+                )
+                ->pluck(
+                    'total',
+                    'business_day_id'
+                );
+
+            $wastage =
+                Wastage::query()
+                ->where(
+                    'business_day_id',
+                    (int)
+                    $scope['business_day_id']
+                )
+                ->where(
+                    'status',
+                    Wastage::STATUS_POSTED
+                )
+                ->select([
+                    'business_day_id',
+
+                    DB::raw(
+                        'COALESCE(SUM(estimated_cost), 0) AS total'
+                    ),
+                ])
+                ->groupBy(
+                    'business_day_id'
+                )
+                ->pluck(
+                    'total',
+                    'business_day_id'
+                );
+
+            $refunds =
+                Refund::query()
+                ->where(
+                    'business_day_id',
+                    (int)
+                    $scope['business_day_id']
+                )
+                ->where(
+                    'status',
+                    Refund::STATUS_COMPLETED
+                )
+                ->select([
+                    'business_day_id',
+
+                    DB::raw(
+                        'COALESCE(SUM(amount), 0) AS total'
+                    ),
+                ])
+                ->groupBy(
+                    'business_day_id'
+                )
+                ->pluck(
+                    'total',
+                    'business_day_id'
+                );
+
+            return $days
+                ->sortBy(
+                    'business_date'
+                )
+                ->map(
+                    function (
+                        BusinessDay $day
+                    ) use (
+                        $salesRows,
+                        $expenses,
+                        $wastage,
+                        $refunds
+                    ): array {
+                        $date =
+                            $day
+                            ->business_date
+                            ->toDateString();
+
+                        $salesRow =
+                            $salesRows->get(
+                                $date
+                            );
+
+                        return $this->dailyProfitRow(
+                            date: $date,
+                            salesRow: $salesRow,
+                            refund: $refunds[$day->id]
+                                ?? 0,
+                            expense: $expenses[$day->id]
+                                ?? 0,
+                            wastage: $wastage[$day->id]
+                                ?? 0
+                        );
+                    }
+                )
+                ->values()
+                ->all();
+        }
+
+        $expenseQuery =
             Expense::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'status',
                 Expense::STATUS_POSTED
-            )
-            ->select([
-                'business_day_id',
+            );
 
-                DB::raw(
-                    'COALESCE(SUM(amount), 0) AS total'
-                ),
-            ])
+        $this->applyDateScope(
+            query: $expenseQuery,
+            scope: $scope,
+            dateColumn: 'expense_date'
+        );
+
+        $expenses =
+            $expenseQuery
+            ->selectRaw(
+                'expense_date AS report_date'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(amount), 0) AS total'
+            )
             ->groupBy(
-                'business_day_id'
+                'report_date'
             )
             ->pluck(
                 'total',
-                'business_day_id'
+                'report_date'
             );
 
-        $wastage =
+        $wastageQuery =
             Wastage::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'status',
                 Wastage::STATUS_POSTED
-            )
-            ->select([
-                'business_day_id',
+            );
 
-                DB::raw(
-                    'COALESCE(SUM(estimated_cost), 0) AS total'
-                ),
-            ])
+        $this->applyTimestampScope(
+            query: $wastageQuery,
+            scope: $scope,
+            timestampColumn: 'wasted_at'
+        );
+
+        $wastageDateExpression =
+            $this->calendarDateExpression(
+                'wasted_at'
+            );
+
+        $wastage =
+            $wastageQuery
+            ->selectRaw(
+                $wastageDateExpression
+                    . ' AS report_date'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(estimated_cost), 0) AS total'
+            )
             ->groupBy(
-                'business_day_id'
+                'report_date'
             )
             ->pluck(
                 'total',
-                'business_day_id'
+                'report_date'
             );
 
-        $refunds =
+        $refundQuery =
             Refund::query()
-            ->whereIn(
-                'business_day_id',
-                $scope['business_day_ids']
-            )
             ->where(
                 'status',
                 Refund::STATUS_COMPLETED
-            )
-            ->select([
-                'business_day_id',
+            );
 
-                DB::raw(
-                    'COALESCE(SUM(amount), 0) AS total'
-                ),
-            ])
+        $this->applyTimestampScope(
+            query: $refundQuery,
+            scope: $scope,
+            timestampColumn: 'refunded_at'
+        );
+
+        $refundDateExpression =
+            $this->calendarDateExpression(
+                'refunded_at'
+            );
+
+        $refunds =
+            $refundQuery
+            ->selectRaw(
+                $refundDateExpression
+                    . ' AS report_date'
+            )
+            ->selectRaw(
+                'COALESCE(SUM(amount), 0) AS total'
+            )
             ->groupBy(
-                'business_day_id'
+                'report_date'
             )
             ->pluck(
                 'total',
-                'business_day_id'
+                'report_date'
             );
 
-        return $days
-            ->sortBy(
-                'business_date'
+        $rows =
+            collect();
+
+        $date =
+            Carbon::createFromFormat(
+                'Y-m-d',
+                $scope['date_from'],
+                self::REPORT_TIMEZONE
             )
-            ->map(
-                function (
-                    BusinessDay $day
-                ) use (
-                    $salesRows,
-                    $expenses,
-                    $wastage,
-                    $refunds
-                ): array {
-                    $date =
-                        $day
-                        ->business_date
-                        ->toDateString();
+            ->startOfDay();
 
-                    $salesRow =
-                        $salesRows->get(
-                            $date
-                        );
-
-                    $sales =
-                        $this->money(
-                            $salesRow['sales']
-                                ?? 0
-                        );
-
-                    $cogs =
-                        $this->money(
-                            $salesRow['cogs']
-                                ?? 0
-                        );
-
-                    $refund =
-                        $this->money(
-                            $refunds[$day->id]
-                                ?? 0
-                        );
-
-                    $expense =
-                        $this->money(
-                            $expenses[$day->id]
-                                ?? 0
-                        );
-
-                    $wastageCost =
-                        $this->money(
-                            $wastage[$day->id]
-                                ?? 0
-                        );
-
-                    $netSales =
-                        $this->money(
-                            $sales
-                                -
-                                $refund
-                        );
-
-                    return [
-                        'business_date' =>
-                        $date,
-
-                        'sales' =>
-                        $sales,
-
-                        'refunds' =>
-                        $refund,
-
-                        'net_sales' =>
-                        $netSales,
-
-                        'cogs' =>
-                        $cogs,
-
-                        'expenses' =>
-                        $expense,
-
-                        'wastage_cost' =>
-                        $wastageCost,
-
-                        'estimated_net_profit' =>
-                        $this->money(
-                            $netSales
-                                -
-                                $cogs
-                                -
-                                $expense
-                                -
-                                $wastageCost
-                        ),
-                    ];
-                }
+        $end =
+            Carbon::createFromFormat(
+                'Y-m-d',
+                $scope['date_to'],
+                self::REPORT_TIMEZONE
             )
+            ->startOfDay();
+
+        while (
+            $date->lte(
+                $end
+            )
+        ) {
+            $key =
+                $date->toDateString();
+
+            $rows->push(
+                $this->dailyProfitRow(
+                    date: $key,
+                    salesRow: $salesRows->get(
+                        $key
+                    ),
+                    refund: $refunds->get(
+                        $key,
+                        0
+                    ),
+                    expense: $expenses->get(
+                        $key,
+                        0
+                    ),
+                    wastage: $wastage->get(
+                        $key,
+                        0
+                    )
+                )
+            );
+
+            $date->addDay();
+        }
+
+        return $rows
             ->values()
             ->all();
+    }
+
+    private function dailyProfitRow(
+        string $date,
+        mixed $salesRow,
+        mixed $refund,
+        mixed $expense,
+        mixed $wastage
+    ): array {
+        $sales =
+            $this->money(
+                $salesRow['sales']
+                    ?? 0
+            );
+
+        $cogs =
+            $this->money(
+                $salesRow['cogs']
+                    ?? 0
+            );
+
+        $refundAmount =
+            $this->money(
+                $refund
+            );
+
+        $expenseAmount =
+            $this->money(
+                $expense
+            );
+
+        $wastageCost =
+            $this->money(
+                $wastage
+            );
+
+        $netSales =
+            $this->money(
+                $sales
+                    -
+                    $refundAmount
+            );
+
+        return [
+            'business_date' =>
+            $date,
+
+            'sales' =>
+            $sales,
+
+            'refunds' =>
+            $refundAmount,
+
+            'net_sales' =>
+            $netSales,
+
+            'cogs' =>
+            $cogs,
+
+            'expenses' =>
+            $expenseAmount,
+
+            'wastage_cost' =>
+            $wastageCost,
+
+            'estimated_net_profit' =>
+            $this->money(
+                $netSales
+                    -
+                    $cogs
+                    -
+                    $expenseAmount
+                    -
+                    $wastageCost
+            ),
+        ];
     }
 
     /*
@@ -2651,11 +3004,12 @@ final class ReportService
     private function completedOrderBreakdown(
         string $field,
         array $filters,
-        array $businessDayIds
+        array $scope
     ): array {
         return $this->orderQuery(
             filters: $filters,
-            businessDayIds: $businessDayIds
+            scope: $scope,
+            timestampColumn: 'completed_at'
         )
             ->where(
                 'status',
@@ -2710,11 +3064,12 @@ final class ReportService
 
     private function orderStatusBreakdown(
         array $filters,
-        array $businessDayIds
+        array $scope
     ): array {
         return $this->orderQuery(
             filters: $filters,
-            businessDayIds: $businessDayIds
+            scope: $scope,
+            timestampColumn: 'created_at'
         )
             ->select([
                 'status',
@@ -2766,7 +3121,7 @@ final class ReportService
 
     private function topItems(
         array $filters,
-        array $businessDayIds,
+        array $scope,
         int $limit
     ): array {
         $query =
@@ -2779,10 +3134,6 @@ final class ReportService
                 '=',
                 'order_items.order_id'
             )
-            ->whereIn(
-                'orders.business_day_id',
-                $businessDayIds
-            )
             ->where(
                 'orders.status',
                 Order::STATUS_COMPLETED
@@ -2791,6 +3142,13 @@ final class ReportService
                 'order_items.status',
                 OrderItem::STATUS_ACTIVE
             );
+
+        $this->applyTimestampScope(
+            query: $query,
+            scope: $scope,
+            timestampColumn: 'orders.completed_at',
+            businessDayColumn: 'orders.business_day_id'
+        );
 
         $this->applyOrderFiltersToQueryBuilder(
             query: $query,
@@ -2921,7 +3279,7 @@ final class ReportService
     */
 
     private function paymentSummary(
-        array $businessDayIds,
+        array $scope,
         array $filters
     ): array {
         $paymentQuery =
@@ -2934,10 +3292,6 @@ final class ReportService
                 '=',
                 'payments.invoice_id'
             )
-            ->whereIn(
-                'invoices.business_day_id',
-                $businessDayIds
-            )
             ->where(
                 'invoices.status',
                 '!=',
@@ -2947,6 +3301,13 @@ final class ReportService
                 'payments.status',
                 Payment::STATUS_COMPLETED
             );
+
+        $this->applyTimestampScope(
+            query: $paymentQuery,
+            scope: $scope,
+            timestampColumn: 'payments.paid_at',
+            businessDayColumn: 'invoices.business_day_id'
+        );
 
         if (
             isset(
@@ -2979,14 +3340,16 @@ final class ReportService
 
         $refundQuery =
             Refund::query()
-            ->whereIn(
-                'business_day_id',
-                $businessDayIds
-            )
             ->where(
                 'status',
                 Refund::STATUS_COMPLETED
             );
+
+        $this->applyTimestampScope(
+            query: $refundQuery,
+            scope: $scope,
+            timestampColumn: 'refunded_at'
+        );
 
         if (
             isset(
@@ -3165,29 +3528,11 @@ final class ReportService
                 Expense::STATUS_POSTED
             );
 
-        if (
-            isset(
-                $filters['business_day_id']
-            )
-        ) {
-            $query->where(
-                'business_day_id',
-                (int)
-                $filters['business_day_id']
-            );
-        } else {
-            $query
-                ->whereDate(
-                    'expense_date',
-                    '>=',
-                    $scope['date_from']
-                )
-                ->whereDate(
-                    'expense_date',
-                    '<=',
-                    $scope['date_to']
-                );
-        }
+        $this->applyDateScope(
+            query: $query,
+            scope: $scope,
+            dateColumn: 'expense_date'
+        );
 
         return $this->money(
             $query->sum(
@@ -3197,40 +3542,48 @@ final class ReportService
     }
 
     private function wastageTotal(
-        array $businessDayIds
+        array $scope
     ): float {
-        return $this->money(
+        $query =
             Wastage::query()
-                ->whereIn(
-                    'business_day_id',
-                    $businessDayIds
-                )
-                ->where(
-                    'status',
-                    Wastage::STATUS_POSTED
-                )
-                ->sum(
-                    'estimated_cost'
-                )
+            ->where(
+                'status',
+                Wastage::STATUS_POSTED
+            );
+
+        $this->applyTimestampScope(
+            query: $query,
+            scope: $scope,
+            timestampColumn: 'wasted_at'
+        );
+
+        return $this->money(
+            $query->sum(
+                'estimated_cost'
+            )
         );
     }
 
     private function refundTotal(
-        array $businessDayIds
+        array $scope
     ): float {
-        return $this->money(
+        $query =
             Refund::query()
-                ->whereIn(
-                    'business_day_id',
-                    $businessDayIds
-                )
-                ->where(
-                    'status',
-                    Refund::STATUS_COMPLETED
-                )
-                ->sum(
-                    'amount'
-                )
+            ->where(
+                'status',
+                Refund::STATUS_COMPLETED
+            );
+
+        $this->applyTimestampScope(
+            query: $query,
+            scope: $scope,
+            timestampColumn: 'refunded_at'
+        );
+
+        return $this->money(
+            $query->sum(
+                'amount'
+            )
         );
     }
 

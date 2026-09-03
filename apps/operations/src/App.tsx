@@ -76,8 +76,8 @@ import SupplierPaymentsPage
 import IngredientsPage
   from './ingredients/IngredientsPage';
 
-import ModulePlaceholderPage
-  from './pages/ModulePlaceholderPage';
+// import ModulePlaceholderPage
+//   from './pages/ModulePlaceholderPage';
 
 import MenuManagementPage
   from './menu/MenuManagementPage';
