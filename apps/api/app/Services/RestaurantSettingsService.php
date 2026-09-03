@@ -8,29 +8,49 @@ use App\Models\User;
 use App\Support\DatabaseTransaction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 final class RestaurantSettingsService
 {
-    private const CACHE_KEY =
-    'restaurant.settings.current';
-
     public function __construct(
         private readonly AuditLogger $auditLogger
     ) {}
 
+    /*
+    |--------------------------------------------------------------------------
+    | Get Restaurant Settings
+    |--------------------------------------------------------------------------
+    |
+    | Restaurant settings contain a single authoritative database row.
+    |
+    | Do NOT cache the complete Eloquent model instance here.
+    |
+    | Previously the Eloquent model was stored through Cache::remember().
+    | A stale serialized model could later be restored by PHP as:
+    |
+    | __PHP_Incomplete_Class
+    |
+    | That breaks this method because it must return:
+    |
+    | App\Models\RestaurantSetting
+    |
+    | Reading this single row directly is inexpensive and avoids serialized
+    | Eloquent-model cache corruption completely.
+    |--------------------------------------------------------------------------
+    */
+
     public function get(): RestaurantSetting
     {
-        return Cache::remember(
-            self::CACHE_KEY,
-            now()->addHour(),
-            fn(): RestaurantSetting =>
-            RestaurantSetting::query()
-                ->firstOrFail()
-        );
+        return RestaurantSetting::query()
+            ->firstOrFail();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Document Numbering
+    |--------------------------------------------------------------------------
+    */
 
     public function sequences(): Collection
     {
@@ -38,6 +58,12 @@ final class RestaurantSettingsService
             ->orderBy('id')
             ->get();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Restaurant Settings
+    |--------------------------------------------------------------------------
+    */
 
     public function update(
         User $actor,
@@ -50,95 +76,94 @@ final class RestaurantSettingsService
             $data['numbering']
         );
 
-        $settings =
-            DatabaseTransaction::run(
-                function () use (
-                    $actor,
-                    $data,
+        return DatabaseTransaction::run(
+            function () use (
+                $actor,
+                $data,
+                $numbering
+            ): RestaurantSetting {
+                $settings =
+                    RestaurantSetting::query()
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $oldValues =
+                    $settings->only([
+                        'business_name',
+                        'legal_name',
+                        'phone',
+                        'email',
+                        'address',
+                        'currency',
+                        'timezone',
+                        'tax_enabled',
+                        'default_tax_rate',
+                        'service_charge_enabled',
+                        'default_service_charge_rate',
+                        'receipt_header',
+                        'receipt_footer',
+                        'opening_hours',
+                        'social_media',
+                        'website_contact',
+                    ]);
+
+                $settings->fill(
+                    $data
+                );
+
+                $settings->save();
+
+                $this->updateSequences(
                     $numbering
-                ): RestaurantSetting {
-                    $settings =
-                        RestaurantSetting::query()
-                        ->lockForUpdate()
-                        ->firstOrFail();
+                );
 
-                    $oldValues =
-                        $settings->only([
-                            'business_name',
-                            'legal_name',
-                            'phone',
-                            'email',
-                            'address',
-                            'currency',
-                            'timezone',
-                            'tax_enabled',
-                            'default_tax_rate',
-                            'service_charge_enabled',
-                            'default_service_charge_rate',
-                            'receipt_header',
-                            'receipt_footer',
-                            'opening_hours',
-                            'social_media',
-                            'website_contact',
-                        ]);
+                $this->auditLogger->record(
+                    action: 'RESTAURANT_SETTINGS_UPDATED',
 
-                    $settings->fill(
-                        $data
-                    );
+                    entityType: 'restaurant_settings',
 
-                    $settings->save();
+                    entityId: $settings->id,
 
-                    $this->updateSequences(
-                        $numbering
-                    );
+                    oldValues: $oldValues,
 
-                    $this->auditLogger->record(
-                        action: 'RESTAURANT_SETTINGS_UPDATED',
+                    newValues: $settings->only([
+                        'business_name',
+                        'legal_name',
+                        'phone',
+                        'email',
+                        'address',
+                        'currency',
+                        'timezone',
+                        'tax_enabled',
+                        'default_tax_rate',
+                        'service_charge_enabled',
+                        'default_service_charge_rate',
+                        'receipt_header',
+                        'receipt_footer',
+                        'opening_hours',
+                        'social_media',
+                        'website_contact',
+                    ]),
 
-                        entityType: 'restaurant_settings',
+                    metadata: [
+                        'numbering' =>
+                        $numbering,
+                    ],
 
-                        entityId: $settings->id,
+                    userId: $actor->id
+                );
 
-                        oldValues: $oldValues,
-
-                        newValues: $settings->only([
-                            'business_name',
-                            'legal_name',
-                            'phone',
-                            'email',
-                            'address',
-                            'currency',
-                            'timezone',
-                            'tax_enabled',
-                            'default_tax_rate',
-                            'service_charge_enabled',
-                            'default_service_charge_rate',
-                            'receipt_header',
-                            'receipt_footer',
-                            'opening_hours',
-                            'social_media',
-                            'website_contact',
-                        ]),
-
-                        metadata: [
-                            'numbering' =>
-                            $numbering,
-                        ],
-
-                        userId: $actor->id
-                    );
-
-                    return $settings
-                        ->refresh();
-                }
-            );
-
-        Cache::forget(
-            self::CACHE_KEY
+                return $settings
+                    ->refresh();
+            }
         );
-
-        return $settings;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Restaurant Logo
+    |--------------------------------------------------------------------------
+    */
 
     public function uploadLogo(
         User $actor,
@@ -201,27 +226,38 @@ final class RestaurantSettingsService
                     ];
                 }
             );
-        } catch (Throwable $exception) {
-            Storage::disk('public')
-                ->delete($newPath);
+        } catch (
+            Throwable $exception
+        ) {
+            Storage::disk(
+                'public'
+            )->delete(
+                $newPath
+            );
 
             throw $exception;
         }
 
         if (
             $oldPath
-            && $oldPath !== $newPath
+            &&
+            $oldPath !== $newPath
         ) {
-            Storage::disk('public')
-                ->delete($oldPath);
+            Storage::disk(
+                'public'
+            )->delete(
+                $oldPath
+            );
         }
-
-        Cache::forget(
-            self::CACHE_KEY
-        );
 
         return $settings;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Restaurant Logo
+    |--------------------------------------------------------------------------
+    */
 
     public function removeLogo(
         User $actor
@@ -276,19 +312,24 @@ final class RestaurantSettingsService
             }
         );
 
-        if ($oldPath) {
-            Storage::disk('public')
-                ->delete(
-                    $oldPath
-                );
+        if (
+            $oldPath
+        ) {
+            Storage::disk(
+                'public'
+            )->delete(
+                $oldPath
+            );
         }
-
-        Cache::forget(
-            self::CACHE_KEY
-        );
 
         return $settings;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Document Sequences
+    |--------------------------------------------------------------------------
+    */
 
     private function updateSequences(
         array $numbering

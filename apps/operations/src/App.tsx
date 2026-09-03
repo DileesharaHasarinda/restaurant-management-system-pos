@@ -40,6 +40,9 @@ import SuppliersPage from "./suppliers/SuppliersPage";
 
 import PurchasesPage from "./purchases/PurchasesPage";
 
+import RestaurantSettingsPage
+  from "./restaurantSettings/RestaurantSettingsPage";
+
 import AuditLogsPage
   from "./audit/AuditLogsPage";
 
@@ -294,11 +297,7 @@ export default function App() {
               <Route
                 path="/restaurant-settings"
                 element={
-                  <ModulePlaceholderPage
-                    eyebrow="ADMINISTRATION"
-                    title="Restaurant Settings"
-                    description="Manage restaurant identity, taxation, numbering and operational configuration."
-                  />
+                  <RestaurantSettingsPage />
                 }
               />
 
