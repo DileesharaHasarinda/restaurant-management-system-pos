@@ -27,15 +27,26 @@ interface CashDrawerModuleProps {
     onSessionExpired?: () => void;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Local / USB Receipt Printer Defaults
+|--------------------------------------------------------------------------
+*/
+
 const DEFAULT_SETTINGS: ReceiptPrinterSettings = {
     printerName:
         "Cashier Receipt Printer",
 
+    /*
+     * Compatibility fields.
+     *
+     * Cashier printer hardware no longer uses TCP/IP.
+     */
     host:
-        "",
+        "LOCAL_USB",
 
     port:
-        9100,
+        0,
 
     paperWidthMm:
         80,
@@ -55,7 +66,8 @@ const DEFAULT_SETTINGS: ReceiptPrinterSettings = {
 
 const makeUuid = (): string => {
     if (
-        typeof crypto !== "undefined" &&
+        typeof crypto !== "undefined"
+        &&
         typeof crypto.randomUUID === "function"
     ) {
         return crypto.randomUUID();
@@ -64,66 +76,85 @@ const makeUuid = (): string => {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
         .replace(
             /[xy]/g,
-            (character) => {
+            (
+                character,
+            ) => {
                 const random =
-                    (Math.random() * 16) | 0;
+                    (
+                        Math.random()
+                        *
+                        16
+                    )
+                    |
+                    0;
 
                 const value =
                     character === "x"
                         ? random
-                        : (random & 0x3) | 0x8;
+                        : (
+                            random
+                            &
+                            0x3
+                        )
+                        |
+                        0x8;
 
-                return value.toString(16);
-            }
+                return value.toString(
+                    16,
+                );
+            },
         );
 };
 
-const money = (
-    value:
-        number
-        |
-        string
-        |
-        null
-        |
-        undefined
-): string => {
-    const amount =
-        Number(
-            value ?? 0
-        );
+const money =
+    (
+        value:
+            number
+            |
+            string
+            |
+            null
+            |
+            undefined,
+    ): string => {
+        const amount =
+            Number(
+                value
+                ??
+                0,
+            );
 
-    if (
-        !Number.isFinite(
-            amount
-        )
-    ) {
-        return "Rs. 0.00";
-    }
-
-    return `Rs. ${amount.toLocaleString(
-        "en-LK",
-        {
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
+        if (
+            !Number.isFinite(
+                amount,
+            )
+        ) {
+            return "Rs. 0.00";
         }
-    )}`;
-};
+
+        return `Rs. ${amount.toLocaleString(
+            "en-LK",
+            {
+                minimumFractionDigits:
+                    2,
+
+                maximumFractionDigits:
+                    2,
+            },
+        )}`;
+    };
 
 export default function CashDrawerModule(
     {
         onSessionExpired,
-    }: CashDrawerModuleProps
+    }: CashDrawerModuleProps,
 ) {
     const [
         settings,
         setSettings,
     ] =
         useState<ReceiptPrinterSettings>(
-            DEFAULT_SETTINGS
+            DEFAULT_SETTINGS,
         );
 
     const [
@@ -131,7 +162,7 @@ export default function CashDrawerModule(
         setShift,
     ] =
         useState<DrawerCashierShift | null>(
-            null
+            null,
         );
 
     const [
@@ -139,7 +170,7 @@ export default function CashDrawerModule(
         setLoading,
     ] =
         useState(
-            true
+            true,
         );
 
     const [
@@ -147,7 +178,7 @@ export default function CashDrawerModule(
         setBusy,
     ] =
         useState(
-            false
+            false,
         );
 
     const [
@@ -155,7 +186,7 @@ export default function CashDrawerModule(
         setMessage,
     ] =
         useState(
-            ""
+            "",
         );
 
     const [
@@ -163,7 +194,7 @@ export default function CashDrawerModule(
         setError,
     ] =
         useState(
-            ""
+            "",
         );
 
     const [
@@ -171,7 +202,7 @@ export default function CashDrawerModule(
         setReason,
     ] =
         useState(
-            ""
+            "",
         );
 
     /*
@@ -194,7 +225,7 @@ export default function CashDrawerModule(
     ] =
         useState(
             () =>
-                makeUuid()
+                makeUuid(),
         );
 
     /*
@@ -207,7 +238,7 @@ export default function CashDrawerModule(
         useCallback(
             (
                 exception:
-                    unknown
+                    unknown,
             ): void => {
                 if (
                     exception instanceof ApiError
@@ -222,12 +253,12 @@ export default function CashDrawerModule(
                 setError(
                     exception instanceof Error
                         ? exception.message
-                        : "Cash drawer operation failed."
+                        : "Cash drawer operation failed.",
                 );
             },
             [
                 onSessionExpired,
-            ]
+            ],
         );
 
     /*
@@ -241,16 +272,16 @@ export default function CashDrawerModule(
             async (): Promise<void> => {
                 const response =
                     await api.get<CurrentCashierShiftResponse>(
-                        "/cashier-shifts/current"
+                        "/cashier-shifts/current",
                     );
 
                 setShift(
                     response
                         .data
-                        .shift
+                        .shift,
                 );
             },
-            []
+            [],
         );
 
     /*
@@ -260,11 +291,14 @@ export default function CashDrawerModule(
     |
     | CashierWorkspace owns the single Reverb/Echo connection.
     |
-    | This module only listens to internal realtime invalidation events and
-    | silently reloads the authoritative current shift from Laravel.
+    | This module only reloads authoritative shift data.
     |
-    | No drawer hardware action, payment operation or manual-open POST is
-    | repeated because of realtime.
+    | No realtime event can:
+    |
+    | - open the cash drawer
+    | - print a receipt
+    | - submit a payment
+    | - repeat a manual-open request
     |--------------------------------------------------------------------------
     */
 
@@ -288,11 +322,11 @@ export default function CashDrawerModule(
         useCallback(
             async (): Promise<void> => {
                 setLoading(
-                    true
+                    true,
                 );
 
                 setError(
-                    ""
+                    "",
                 );
 
                 try {
@@ -306,34 +340,34 @@ export default function CashDrawerModule(
                                 .getReceiptPrinterSettings(),
 
                             api.get<CurrentCashierShiftResponse>(
-                                "/cashier-shifts/current"
+                                "/cashier-shifts/current",
                             ),
                         ]);
 
                     setSettings(
-                        savedSettings
+                        savedSettings,
                     );
 
                     setShift(
                         shiftResponse
                             .data
-                            .shift
+                            .shift,
                     );
                 } catch (
                 exception
                 ) {
                     handleError(
-                        exception
+                        exception,
                     );
                 } finally {
                     setLoading(
-                        false
+                        false,
                     );
                 }
             },
             [
                 handleError,
-            ]
+            ],
         );
 
     useEffect(
@@ -342,7 +376,7 @@ export default function CashDrawerModule(
         },
         [
             load,
-        ]
+        ],
     );
 
     /*
@@ -354,7 +388,7 @@ export default function CashDrawerModule(
     const runAction =
         async (
             action:
-                () => Promise<void>
+                () => Promise<void>,
         ): Promise<void> => {
             if (
                 busy
@@ -363,15 +397,15 @@ export default function CashDrawerModule(
             }
 
             setBusy(
-                true
+                true,
             );
 
             setMessage(
-                ""
+                "",
             );
 
             setError(
-                ""
+                "",
             );
 
             try {
@@ -380,11 +414,11 @@ export default function CashDrawerModule(
             exception
             ) {
                 handleError(
-                    exception
+                    exception,
                 );
             } finally {
                 setBusy(
-                    false
+                    false,
                 );
             }
         };
@@ -403,23 +437,28 @@ export default function CashDrawerModule(
                         await window
                             .posBridge
                             .setReceiptPrinterSettings(
-                                settings
+                                settings,
                             );
 
                     setSettings(
-                        saved
+                        saved,
                     );
 
                     setMessage(
-                        "Receipt printer and cash drawer settings saved successfully."
+                        "Local receipt printer and cash drawer settings saved successfully.",
                     );
-                }
+                },
             );
         };
 
     /*
     |--------------------------------------------------------------------------
-    | Test Printer Connection
+    | Test Local Printer Queue
+    |--------------------------------------------------------------------------
+    |
+    | This does NOT test an IP address.
+    |
+    | Windows checks that the configured printer queue exists.
     |--------------------------------------------------------------------------
     */
 
@@ -431,11 +470,11 @@ export default function CashDrawerModule(
                         await window
                             .posBridge
                             .setReceiptPrinterSettings(
-                                settings
+                                settings,
                             );
 
                     setSettings(
-                        saved
+                        saved,
                     );
 
                     const result =
@@ -444,9 +483,9 @@ export default function CashDrawerModule(
                             .testReceiptPrinterConnection();
 
                     setMessage(
-                        result.message
+                        result.message,
                     );
-                }
+                },
             );
         };
 
@@ -464,11 +503,11 @@ export default function CashDrawerModule(
                         await window
                             .posBridge
                             .setReceiptPrinterSettings(
-                                settings
+                                settings,
                             );
 
                     setSettings(
-                        saved
+                        saved,
                     );
 
                     const result =
@@ -477,9 +516,9 @@ export default function CashDrawerModule(
                             .testReceiptPrinter();
 
                     setMessage(
-                        `${result.message} ${result.bytesWritten} bytes sent.`
+                        `${result.message} ${result.bytesWritten} bytes sent.`,
                     );
-                }
+                },
             );
         };
 
@@ -489,6 +528,20 @@ export default function CashDrawerModule(
     |--------------------------------------------------------------------------
     |
     | Hardware-only diagnostic.
+    |
+    | ESC/POS drawer pulse travels:
+    |
+    | Electron
+    |   ↓
+    | Windows local printer queue
+    |   ↓
+    | USB
+    |   ↓
+    | Receipt Printer
+    |   ↓
+    | DK / RJ11-RJ12
+    |   ↓
+    | Cash Drawer
     |
     | No financial transaction or MANUAL_OPEN record is created.
     |--------------------------------------------------------------------------
@@ -502,11 +555,11 @@ export default function CashDrawerModule(
                         await window
                             .posBridge
                             .setReceiptPrinterSettings(
-                                settings
+                                settings,
                             );
 
                     setSettings(
-                        saved
+                        saved,
                     );
 
                     const result =
@@ -515,9 +568,9 @@ export default function CashDrawerModule(
                             .testCashDrawer();
 
                     setMessage(
-                        result.message
+                        result.message,
                     );
-                }
+                },
             );
         };
 
@@ -536,7 +589,11 @@ export default function CashDrawerModule(
     |   ↓
     | should_open = true
     |   ↓
-    | Electron pulse
+    | Electron
+    |   ↓
+    | USB Receipt Printer
+    |   ↓
+    | DK drawer pulse
     |--------------------------------------------------------------------------
     */
 
@@ -546,7 +603,7 @@ export default function CashDrawerModule(
                 !shift
             ) {
                 setError(
-                    "Open a cashier shift before manually opening the cash drawer."
+                    "Open a cashier shift before manually opening the cash drawer.",
                 );
 
                 return;
@@ -559,7 +616,7 @@ export default function CashDrawerModule(
                 !cleanReason
             ) {
                 setError(
-                    "Enter a reason for manually opening the cash drawer."
+                    "Enter a reason for manually opening the cash drawer.",
                 );
 
                 return;
@@ -584,16 +641,16 @@ export default function CashDrawerModule(
 
                                 reason:
                                     cleanReason,
-                            }
+                            },
                         );
 
                     /*
-                     * At this point Laravel definitely returned a response.
-                     * The request is resolved, so the next user operation
-                     * should receive a new idempotency key.
+                     * Laravel definitely returned a response.
+                     *
+                     * The next user operation gets a new UUID.
                      */
                     setManualOpenRequestId(
-                        makeUuid()
+                        makeUuid(),
                     );
 
                     if (
@@ -603,11 +660,11 @@ export default function CashDrawerModule(
                             .should_open
                     ) {
                         setMessage(
-                            "This manual drawer request was already processed. No duplicate hardware pulse was sent."
+                            "This manual drawer request was already processed. No duplicate hardware pulse was sent.",
                         );
 
                         setReason(
-                            ""
+                            "",
                         );
 
                         await loadCurrentShift();
@@ -616,7 +673,7 @@ export default function CashDrawerModule(
                     }
 
                     /*
-                     * Laravel authorized exactly one hardware pulse.
+                     * Laravel authorized exactly one physical pulse.
                      */
                     try {
                         const result =
@@ -625,31 +682,31 @@ export default function CashDrawerModule(
                                 .openCashDrawerHardware();
 
                         setMessage(
-                            result.message
+                            result.message,
                         );
                     } catch (
                     hardwareException
                     ) {
                         /*
-                         * The backend authorization/audit already succeeded.
+                         * Backend authorization/audit already succeeded.
                          *
-                         * Do not pretend the MANUAL_OPEN database operation
-                         * failed just because the physical printer failed.
+                         * Hardware failure does not mean the Laravel
+                         * MANUAL_OPEN operation failed.
                          */
                         setError(
                             `Manual drawer opening was authorized and recorded, but the physical drawer did not open: ${hardwareException instanceof Error
                                 ? hardwareException.message
                                 : "Unknown hardware error."
-                            }`
+                            }`,
                         );
                     }
 
                     setReason(
-                        ""
+                        "",
                     );
 
                     await loadCurrentShift();
-                }
+                },
             );
         };
 
@@ -692,9 +749,9 @@ export default function CashDrawerModule(
                     </h1>
 
                     <p>
-                        Configure the cashier receipt printer,
-                        test the physical drawer and perform
-                        audited manual openings.
+                        Configure the local USB cashier receipt
+                        printer, test the physical drawer and
+                        perform audited manual openings.
                     </p>
                 </div>
 
@@ -733,6 +790,12 @@ export default function CashDrawerModule(
                     : null
             }
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Overview
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="drawer-overview-grid">
                 <div className="drawer-overview-card">
                     <span>
@@ -760,7 +823,7 @@ export default function CashDrawerModule(
                                 shift
                                     ?.expected_cash
                                 ??
-                                0
+                                0,
                             )
                         }
                     </strong>
@@ -774,9 +837,9 @@ export default function CashDrawerModule(
                     <strong>
                         {
                             settings
-                                .host
+                                .printerName
                                 .trim()
-                                ? settings.host
+                                ? settings.printerName
                                 : "Not Configured"
                         }
                     </strong>
@@ -784,21 +847,27 @@ export default function CashDrawerModule(
 
                 <div className="drawer-overview-card">
                     <span>
-                        TCP Port
+                        Connection
                     </span>
 
                     <strong>
-                        {settings.port}
+                        Local / USB
                     </strong>
                 </div>
             </section>
 
             <div className="drawer-main-grid">
+                {/*
+                |--------------------------------------------------------------------------
+                | Local Receipt Printer + Drawer
+                |--------------------------------------------------------------------------
+                */}
+
                 <section className="drawer-card">
                     <div className="drawer-card-header">
                         <div>
                             <span className="drawer-card-kicker">
-                                HARDWARE
+                                CASHIER HARDWARE
                             </span>
 
                             <h2>
@@ -814,7 +883,7 @@ export default function CashDrawerModule(
                     <div className="drawer-form-grid">
                         <label className="drawer-field drawer-wide-field">
                             <span>
-                                Printer Name
+                                Windows Printer Name
                             </span>
 
                             <input
@@ -822,12 +891,13 @@ export default function CashDrawerModule(
                                     settings
                                         .printerName
                                 }
+                                placeholder="Example: XP-80C"
                                 disabled={
                                     busy
                                 }
                                 onChange={
                                     (
-                                        event
+                                        event,
                                     ) => {
                                         setSettings({
                                             ...settings,
@@ -842,69 +912,41 @@ export default function CashDrawerModule(
                             />
                         </label>
 
+                        {/*
+                        |--------------------------------------------------------------------------
+                        | Connection
+                        |--------------------------------------------------------------------------
+                        */}
+
                         <label className="drawer-field">
                             <span>
-                                Printer IP Address
+                                Connection Type
                             </span>
 
                             <input
-                                value={
-                                    settings.host
-                                }
-                                placeholder="192.168.1.150"
-                                disabled={
-                                    busy
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) => {
-                                        setSettings({
-                                            ...settings,
-
-                                            host:
-                                                event
-                                                    .target
-                                                    .value,
-                                        });
-                                    }
-                                }
+                                value="Local / USB"
+                                disabled
+                                readOnly
                             />
                         </label>
 
                         <label className="drawer-field">
                             <span>
-                                TCP Port
+                                Paper Width
                             </span>
 
                             <input
-                                type="number"
-                                min="1"
-                                max="65535"
-                                value={
-                                    settings.port
-                                }
-                                disabled={
-                                    busy
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) => {
-                                        setSettings({
-                                            ...settings,
-
-                                            port:
-                                                Number(
-                                                    event
-                                                        .target
-                                                        .value
-                                                ),
-                                        });
-                                    }
-                                }
+                                value="80mm"
+                                disabled
+                                readOnly
                             />
                         </label>
+
+                        {/*
+                        |--------------------------------------------------------------------------
+                        | Drawer Connector
+                        |--------------------------------------------------------------------------
+                        */}
 
                         <label className="drawer-field">
                             <span>
@@ -921,7 +963,7 @@ export default function CashDrawerModule(
                                 }
                                 onChange={
                                     (
-                                        event
+                                        event,
                                     ) => {
                                         setSettings({
                                             ...settings,
@@ -930,7 +972,7 @@ export default function CashDrawerModule(
                                                 Number(
                                                     event
                                                         .target
-                                                        .value
+                                                        .value,
                                                 ) === 1
                                                     ? 1
                                                     : 0,
@@ -950,45 +992,21 @@ export default function CashDrawerModule(
 
                         <label className="drawer-field">
                             <span>
-                                Connection Timeout
+                                Drawer Connection
                             </span>
 
-                            <div className="drawer-input-suffix">
-                                <input
-                                    type="number"
-                                    min="1000"
-                                    max="30000"
-                                    step="500"
-                                    value={
-                                        settings
-                                            .connectTimeoutMs
-                                    }
-                                    disabled={
-                                        busy
-                                    }
-                                    onChange={
-                                        (
-                                            event
-                                        ) => {
-                                            setSettings({
-                                                ...settings,
-
-                                                connectTimeoutMs:
-                                                    Number(
-                                                        event
-                                                            .target
-                                                            .value
-                                                    ),
-                                            });
-                                        }
-                                    }
-                                />
-
-                                <span>
-                                    ms
-                                </span>
-                            </div>
+                            <input
+                                value="Printer DK / RJ11-RJ12"
+                                disabled
+                                readOnly
+                            />
                         </label>
+
+                        {/*
+                        |--------------------------------------------------------------------------
+                        | Pulse Timing
+                        |--------------------------------------------------------------------------
+                        */}
 
                         <label className="drawer-field">
                             <span>
@@ -1009,7 +1027,7 @@ export default function CashDrawerModule(
                                     }
                                     onChange={
                                         (
-                                            event
+                                            event,
                                         ) => {
                                             setSettings({
                                                 ...settings,
@@ -1018,7 +1036,7 @@ export default function CashDrawerModule(
                                                     Number(
                                                         event
                                                             .target
-                                                            .value
+                                                            .value,
                                                     ),
                                             });
                                         }
@@ -1050,7 +1068,7 @@ export default function CashDrawerModule(
                                     }
                                     onChange={
                                         (
-                                            event
+                                            event,
                                         ) => {
                                             setSettings({
                                                 ...settings,
@@ -1059,7 +1077,7 @@ export default function CashDrawerModule(
                                                     Number(
                                                         event
                                                             .target
-                                                            .value
+                                                            .value,
                                                     ),
                                             });
                                         }
@@ -1073,16 +1091,40 @@ export default function CashDrawerModule(
                         </label>
                     </div>
 
+                    {/*
+                    |--------------------------------------------------------------------------
+                    | Hardware Connection
+                    |--------------------------------------------------------------------------
+                    */}
+
                     <div className="drawer-hardware-note">
                         <strong>
                             Physical connection
                         </strong>
 
                         <span>
-                            Touchscreen PC → Receipt Printer →
-                            RJ11/RJ12 → Cash Drawer
+                            Cashier PC → USB → Receipt Printer →
+                            DK / RJ11-RJ12 → Cash Drawer
                         </span>
                     </div>
+
+                    <div className="drawer-local-note">
+                        <strong>
+                            Windows printer queue
+                        </strong>
+
+                        <span>
+                            Enter the exact printer name installed
+                            in Windows. No cashier printer IP address
+                            or TCP port is required.
+                        </span>
+                    </div>
+
+                    {/*
+                    |--------------------------------------------------------------------------
+                    | Hardware Actions
+                    |--------------------------------------------------------------------------
+                    */}
 
                     <div className="drawer-action-grid">
                         <button
@@ -1116,7 +1158,7 @@ export default function CashDrawerModule(
                                 }
                             }
                         >
-                            Test Connection
+                            Test Printer
                         </button>
 
                         <button
@@ -1150,6 +1192,12 @@ export default function CashDrawerModule(
                         </button>
                     </div>
                 </section>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Manual Drawer Open
+                |--------------------------------------------------------------------------
+                */}
 
                 <section className="drawer-card manual-card">
                     <div className="drawer-card-header">
@@ -1193,7 +1241,7 @@ export default function CashDrawerModule(
                                     shift
                                         ?.expected_cash
                                     ??
-                                    0
+                                    0,
                                 )
                             }
                         </strong>
@@ -1224,12 +1272,12 @@ export default function CashDrawerModule(
                             }
                             onChange={
                                 (
-                                    event
+                                    event,
                                 ) => {
                                     setReason(
                                         event
                                             .target
-                                            .value
+                                            .value,
                                     );
                                 }
                             }
@@ -1287,6 +1335,12 @@ export default function CashDrawerModule(
                 </section>
             </div>
 
+            {/*
+            |--------------------------------------------------------------------------
+            | Hardware Rules
+            |--------------------------------------------------------------------------
+            */}
+
             <section className="drawer-rules">
                 <div>
                     <span className="rule-indicator opens" />
@@ -1337,6 +1391,12 @@ export default function CashDrawerModule(
     );
 }
 
+/*
+|--------------------------------------------------------------------------
+| Styles
+|--------------------------------------------------------------------------
+*/
+
 const styles = `
   .drawer-page {
       width: 100%;
@@ -1345,21 +1405,21 @@ const styles = `
       gap: 22px;
       color: #0f172a;
   }
-  
+
   .drawer-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 24px;
   }
-  
+
   .drawer-header h1 {
       margin: 4px 0 6px;
       font-size: 31px;
       line-height: 1.1;
       letter-spacing: -.025em;
   }
-  
+
   .drawer-header p {
       max-width: 700px;
       margin: 0;
@@ -1367,7 +1427,7 @@ const styles = `
       font-size: 15px;
       line-height: 1.6;
   }
-  
+
   .drawer-eyebrow,
   .drawer-card-kicker {
       display: block;
@@ -1376,7 +1436,7 @@ const styles = `
       font-weight: 900;
       letter-spacing: .12em;
   }
-  
+
   .drawer-shift-status {
       min-width: 128px;
       padding: 11px 18px;
@@ -1386,44 +1446,44 @@ const styles = `
       font-weight: 900;
       letter-spacing: .05em;
   }
-  
+
   .drawer-shift-status.is-open {
       color: #166534;
       background: #dcfce7;
       border: 1px solid #bbf7d0;
   }
-  
+
   .drawer-shift-status.is-closed {
       color: #475569;
       background: #f1f5f9;
       border: 1px solid #e2e8f0;
   }
-  
+
   .drawer-alert {
       padding: 14px 17px;
       border-radius: 12px;
       font-size: 14px;
       font-weight: 700;
   }
-  
+
   .drawer-alert.success {
       color: #166534;
       background: #f0fdf4;
       border: 1px solid #bbf7d0;
   }
-  
+
   .drawer-alert.error {
       color: #991b1b;
       background: #fef2f2;
       border: 1px solid #fecaca;
   }
-  
+
   .drawer-overview-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
   }
-  
+
   .drawer-overview-card {
       min-height: 92px;
       padding: 17px;
@@ -1437,13 +1497,13 @@ const styles = `
       border-radius: 15px;
       box-shadow: 0 5px 18px rgba(15, 23, 42, .04);
   }
-  
+
   .drawer-overview-card span {
       color: #64748b;
       font-size: 12px;
       font-weight: 800;
   }
-  
+
   .drawer-overview-card strong {
       overflow: hidden;
       color: #0f172a;
@@ -1451,14 +1511,14 @@ const styles = `
       text-overflow: ellipsis;
       white-space: nowrap;
   }
-  
+
   .drawer-main-grid {
       display: grid;
       grid-template-columns: minmax(560px, 1.3fr) minmax(340px, .7fr);
       gap: 20px;
       align-items: start;
   }
-  
+
   .drawer-card {
       padding: 22px;
       background: #ffffff;
@@ -1466,7 +1526,7 @@ const styles = `
       border-radius: 18px;
       box-shadow: 0 6px 22px rgba(15, 23, 42, .05);
   }
-  
+
   .drawer-card-header {
       margin-bottom: 20px;
       display: flex;
@@ -1474,12 +1534,12 @@ const styles = `
       justify-content: space-between;
       gap: 20px;
   }
-  
+
   .drawer-card-header h2 {
       margin: 5px 0 0;
       font-size: 21px;
   }
-  
+
   .drawer-icon {
       width: 48px;
       height: 48px;
@@ -1491,34 +1551,34 @@ const styles = `
       font-size: 14px;
       font-weight: 900;
   }
-  
+
   .drawer-icon.cash {
       color: #15803d;
       background: #dcfce7;
   }
-  
+
   .drawer-form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 15px;
   }
-  
+
   .drawer-wide-field {
       grid-column: 1 / -1;
   }
-  
+
   .drawer-field {
       display: flex;
       flex-direction: column;
       gap: 7px;
   }
-  
+
   .drawer-field > span {
       color: #334155;
       font-size: 13px;
       font-weight: 800;
   }
-  
+
   .drawer-field input,
   .drawer-field select,
   .drawer-field textarea {
@@ -1533,34 +1593,39 @@ const styles = `
       font-size: 15px;
       outline: none;
   }
-  
+
   .drawer-field input,
   .drawer-field select {
       min-height: 49px;
   }
-  
+
+  .drawer-field input:disabled {
+      color: #475569;
+      background: #f8fafc;
+  }
+
   .drawer-field textarea {
       resize: vertical;
       min-height: 108px;
   }
-  
+
   .drawer-field input:focus,
   .drawer-field select:focus,
   .drawer-field textarea:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
   }
-  
+
   .drawer-input-suffix {
       display: flex;
       align-items: stretch;
   }
-  
+
   .drawer-input-suffix input {
       border-top-right-radius: 0;
       border-bottom-right-radius: 0;
   }
-  
+
   .drawer-input-suffix > span {
       min-width: 48px;
       padding: 0 10px;
@@ -1575,32 +1640,42 @@ const styles = `
       font-size: 12px;
       font-weight: 800;
   }
-  
+
   .drawer-hardware-note,
-  .drawer-security-note {
+  .drawer-security-note,
+  .drawer-local-note {
       margin-top: 18px;
       padding: 14px 15px;
       border-radius: 12px;
       line-height: 1.5;
   }
-  
+
   .drawer-hardware-note {
       color: #334155;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
   }
-  
+
   .drawer-hardware-note strong,
-  .drawer-hardware-note span {
+  .drawer-hardware-note span,
+  .drawer-local-note strong,
+  .drawer-local-note span {
       display: block;
   }
-  
-  .drawer-hardware-note span {
+
+  .drawer-hardware-note span,
+  .drawer-local-note span {
       margin-top: 4px;
       color: #64748b;
       font-size: 13px;
   }
-  
+
+  .drawer-local-note {
+      color: #1e3a8a;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+  }
+
   .drawer-security-note {
       margin: 16px 0;
       color: #1e3a8a;
@@ -1608,14 +1683,14 @@ const styles = `
       border: 1px solid #bfdbfe;
       font-size: 13px;
   }
-  
+
   .drawer-action-grid {
       margin-top: 18px;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
   }
-  
+
   .drawer-button,
   .manual-open-button,
   .drawer-refresh-button {
@@ -1626,37 +1701,37 @@ const styles = `
       font-weight: 900;
       cursor: pointer;
   }
-  
+
   .drawer-button {
       color: #334155;
       background: #f8fafc;
       border: 1px solid #cbd5e1;
   }
-  
+
   .drawer-button.primary {
       color: #ffffff;
       background: #2563eb;
       border-color: #2563eb;
   }
-  
+
   .drawer-button.warning {
       color: #92400e;
       background: #fffbeb;
       border-color: #fde68a;
   }
-  
+
   .drawer-button:disabled,
   .manual-open-button:disabled,
   .drawer-refresh-button:disabled {
       opacity: .55;
       cursor: not-allowed;
   }
-  
+
   .manual-card {
       display: flex;
       flex-direction: column;
   }
-  
+
   .manual-status {
       padding: 14px 0;
       display: flex;
@@ -1664,31 +1739,31 @@ const styles = `
       gap: 20px;
       border-bottom: 1px solid #eef2f7;
   }
-  
+
   .manual-status span {
       color: #64748b;
       font-size: 13px;
       font-weight: 700;
   }
-  
+
   .manual-status strong {
       text-align: right;
   }
-  
+
   .manual-open-button {
       margin-top: 17px;
       color: #ffffff;
       background: #15803d;
       border: 0;
   }
-  
+
   .drawer-refresh-button {
       margin-top: 10px;
       color: #334155;
       background: #f1f5f9;
       border: 0;
   }
-  
+
   .drawer-no-shift {
       margin-top: 12px;
       padding: 12px;
@@ -1699,13 +1774,13 @@ const styles = `
       font-size: 12px;
       font-weight: 700;
   }
-  
+
   .drawer-rules {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 13px;
   }
-  
+
   .drawer-rules > div {
       min-height: 78px;
       padding: 15px;
@@ -1717,73 +1792,73 @@ const styles = `
       background: #ffffff;
       border: 1px solid #e2e8f0;
   }
-  
+
   .drawer-rules strong,
   .drawer-rules span {
       display: block;
   }
-  
+
   .drawer-rules strong {
       font-size: 13px;
   }
-  
+
   .drawer-rules div div span {
       margin-top: 3px;
       color: #64748b;
       font-size: 12px;
       line-height: 1.4;
   }
-  
+
   .rule-indicator {
       flex: 0 0 auto;
       width: 11px;
       height: 11px;
       border-radius: 999px;
   }
-  
+
   .rule-indicator.opens {
       background: #22c55e;
   }
-  
+
   .rule-indicator.closed {
       background: #94a3b8;
   }
-  
+
   .rule-indicator.secure {
       background: #2563eb;
   }
-  
+
   .drawer-loading {
       padding: 50px;
       text-align: center;
       color: #64748b;
       font-weight: 700;
   }
-  
+
   @media (max-width: 1150px) {
       .drawer-overview-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-  
+
       .drawer-main-grid {
           grid-template-columns: 1fr;
       }
   }
-  
+
   @media (max-width: 760px) {
       .drawer-header {
           flex-direction: column;
       }
-  
+
       .drawer-overview-grid,
       .drawer-form-grid,
       .drawer-action-grid,
       .drawer-rules {
           grid-template-columns: 1fr;
       }
-  
+
       .drawer-wide-field {
           grid-column: auto;
       }
   }
-  `;
+`;

@@ -1,6 +1,237 @@
-import type { CustomerReceiptPayload } from "../../receiptPrinterTypes";
+import type {
+  CustomerReceiptAddon,
+  CustomerReceiptPayment,
+  CustomerReceiptPayload,
+} from "../../receiptPrinterTypes";
 
-import type { CashierInvoice, CustomerPaymentRecord } from "./types";
+import type {
+  CashierInvoice,
+  CashierInvoiceAddon,
+  CustomerPaymentRecord,
+} from "./types";
+
+/*
+|--------------------------------------------------------------------------
+| Number Helpers
+|--------------------------------------------------------------------------
+*/
+
+const numberValue = (value: unknown, fallback = 0): number => {
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Invoice Add-on
+|--------------------------------------------------------------------------
+*/
+
+const mapAddon = (addon: CashierInvoiceAddon): CustomerReceiptAddon => {
+  const quantity = numberValue(addon.quantity, 1);
+
+  const unitPrice = numberValue(addon.unit_price ?? addon.price ?? 0);
+
+  const providedLineTotal = addon.line_total ?? addon.total;
+
+  const lineTotal =
+    providedLineTotal !== null && providedLineTotal !== undefined
+      ? numberValue(providedLineTotal)
+      : quantity * unitPrice;
+
+  return {
+    name:
+      addon.addon_name_snapshot ?? addon.addon_name ?? addon.name ?? "Addon",
+
+    quantity,
+
+    unitPrice,
+
+    lineTotal,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Payment
+|--------------------------------------------------------------------------
+*/
+
+const mapPayment = (
+  payment: CustomerPaymentRecord
+): CustomerReceiptPayment => ({
+  method: payment.payment_method ?? payment.method ?? "OTHER",
+
+  amount: numberValue(payment.amount),
+
+  tenderedAmount:
+    payment.tendered_amount !== null && payment.tendered_amount !== undefined
+      ? numberValue(payment.tendered_amount)
+      : null,
+
+  changeGiven: numberValue(payment.change_given ?? 0),
+
+  referenceNumber: payment.reference_number ?? null,
+
+  paidAt: payment.paid_at ?? null,
+});
+
+/*
+|--------------------------------------------------------------------------
+| Amount Actually Received From Customer
+|--------------------------------------------------------------------------
+|
+| CASH:
+|
+| amount           = amount applied to invoice
+| tendered_amount  = actual cash handed over
+|
+| Example:
+|
+| Invoice balance  = 1,500
+| Customer gives   = 2,000
+| amount            = 1,500
+| tendered_amount   = 2,000
+| change_given      =   500
+|
+| CARD / QR / BANK / OTHER:
+|
+| There is no physical cash tender amount, therefore payment.amount is the
+| amount received.
+|--------------------------------------------------------------------------
+*/
+
+const calculateAmountReceived = (payments: CustomerReceiptPayment[]): number =>
+  payments.reduce((total, payment) => {
+    const method = payment.method.trim().toUpperCase();
+
+    if (
+      method === "CASH" &&
+      payment.tenderedAmount !== null &&
+      payment.tenderedAmount !== undefined
+    ) {
+      return total + numberValue(payment.tenderedAmount);
+    }
+
+    return total + numberValue(payment.amount);
+  }, 0);
+
+/*
+|--------------------------------------------------------------------------
+| Total Change
+|--------------------------------------------------------------------------
+|
+| Prefer the individual payment history because it records the actual
+| change associated with each cash payment.
+|
+| If old payment history does not contain change_given, the mapper falls
+| back to invoice.payment.change_amount.
+|--------------------------------------------------------------------------
+*/
+
+const calculateChangeAmount = (
+  payments: CustomerPaymentRecord[],
+  invoiceChangeAmount: number
+): number => {
+  const hasRecordedChange = payments.some(
+    (payment) =>
+      payment.change_given !== null && payment.change_given !== undefined
+  );
+
+  if (!hasRecordedChange) {
+    return numberValue(invoiceChangeAmount);
+  }
+
+  return payments.reduce(
+    (total, payment) => total + numberValue(payment.change_given ?? 0),
+    0
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Payment Timestamp Parsing
+|--------------------------------------------------------------------------
+|
+| Laravel normally serializes Carbon timestamps as ISO-8601.
+|
+| This also supports a plain:
+|
+| YYYY-MM-DD HH:mm:ss
+|
+| timestamp by treating it as Sri Lanka local time.
+|--------------------------------------------------------------------------
+*/
+
+const timestampMilliseconds = (
+  value: string | null | undefined
+): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const plainLocalTimestamp =
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+  const normalized = plainLocalTimestamp.test(trimmed)
+    ? `${trimmed.replace(" ", "T")}+05:30`
+    : trimmed;
+
+  const milliseconds = new Date(normalized).getTime();
+
+  return Number.isNaN(milliseconds) ? null : milliseconds;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Latest Payment Time
+|--------------------------------------------------------------------------
+|
+| Customer receipt date/time should represent the payment transaction,
+| not merely the time at which the invoice was generated.
+|--------------------------------------------------------------------------
+*/
+
+const latestPaymentDateTime = (
+  payments: CustomerPaymentRecord[]
+): string | null => {
+  let latestValue: string | null = null;
+
+  let latestMilliseconds = Number.NEGATIVE_INFINITY;
+
+  for (const payment of payments) {
+    if (!payment.paid_at) {
+      continue;
+    }
+
+    const milliseconds = timestampMilliseconds(payment.paid_at);
+
+    if (milliseconds === null) {
+      continue;
+    }
+
+    if (milliseconds > latestMilliseconds) {
+      latestMilliseconds = milliseconds;
+
+      latestValue = payment.paid_at;
+    }
+  }
+
+  return latestValue;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Build Customer Receipt Payload
+|--------------------------------------------------------------------------
+*/
 
 export const buildCustomerReceiptPayload = (
   invoice: CashierInvoice,
@@ -8,60 +239,87 @@ export const buildCustomerReceiptPayload = (
   payments: CustomerPaymentRecord[],
 
   copyLabel: string | null = null
-): CustomerReceiptPayload => ({
-  invoiceNumber: invoice.invoice_number,
+): CustomerReceiptPayload => {
+  const mappedPayments = payments.map(mapPayment);
 
-  tableName: invoice.table_name,
+  const amountReceived = calculateAmountReceived(mappedPayments);
 
-  customerName: invoice.customer.name,
+  const changeAmount = calculateChangeAmount(
+    payments,
+    invoice.payment.change_amount
+  );
 
-  customerPhone: invoice.customer.phone,
+  const paidAt = latestPaymentDateTime(payments);
 
-  items: (invoice.items ?? []).map((item) => ({
-    name: item.name,
+  return {
+    invoiceNumber: invoice.invoice_number,
 
-    variant: item.variant,
+    tableName: invoice.table_name,
 
-    quantity: Number(item.quantity),
+    customerName: invoice.customer.name,
 
-    unitPrice: Number(item.unit_price),
+    customerPhone: invoice.customer.phone,
 
-    lineTotal: Number(item.line_total),
-  })),
+    items: (invoice.items ?? []).map((item) => ({
+      name: item.name,
 
-  subtotal: Number(invoice.totals.subtotal),
+      variant: item.variant,
 
-  discount: Number(invoice.totals.discount),
+      quantity: numberValue(item.quantity),
 
-  serviceCharge: Number(invoice.totals.service_charge),
+      unitPrice: numberValue(item.unit_price),
 
-  tax: Number(invoice.totals.tax),
+      lineTotal: numberValue(item.line_total),
 
-  grandTotal: Number(invoice.totals.grand_total),
+      addons: (item.addons ?? []).map(mapAddon),
+    })),
 
-  paidAmount: Number(invoice.payment.paid_amount),
+    subtotal: numberValue(invoice.totals.subtotal),
 
-  changeAmount: Number(invoice.payment.change_amount),
+    discount: numberValue(invoice.totals.discount),
 
-  balanceDue: Number(invoice.payment.balance_due),
+    serviceCharge: numberValue(invoice.totals.service_charge),
 
-  paymentStatus: invoice.payment.status,
+    tax: numberValue(invoice.totals.tax),
 
-  payments: payments.map((payment) => ({
-    method: payment.payment_method ?? payment.method ?? "OTHER",
+    grandTotal: numberValue(invoice.totals.grand_total),
 
-    amount: Number(payment.amount),
+    /*
+     * Actual money/tender received from the customer.
+     */
+    amountReceived,
 
-    tenderedAmount: payment.tendered_amount ?? null,
+    /*
+     * Amount applied to invoice accounting.
+     */
+    paidAmount: numberValue(invoice.payment.paid_amount),
 
-    changeGiven: Number(payment.change_given ?? 0),
+    /*
+     * Actual change returned.
+     */
+    changeAmount,
 
-    referenceNumber: payment.reference_number ?? null,
-  })),
+    balanceDue: numberValue(invoice.payment.balance_due),
 
-  issuedAt: invoice.issued_at,
+    paymentStatus: invoice.payment.status,
 
-  printedAt: new Date().toISOString(),
+    payments: mappedPayments,
 
-  copyLabel: copyLabel,
-});
+    /*
+     * Prefer payment time for receipt date/time.
+     */
+    paidAt,
+
+    /*
+     * Retain invoice issue time as fallback/history.
+     */
+    issuedAt: invoice.issued_at,
+
+    /*
+     * Final fallback if there is neither payment nor invoice timestamp.
+     */
+    printedAt: new Date().toISOString(),
+
+    copyLabel: copyLabel,
+  };
+};

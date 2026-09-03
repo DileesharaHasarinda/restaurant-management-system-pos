@@ -58,6 +58,28 @@ export interface CashDrawerResult {
   message: string;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Customer Receipt Add-on
+|--------------------------------------------------------------------------
+*/
+
+export interface CustomerReceiptAddon {
+  name: string;
+
+  quantity: number;
+
+  unitPrice: number;
+
+  lineTotal: number;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Customer Receipt Item
+|--------------------------------------------------------------------------
+*/
+
 export interface CustomerReceiptItem {
   name: string;
 
@@ -68,19 +90,47 @@ export interface CustomerReceiptItem {
   unitPrice: number;
 
   lineTotal: number;
+
+  addons: CustomerReceiptAddon[];
 }
+
+/*
+|--------------------------------------------------------------------------
+| Customer Receipt Payment
+|--------------------------------------------------------------------------
+*/
 
 export interface CustomerReceiptPayment {
   method: string;
 
+  /*
+   * Amount applied to invoice.
+   */
   amount: number;
 
+  /*
+   * Actual cash supplied by customer for CASH payments.
+   */
   tenderedAmount?: number | null;
 
+  /*
+   * Cash returned.
+   */
   changeGiven?: number;
 
   referenceNumber?: string | null;
+
+  /*
+   * Authoritative payment timestamp.
+   */
+  paidAt?: string | null;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Customer Receipt Payload
+|--------------------------------------------------------------------------
+*/
 
 export interface CustomerReceiptPayload {
   invoiceNumber: string;
@@ -103,8 +153,25 @@ export interface CustomerReceiptPayload {
 
   grandTotal: number;
 
+  /*
+   * Physical money/tender received from customer.
+   *
+   * Cash:
+   * tendered_amount
+   *
+   * Non-cash:
+   * payment.amount
+   */
+  amountReceived: number;
+
+  /*
+   * Amount applied against the invoice.
+   */
   paidAmount: number;
 
+  /*
+   * Amount returned to customer.
+   */
   changeAmount: number;
 
   balanceDue: number;
@@ -113,6 +180,14 @@ export interface CustomerReceiptPayload {
 
   payments: CustomerReceiptPayment[];
 
+  /*
+   * Latest authoritative payment time.
+   */
+  paidAt?: string | null;
+
+  /*
+   * Invoice issue time retained as fallback.
+   */
   issuedAt?: string | null;
 
   printedAt: string;

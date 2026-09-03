@@ -1,8 +1,10 @@
 import { app } from "electron";
 
 import fs from "node:fs/promises";
-import { createConnection } from "node:net";
+
 import path from "node:path";
+
+import { sendRawToLocalPrinter, testLocalRawPrinter } from "./localRawPrinter";
 
 import type {
   CashDrawerResult,
@@ -12,9 +14,17 @@ import type {
   ReceiptPrinterSettings,
 } from "./receiptPrinterTypes";
 
+/*
+|--------------------------------------------------------------------------
+| Settings
+|--------------------------------------------------------------------------
+*/
+
 const SETTINGS_FILE = "restaurant-pos-receipt-printer.json";
 
-const DEFAULT_PORT = 9100;
+const LOCAL_PRINTER_HOST = "LOCAL_USB";
+
+const LOCAL_PRINTER_PORT = 0;
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 4000;
 
@@ -23,6 +33,14 @@ const DEFAULT_DRAWER_PULSE_ON_MS = 50;
 const DEFAULT_DRAWER_PULSE_OFF_MS = 500;
 
 const PAPER_CHARACTERS = 48;
+
+/*
+|--------------------------------------------------------------------------
+| Receipt Time Zone
+|--------------------------------------------------------------------------
+*/
+
+const RECEIPT_TIME_ZONE = "Asia/Colombo";
 
 /*
 |--------------------------------------------------------------------------
@@ -48,55 +66,47 @@ const FULL_CUT = Buffer.from([GS, 0x56, 0x00]);
 
 /*
 |--------------------------------------------------------------------------
-| Settings
+| Settings Path
 |--------------------------------------------------------------------------
 */
 
 const settingsPath = (): string =>
   path.join(app.getPath("userData"), SETTINGS_FILE);
 
+/*
+|--------------------------------------------------------------------------
+| Default Cashier Printer Settings
+|--------------------------------------------------------------------------
+*/
+
 export const defaultReceiptPrinterSettings = (): ReceiptPrinterSettings => ({
-  printerName: "Cashier Receipt Printer",
+  printerName: "",
 
-  host: "",
+  host: LOCAL_PRINTER_HOST,
 
-  port: DEFAULT_PORT,
+  port: LOCAL_PRINTER_PORT,
 
   paperWidthMm: 80,
 
   connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
 
-  /*
-   * ESC/POS drawer connector:
-   *
-   * 0 = Pin 2
-   * 1 = Pin 5
-   *
-   * Most printers use 0.
-   */
   drawerPin: 0,
 
-  /*
-   * ESC p timing values.
-   *
-   * 50ms  -> 25 -> 0x19
-   * 500ms -> 250 -> 0xFA
-   *
-   * Default pulse:
-   *
-   * 1B 70 00 19 FA
-   */
   drawerPulseOnMs: DEFAULT_DRAWER_PULSE_ON_MS,
 
   drawerPulseOffMs: DEFAULT_DRAWER_PULSE_OFF_MS,
 });
 
+/*
+|--------------------------------------------------------------------------
+| Normalize Settings
+|--------------------------------------------------------------------------
+*/
+
 const normaliseSettings = (
   value: Partial<ReceiptPrinterSettings>
 ): ReceiptPrinterSettings => {
   const defaults = defaultReceiptPrinterSettings();
-
-  const port = Number(value.port ?? defaults.port);
 
   const timeout = Number(value.connectTimeoutMs ?? defaults.connectTimeoutMs);
 
@@ -107,19 +117,20 @@ const normaliseSettings = (
   const pulseOff = Number(value.drawerPulseOffMs ?? defaults.drawerPulseOffMs);
 
   return {
-    printerName:
-      String(value.printerName ?? defaults.printerName).trim() ||
-      defaults.printerName,
+    printerName: String(value.printerName ?? defaults.printerName).trim(),
 
-    host: String(value.host ?? defaults.host).trim(),
+    /*
+     * Cashier receipt printer is always local / USB.
+     */
+    host: LOCAL_PRINTER_HOST,
 
-    port:
-      Number.isInteger(port) && port >= 1 && port <= 65535
-        ? port
-        : defaults.port,
+    port: LOCAL_PRINTER_PORT,
 
     paperWidthMm: 80,
 
+    /*
+     * Retained for compatibility with the existing settings type/UI.
+     */
     connectTimeoutMs:
       Number.isFinite(timeout) && timeout >= 1000 && timeout <= 30000
         ? Math.round(timeout)
@@ -139,6 +150,12 @@ const normaliseSettings = (
   };
 };
 
+/*
+|--------------------------------------------------------------------------
+| Load Settings
+|--------------------------------------------------------------------------
+*/
+
 export const loadReceiptPrinterSettings =
   async (): Promise<ReceiptPrinterSettings> => {
     try {
@@ -151,6 +168,12 @@ export const loadReceiptPrinterSettings =
       return defaultReceiptPrinterSettings();
     }
   };
+
+/*
+|--------------------------------------------------------------------------
+| Save Settings
+|--------------------------------------------------------------------------
+*/
 
 export const saveReceiptPrinterSettings = async (
   value: Partial<ReceiptPrinterSettings>
@@ -166,7 +189,13 @@ export const saveReceiptPrinterSettings = async (
     recursive: true,
   });
 
-  await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), "utf8");
+  await fs.writeFile(
+    settingsPath(),
+
+    JSON.stringify(next, null, 2),
+
+    "utf8"
+  );
 
   return next;
 };
@@ -178,105 +207,32 @@ export const saveReceiptPrinterSettings = async (
 */
 
 const assertPrinterConfigured = (settings: ReceiptPrinterSettings): void => {
-  if (!settings.host) {
-    throw new Error("Cashier receipt printer IP address is not configured.");
-  }
-
-  if (settings.port < 1 || settings.port > 65535) {
-    throw new Error("Cashier receipt printer port is invalid.");
+  if (!settings.printerName.trim()) {
+    throw new Error(
+      "Cashier receipt printer name is not configured. Enter the exact local printer name, for example Printer_POS_80."
+    );
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| TCP
+| Local RAW Send
 |--------------------------------------------------------------------------
 */
 
 const sendRaw = async (
   settings: ReceiptPrinterSettings,
+
   data: Buffer
 ): Promise<number> => {
   assertPrinterConfigured(settings);
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
-
-    const socket = createConnection({
-      host: settings.host,
-
-      port: settings.port,
-    });
-
-    const fail = (error: Error): void => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-
-      clearTimeout(timer);
-
-      socket.destroy();
-
-      reject(error);
-    };
-
-    const timer = setTimeout(
-      () => {
-        fail(
-          new Error(
-            `Receipt printer connection timed out after ${settings.connectTimeoutMs}ms.`
-          )
-        );
-      },
-
-      settings.connectTimeoutMs
-    );
-
-    socket.once(
-      "error",
-
-      (error) => {
-        fail(error);
-      }
-    );
-
-    socket.once(
-      "connect",
-
-      () => {
-        socket.write(
-          data,
-
-          (error) => {
-            if (error) {
-              fail(error);
-
-              return;
-            }
-
-            socket.end(() => {
-              if (settled) {
-                return;
-              }
-
-              settled = true;
-
-              clearTimeout(timer);
-
-              resolve(data.length);
-            });
-          }
-        );
-      }
-    );
-  });
+  return sendRawToLocalPrinter(settings.printerName, data);
 };
 
 /*
 |--------------------------------------------------------------------------
-| Connection Test
+| Printer Test
 |--------------------------------------------------------------------------
 */
 
@@ -285,77 +241,19 @@ export const testReceiptPrinterConnection = async (
 ): Promise<ReceiptPrinterConnectionResult> => {
   assertPrinterConfigured(settings);
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
+  await testLocalRawPrinter(settings.printerName);
 
-    const socket = createConnection({
-      host: settings.host,
+  return {
+    success: true,
 
-      port: settings.port,
-    });
+    printerName: settings.printerName,
 
-    const fail = (error: Error): void => {
-      if (settled) {
-        return;
-      }
+    host: LOCAL_PRINTER_HOST,
 
-      settled = true;
+    port: LOCAL_PRINTER_PORT,
 
-      clearTimeout(timer);
-
-      socket.destroy();
-
-      reject(error);
-    };
-
-    const timer = setTimeout(
-      () => {
-        fail(
-          new Error(
-            `Receipt printer connection timed out after ${settings.connectTimeoutMs}ms.`
-          )
-        );
-      },
-
-      settings.connectTimeoutMs
-    );
-
-    socket.once(
-      "error",
-
-      (error) => {
-        fail(error);
-      }
-    );
-
-    socket.once(
-      "connect",
-
-      () => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-
-        clearTimeout(timer);
-
-        socket.destroy();
-
-        resolve({
-          success: true,
-
-          printerName: settings.printerName,
-
-          host: settings.host,
-
-          port: settings.port,
-
-          message: "Cashier receipt printer connection successful.",
-        });
-      }
-    );
-  });
+    message: "Local / USB cashier receipt printer is installed and available.",
+  };
 };
 
 /*
@@ -367,8 +265,21 @@ export const testReceiptPrinterConnection = async (
 const pulseUnit = (milliseconds: number): number => {
   const value = Math.round(milliseconds / 2);
 
-  return Math.max(1, Math.min(255, value));
+  return Math.max(
+    1,
+
+    Math.min(255, value)
+  );
 };
+
+/*
+|--------------------------------------------------------------------------
+| Build Drawer ESC/POS Pulse
+|--------------------------------------------------------------------------
+|
+| ESC p m t1 t2
+|--------------------------------------------------------------------------
+*/
 
 export const buildCashDrawerPulseBuffer = (
   settings: ReceiptPrinterSettings
@@ -376,9 +287,6 @@ export const buildCashDrawerPulseBuffer = (
   const pulse = Buffer.from([
     ESC,
 
-    /*
-     * ESC p m t1 t2
-     */
     0x70,
 
     settings.drawerPin,
@@ -390,6 +298,12 @@ export const buildCashDrawerPulseBuffer = (
 
   return Buffer.concat([INITIALIZE, pulse]);
 };
+
+/*
+|--------------------------------------------------------------------------
+| Pulse Cash Drawer
+|--------------------------------------------------------------------------
+*/
 
 export const pulseCashDrawer = async (
   settings: ReceiptPrinterSettings
@@ -403,19 +317,20 @@ export const pulseCashDrawer = async (
 
     printerName: settings.printerName,
 
-    host: settings.host,
+    host: LOCAL_PRINTER_HOST,
 
-    port: settings.port,
+    port: LOCAL_PRINTER_PORT,
 
     bytesWritten,
 
-    message: "Cash drawer pulse sent successfully.",
+    message:
+      "Cash drawer pulse sent through the local receipt printer DK port successfully.",
   };
 };
 
 /*
 |--------------------------------------------------------------------------
-| Receipt Helpers
+| Receipt Text Helpers
 |--------------------------------------------------------------------------
 */
 
@@ -428,6 +343,12 @@ const receiptText = (value: unknown): Buffer =>
 const separator = (character = "-"): string =>
   character.repeat(PAPER_CHARACTERS);
 
+/*
+|--------------------------------------------------------------------------
+| Money
+|--------------------------------------------------------------------------
+*/
+
 const receiptMoney = (value: number): string => {
   const amount = Number(value);
 
@@ -437,6 +358,12 @@ const receiptMoney = (value: number): string => {
 
   return amount.toFixed(2);
 };
+
+/*
+|--------------------------------------------------------------------------
+| Quantity
+|--------------------------------------------------------------------------
+*/
 
 const receiptQuantity = (value: number): string => {
   const quantity = Number(value);
@@ -452,17 +379,99 @@ const receiptQuantity = (value: number): string => {
   return quantity.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 };
 
+/*
+|--------------------------------------------------------------------------
+| Receipt Date Parser
+|--------------------------------------------------------------------------
+|
+| Laravel ISO timestamps:
+|
+| 2026-09-03T07:45:00.000000Z
+|
+| are parsed normally.
+|
+| A plain database timestamp:
+|
+| 2026-09-03 13:15:00
+|
+| has no timezone information, therefore it is interpreted as Sri Lanka
+| local time (+05:30).
+|--------------------------------------------------------------------------
+*/
+
+const parseReceiptDate = (value: string | null | undefined): Date => {
+  if (!value) {
+    return new Date();
+  }
+
+  const trimmed = value.trim();
+
+  const plainTimestamp = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+  const normalized = plainTimestamp.test(trimmed)
+    ? `${trimmed.replace(" ", "T")}+05:30`
+    : trimmed;
+
+  return new Date(normalized);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Receipt Date / Time
+|--------------------------------------------------------------------------
+|
+| The time zone is explicit so the receipt does not depend on:
+|
+| - Mac timezone
+| - Windows timezone
+| - Electron renderer timezone
+|
+| All Palmyrah POS customer receipts are printed in Sri Lanka time.
+|--------------------------------------------------------------------------
+*/
+
 const receiptDateTime = (value: string | null | undefined): string => {
-  const date = value ? new Date(value) : new Date();
+  const date = parseReceiptDate(value);
 
   if (Number.isNaN(date.getTime())) {
     return "";
   }
 
-  return date.toLocaleString("en-LK");
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    timeZone: RECEIPT_TIME_ZONE,
+
+    day: "2-digit",
+
+    month: "short",
+
+    year: "numeric",
+
+    hour: "2-digit",
+
+    minute: "2-digit",
+
+    second: "2-digit",
+
+    hour12: true,
+  }).format(date);
+
+  return formatted
+    .replace(",", "")
+    .replace(/\bam\b/i, "AM")
+    .replace(/\bpm\b/i, "PM");
 };
 
-const leftRight = (left: string, right: string): string => {
+/*
+|--------------------------------------------------------------------------
+| Left / Right Receipt Line
+|--------------------------------------------------------------------------
+*/
+
+const leftRight = (
+  left: string,
+
+  right: string
+): string => {
   const cleanLeft = printableText(left);
 
   const cleanRight = printableText(right);
@@ -486,7 +495,16 @@ const leftRight = (left: string, right: string): string => {
 
 /*
 |--------------------------------------------------------------------------
-| Customer Receipt
+| Payment Method Label
+|--------------------------------------------------------------------------
+*/
+
+const receiptPaymentMethod = (value: string): string =>
+  printableText(value).replace(/_/g, " ").toUpperCase();
+
+/*
+|--------------------------------------------------------------------------
+| Build Customer Receipt
 |--------------------------------------------------------------------------
 */
 
@@ -497,11 +515,21 @@ export const buildCustomerReceiptBuffer = (
 
   buffers.push(INITIALIZE);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Header
+  |--------------------------------------------------------------------------
+  */
+
   buffers.push(
     ALIGN_CENTER,
+
     BOLD_ON,
+
     receiptText("RESTAURANT\n"),
+
     receiptText("CUSTOMER RECEIPT\n"),
+
     BOLD_OFF
   );
 
@@ -521,15 +549,30 @@ export const buildCustomerReceiptBuffer = (
     ALIGN_LEFT
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Information
+  |--------------------------------------------------------------------------
+  */
+
   buffers.push(receiptText(`INVOICE: ${payload.invoiceNumber}\n`));
 
   if (payload.tableName) {
     buffers.push(receiptText(`TABLE  : ${payload.tableName}\n`));
   }
 
+  /*
+   * Prefer authoritative payment time.
+   *
+   * Fallback:
+   * invoice issued time
+   * then printer execution time.
+   */
   buffers.push(
     receiptText(
-      `DATE   : ${receiptDateTime(payload.issuedAt ?? payload.printedAt)}\n`
+      `DATE   : ${receiptDateTime(
+        payload.paidAt ?? payload.issuedAt ?? payload.printedAt
+      )}\n`
     )
   );
 
@@ -543,6 +586,12 @@ export const buildCustomerReceiptBuffer = (
 
   buffers.push(receiptText(`${separator()}\n`));
 
+  /*
+  |--------------------------------------------------------------------------
+  | Items + Add-ons
+  |--------------------------------------------------------------------------
+  */
+
   for (const item of payload.items) {
     const name = item.variant ? `${item.name} (${item.variant})` : item.name;
 
@@ -554,27 +603,99 @@ export const buildCustomerReceiptBuffer = (
       BOLD_OFF
     );
 
-    buffers.push(
-      receiptText(
-        `${leftRight(
-          `${receiptQuantity(item.quantity)} x ${receiptMoney(item.unitPrice)}`,
+    /*
+     * When an item has add-ons, show the base price separately.
+     *
+     * The authoritative item.lineTotal is still printed as Item Total below.
+     */
+    if (item.addons.length > 0) {
+      const baseLineTotal = Number(item.quantity) * Number(item.unitPrice);
 
-          receiptMoney(item.lineTotal)
-        )}\n`
-      )
-    );
+      buffers.push(
+        receiptText(
+          `${leftRight(
+            `${receiptQuantity(item.quantity)} x ${receiptMoney(
+              item.unitPrice
+            )}`,
+
+            receiptMoney(baseLineTotal)
+          )}\n`
+        )
+      );
+
+      for (const addon of item.addons) {
+        buffers.push(receiptText(`  + ${addon.name}\n`));
+
+        buffers.push(
+          receiptText(
+            `${leftRight(
+              `    ${receiptQuantity(addon.quantity)} x ${receiptMoney(
+                addon.unitPrice
+              )}`,
+
+              receiptMoney(addon.lineTotal)
+            )}\n`
+          )
+        );
+      }
+
+      buffers.push(
+        BOLD_ON,
+
+        receiptText(
+          `${leftRight(
+            "  Item Total",
+
+            receiptMoney(item.lineTotal)
+          )}\n`
+        ),
+
+        BOLD_OFF
+      );
+    } else {
+      /*
+       * Existing simple item receipt behavior.
+       */
+      buffers.push(
+        receiptText(
+          `${leftRight(
+            `${receiptQuantity(item.quantity)} x ${receiptMoney(
+              item.unitPrice
+            )}`,
+
+            receiptMoney(item.lineTotal)
+          )}\n`
+        )
+      );
+    }
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Totals
+  |--------------------------------------------------------------------------
+  */
 
   buffers.push(receiptText(`${separator()}\n`));
 
   buffers.push(
-    receiptText(`${leftRight("Subtotal", receiptMoney(payload.subtotal))}\n`)
+    receiptText(
+      `${leftRight(
+        "Subtotal",
+
+        receiptMoney(payload.subtotal)
+      )}\n`
+    )
   );
 
   if (payload.discount > 0) {
     buffers.push(
       receiptText(
-        `${leftRight("Discount", `-${receiptMoney(payload.discount)}`)}\n`
+        `${leftRight(
+          "Discount",
+
+          `-${receiptMoney(payload.discount)}`
+        )}\n`
       )
     );
   }
@@ -582,14 +703,24 @@ export const buildCustomerReceiptBuffer = (
   if (payload.serviceCharge > 0) {
     buffers.push(
       receiptText(
-        `${leftRight("Service Charge", receiptMoney(payload.serviceCharge))}\n`
+        `${leftRight(
+          "Service Charge",
+
+          receiptMoney(payload.serviceCharge)
+        )}\n`
       )
     );
   }
 
   if (payload.tax > 0) {
     buffers.push(
-      receiptText(`${leftRight("Tax", receiptMoney(payload.tax))}\n`)
+      receiptText(
+        `${leftRight(
+          "Tax",
+
+          receiptMoney(payload.tax)
+        )}\n`
+      )
     );
   }
 
@@ -599,13 +730,23 @@ export const buildCustomerReceiptBuffer = (
     receiptText(`${separator("=")}\n`),
 
     receiptText(
-      `${leftRight("TOTAL", `Rs.${receiptMoney(payload.grandTotal)}`)}\n`
+      `${leftRight(
+        "TOTAL",
+
+        `Rs.${receiptMoney(payload.grandTotal)}`
+      )}\n`
     ),
 
     receiptText(`${separator("=")}\n`),
 
     BOLD_OFF
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Payment Breakdown
+  |--------------------------------------------------------------------------
+  */
 
   buffers.push(
     BOLD_ON,
@@ -616,30 +757,114 @@ export const buildCustomerReceiptBuffer = (
   );
 
   for (const payment of payload.payments) {
+    const method = receiptPaymentMethod(payment.method);
+
+    /*
+     * payment.amount = amount applied to invoice.
+     */
     buffers.push(
       receiptText(
         `${leftRight(
-          payment.method.replace(/_/g, " "),
+          method,
 
           receiptMoney(payment.amount)
         )}\n`
       )
     );
 
+    /*
+     * CASH needs both the accounting amount and actual cash tendered.
+     */
+    if (
+      method === "CASH" &&
+      payment.tenderedAmount !== null &&
+      payment.tenderedAmount !== undefined
+    ) {
+      buffers.push(
+        receiptText(
+          `${leftRight(
+            "  Cash Received",
+
+            receiptMoney(payment.tenderedAmount)
+          )}\n`
+        )
+      );
+    }
+
+    if (Number(payment.changeGiven ?? 0) > 0) {
+      buffers.push(
+        receiptText(
+          `${leftRight(
+            "  Change Returned",
+
+            receiptMoney(Number(payment.changeGiven ?? 0))
+          )}\n`
+        )
+      );
+    }
+
     if (payment.referenceNumber) {
       buffers.push(receiptText(`  Ref: ${payment.referenceNumber}\n`));
     }
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Payment Summary
+  |--------------------------------------------------------------------------
+  */
+
   buffers.push(
     receiptText(`${separator()}\n`),
 
-    receiptText(`${leftRight("Paid", receiptMoney(payload.paidAmount))}\n`),
+    /*
+     * Actual amount/tender received from customer.
+     */
+    BOLD_ON,
 
-    receiptText(`${leftRight("Change", receiptMoney(payload.changeAmount))}\n`),
+    receiptText(
+      `${leftRight(
+        "Amount Received",
 
-    receiptText(`${leftRight("Balance", receiptMoney(payload.balanceDue))}\n`)
+        receiptMoney(payload.amountReceived)
+      )}\n`
+    ),
+
+    BOLD_OFF,
+
+    /*
+     * Accounting amount applied to invoice.
+     */
+    receiptText(
+      `${leftRight(
+        "Applied To Bill",
+
+        receiptMoney(payload.paidAmount)
+      )}\n`
+    ),
+
+    receiptText(
+      `${leftRight(
+        "Change",
+
+        receiptMoney(payload.changeAmount)
+      )}\n`
+    ),
+
+    receiptText(
+      `${leftRight(
+        "Balance",
+
+        receiptMoney(payload.balanceDue)
+      )}\n`
+    )
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Footer
+  |--------------------------------------------------------------------------
+  */
 
   buffers.push(
     receiptText(`${separator()}\n`),
@@ -662,8 +887,15 @@ export const buildCustomerReceiptBuffer = (
   return Buffer.concat(buffers);
 };
 
+/*
+|--------------------------------------------------------------------------
+| Print Customer Receipt
+|--------------------------------------------------------------------------
+*/
+
 export const printCustomerReceipt = async (
   settings: ReceiptPrinterSettings,
+
   payload: CustomerReceiptPayload
 ): Promise<ReceiptPrinterResult> => {
   const data = buildCustomerReceiptBuffer(payload);
@@ -675,13 +907,14 @@ export const printCustomerReceipt = async (
 
     printerName: settings.printerName,
 
-    host: settings.host,
+    host: LOCAL_PRINTER_HOST,
 
-    port: settings.port,
+    port: LOCAL_PRINTER_PORT,
 
     bytesWritten,
 
-    message: "Customer receipt sent to printer successfully.",
+    message:
+      "Customer receipt sent to local / USB cashier printer successfully.",
   };
 };
 
@@ -700,13 +933,15 @@ export const printReceiptTestPage = async (
     "CASHIER RECEIPT PRINTER TEST",
     "--------------------------------",
     `Printer: ${settings.printerName}`,
-    `IP: ${settings.host}`,
-    `Port: ${settings.port}`,
+    "Connection: LOCAL / USB",
+    "Paper Width: 80mm",
     "--------------------------------",
     "Receipt printer is configured.",
     "",
-    "Cash drawer is connected to",
-    "the printer RJ11/RJ12 port.",
+    "Cash Drawer:",
+    "Printer DK / RJ11-RJ12 port",
+    "",
+    "No printer IP is required.",
     "",
     "",
     "",
@@ -735,12 +970,13 @@ export const printReceiptTestPage = async (
 
     printerName: settings.printerName,
 
-    host: settings.host,
+    host: LOCAL_PRINTER_HOST,
 
-    port: settings.port,
+    port: LOCAL_PRINTER_PORT,
 
     bytesWritten,
 
-    message: "Receipt printer test page sent successfully.",
+    message:
+      "Receipt printer test page sent to local / USB cashier printer successfully.",
   };
 };

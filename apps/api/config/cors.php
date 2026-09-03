@@ -11,6 +11,7 @@ return [
     'paths' => [
         'api/*',
         'sanctum/csrf-cookie',
+        'broadcasting/auth',
     ],
 
     /*
@@ -28,23 +29,15 @@ return [
     | Allowed Origins
     |--------------------------------------------------------------------------
     |
-    | Local development applications:
+    | Fixed development / LAN origins.
     |
-    | Desktop    -> localhost:5173
-    | Operations -> localhost / 127.0.0.1 Vite ports
-    | Website    -> localhost:3000
+    | Localhost and 127.0.0.1 development ports are handled by
+    | allowed_origins_patterns below so Vite can safely move between
+    | ports such as 5173, 5174, 5175, etc.
     |
     */
 
     'allowed_origins' => [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-
-        'http://localhost:5174',
-        'http://127.0.0.1:5174',
 
         /*
          * Current LAN development host.
@@ -52,15 +45,31 @@ return [
         'http://192.168.1.3:3000',
         'http://192.168.1.3:5173',
         'http://192.168.1.3:5174',
+        'http://192.168.1.3:5175',
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Origin Patterns
+    | Allowed Origin Patterns
     |--------------------------------------------------------------------------
+    |
+    | Local development only.
+    |
+    | Examples accepted:
+    |
+    | http://localhost:3000
+    | http://localhost:5173
+    | http://localhost:5174
+    | http://localhost:5175
+    | http://127.0.0.1:3000
+    | http://127.0.0.1:5175
+    |
     */
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^http://localhost:\d+$#',
+        '#^http://127\.0\.0\.1:\d+$#',
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -93,8 +102,8 @@ return [
     | Credentials
     |--------------------------------------------------------------------------
     |
-    | Enabled because Sanctum first-party SPA support is configured.
-    | Bearer-token clients continue working normally.
+    | Keep enabled because Sanctum first-party SPA support is configured.
+    | Bearer-token clients also continue to work normally.
     |
     */
 

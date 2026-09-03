@@ -1,3 +1,25 @@
+export interface CashierInvoiceAddon {
+  id?: number;
+
+  addon_id?: number;
+
+  name?: string | null;
+
+  addon_name?: string | null;
+
+  addon_name_snapshot?: string | null;
+
+  quantity?: number | string | null;
+
+  unit_price?: number | string | null;
+
+  price?: number | string | null;
+
+  line_total?: number | string | null;
+
+  total?: number | string | null;
+}
+
 export interface CashierInvoiceItem {
   id: number;
 
@@ -10,6 +32,20 @@ export interface CashierInvoiceItem {
   unit_price: number;
 
   line_total: number;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Add-ons
+  |--------------------------------------------------------------------------
+  |
+  | The backend may expose add-on snapshots using slightly different
+  | field names depending on the invoice/order resource.
+  |
+  | receiptMapper.ts normalizes them into one receipt representation.
+  |--------------------------------------------------------------------------
+  */
+
+  addons?: CashierInvoiceAddon[];
 }
 
 export interface CashierInvoice {
@@ -50,6 +86,16 @@ export interface CashierInvoice {
   };
 
   payment: {
+    /*
+     * Amount actually applied to the invoice.
+     *
+     * Example:
+     *
+     * Bill             1,500
+     * Cash received    2,000
+     * paid_amount      1,500
+     * change_amount      500
+     */
     paid_amount: number;
 
     change_amount: number;
@@ -79,16 +125,30 @@ export interface CustomerPaymentRecord {
 
   method?: string;
 
+  /*
+   * Amount applied to the invoice by this payment.
+   */
   amount: number;
 
+  /*
+   * Actual physical cash received from the customer.
+   *
+   * Used only for CASH payments.
+   */
   tendered_amount?: number | null;
 
+  /*
+   * Cash returned to the customer.
+   */
   change_given?: number;
 
   reference_number?: string | null;
 
   status?: string;
 
+  /*
+   * Authoritative payment timestamp.
+   */
   paid_at?: string | null;
 }
 

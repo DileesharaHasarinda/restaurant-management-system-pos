@@ -81,9 +81,9 @@ export default function SettingsModule(
                     </h1>
 
                     <p>
-                        Review the cashier terminal connection,
-                        signed-in account, security configuration
-                        and kitchen printer settings.
+                        Manage terminal information, account security,
+                        cashier receipt printing, cash drawer integration
+                        and kitchen printing.
                     </p>
                 </div>
 
@@ -152,13 +152,13 @@ export default function SettingsModule(
                 />
             </section>
 
-            <div className="csm-layout">
-                {/*
-                |--------------------------------------------------------------------------
-                | Terminal Information
-                |--------------------------------------------------------------------------
-                */}
+            {/*
+            |--------------------------------------------------------------------------
+            | Terminal / Account
+            |--------------------------------------------------------------------------
+            */}
 
+            <div className="csm-layout">
                 <section className="csm-card">
                     <div className="csm-card-header">
                         <div>
@@ -227,12 +227,6 @@ export default function SettingsModule(
                         />
                     </div>
                 </section>
-
-                {/*
-                |--------------------------------------------------------------------------
-                | User / Security
-                |--------------------------------------------------------------------------
-                */}
 
                 <section className="csm-card">
                     <div className="csm-card-header">
@@ -335,7 +329,7 @@ export default function SettingsModule(
 
             {/*
             |--------------------------------------------------------------------------
-            | Connection Information
+            | Connection Status
             |--------------------------------------------------------------------------
             */}
 
@@ -375,22 +369,7 @@ export default function SettingsModule(
 
             {/*
             |--------------------------------------------------------------------------
-            | Kitchen Printer
-            |--------------------------------------------------------------------------
-            |
-            | IMPORTANT:
-            |
-            | We intentionally reuse the existing known-good
-            | KitchenPrinterModule.
-            |
-            | Do not move:
-            |
-            | - kitchenPrinter.ts
-            | - kitchenPrintClient.ts
-            | - kitchenPrintWorker.ts
-            | - kitchenPrinterTypes.ts
-            | - preload.ts
-            | - main.ts
+            | Printer Settings
             |--------------------------------------------------------------------------
             */}
 
@@ -398,25 +377,289 @@ export default function SettingsModule(
                 <header className="csm-section-header">
                     <div>
                         <span className="csm-card-kicker">
-                            KITCHEN HARDWARE
+                            POS HARDWARE
                         </span>
 
                         <h2>
-                            Kitchen Printer
+                            Printer Settings
                         </h2>
 
                         <p>
-                            Configure and test the dedicated
+                            Configure the cashier receipt printer,
+                            connected cash drawer and dedicated
                             kitchen KOT printer.
                         </p>
                     </div>
 
                     <div className="csm-printer-badge">
-                        KOT
+                        POS
                     </div>
                 </header>
 
+                {/*
+                |--------------------------------------------------------------------------
+                | Cashier Printer + Cash Drawer
+                |--------------------------------------------------------------------------
+                */}
+
+                <div className="csm-layout">
+                    <section className="csm-card">
+                        <div className="csm-card-header">
+                            <div>
+                                <span className="csm-card-kicker">
+                                    CASHIER HARDWARE
+                                </span>
+
+                                <h2>
+                                    Receipt Printer
+                                </h2>
+
+                                <p>
+                                    The cashier receipt printer handles
+                                    customer receipts and provides the
+                                    hardware pulse used to open the
+                                    cash drawer.
+                                </p>
+                            </div>
+
+                            <div className="csm-card-icon">
+                                RP
+                            </div>
+                        </div>
+
+                        <div className="csm-information-list">
+                            <InformationRow
+                                label="Printer Purpose"
+                                value="Customer Receipts"
+                            />
+
+                            <InformationRow
+                                label="Connection"
+                                value="USB / LAN"
+                            />
+
+                            <InformationRow
+                                label="Paper Width"
+                                value="80mm"
+                            />
+
+                            <InformationRow
+                                label="Print Protocol"
+                                value="ESC/POS"
+                            />
+
+                            <InformationRow
+                                label="Cash Drawer Port"
+                                value="DK / CASH DRAWER"
+                                status="good"
+                            />
+
+                            <InformationRow
+                                label="Drawer Control"
+                                value="Through Receipt Printer"
+                                status="good"
+                            />
+                        </div>
+
+                        <div className="csm-security-note">
+                            <div className="csm-security-note-icon">
+                                ✓
+                            </div>
+
+                            <div>
+                                <strong>
+                                    Recommended connection
+                                </strong>
+
+                                <span>
+                                    Connect the receipt printer directly
+                                    to the cashier PC using USB or LAN.
+                                    The POS sends ESC/POS printing and
+                                    drawer commands to this printer.
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/*
+                    |--------------------------------------------------------------------------
+                    | Cash Drawer
+                    |--------------------------------------------------------------------------
+                    */}
+
+                    <section className="csm-card">
+                        <div className="csm-card-header">
+                            <div>
+                                <span className="csm-card-kicker">
+                                    CASH DRAWER
+                                </span>
+
+                                <h2>
+                                    Printer-Controlled Drawer
+                                </h2>
+
+                                <p>
+                                    The cash drawer connects to the
+                                    dedicated drawer port on the
+                                    cashier receipt printer.
+                                </p>
+                            </div>
+
+                            <div className="csm-card-icon user">
+                                CD
+                            </div>
+                        </div>
+
+                        <div className="csm-information-list">
+                            <InformationRow
+                                label="Drawer Cable"
+                                value="RJ11 / RJ12"
+                            />
+
+                            <InformationRow
+                                label="Connect To"
+                                value="Receipt Printer DK Port"
+                                status="good"
+                            />
+
+                            <InformationRow
+                                label="Direct PC Connection"
+                                value="Not Required"
+                            />
+
+                            <InformationRow
+                                label="Open Method"
+                                value="ESC/POS Drawer Pulse"
+                            />
+
+                            <InformationRow
+                                label="Automatic Open"
+                                value="Cash Payments"
+                                status="good"
+                            />
+                        </div>
+
+                        <div className="csm-security-note">
+                            <div className="csm-security-note-icon">
+                                !
+                            </div>
+
+                            <div>
+                                <strong>
+                                    Do not connect to LAN
+                                </strong>
+
+                                <span>
+                                    Although the drawer plug looks similar
+                                    to a network or telephone connector,
+                                    it must only be connected to the
+                                    printer's dedicated DK / CASH DRAWER
+                                    socket.
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Physical Connection Diagram
+                |--------------------------------------------------------------------------
+                */}
+
                 <div className="csm-printer-container">
+                    <section className="csm-hardware-info">
+                        <div>
+                            <span className="csm-hardware-dot receipt" />
+
+                            <div>
+                                <strong>
+                                    1. Cash Drawer
+                                </strong>
+
+                                <span>
+                                    RJ11 / RJ12 drawer cable connects
+                                    directly to the cashier receipt
+                                    printer DK port.
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span className="csm-hardware-dot receipt" />
+
+                            <div>
+                                <strong>
+                                    2. Cashier Receipt Printer
+                                </strong>
+
+                                <span>
+                                    Connect the printer to the cashier
+                                    computer using USB or LAN.
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span className="csm-hardware-dot security" />
+
+                            <div>
+                                <strong>
+                                    3. POS Drawer Command
+                                </strong>
+
+                                <span>
+                                    After an authorized cash transaction,
+                                    the POS sends an ESC/POS drawer pulse
+                                    through the receipt printer.
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Kitchen Printer
+                |--------------------------------------------------------------------------
+                |
+                | IMPORTANT:
+                |
+                | Reuse the existing known-good KitchenPrinterModule.
+                |
+                | Do not move:
+                |
+                | - kitchenPrinter.ts
+                | - kitchenPrintClient.ts
+                | - kitchenPrintWorker.ts
+                | - kitchenPrinterTypes.ts
+                | - preload.ts
+                | - main.ts
+                |--------------------------------------------------------------------------
+                */}
+
+                <div className="csm-printer-container">
+                    <header className="csm-section-header">
+                        <div>
+                            <span className="csm-card-kicker">
+                                KITCHEN HARDWARE
+                            </span>
+
+                            <h2>
+                                Kitchen Printer
+                            </h2>
+
+                            <p>
+                                Configure and test the dedicated
+                                kitchen KOT printer.
+                            </p>
+                        </div>
+
+                        <div className="csm-printer-badge">
+                            KOT
+                        </div>
+                    </header>
+
                     <KitchenPrinterModule />
                 </div>
             </section>
@@ -433,13 +676,13 @@ export default function SettingsModule(
 
                     <div>
                         <strong>
-                            Receipt Printer
+                            Cashier Printer
                         </strong>
 
                         <span>
-                            Receipt printer and cash drawer
-                            configuration is managed from the
-                            Cash Drawer module.
+                            Prints customer receipts and controls
+                            the physical cash drawer through its
+                            DK port.
                         </span>
                     </div>
                 </div>
@@ -453,8 +696,9 @@ export default function SettingsModule(
                         </strong>
 
                         <span>
-                            Kitchen KOT printing uses its own
-                            separate network printer configuration.
+                            Prints kitchen KOT tickets using
+                            its own independent LAN printer
+                            configuration.
                         </span>
                     </div>
                 </div>
@@ -468,9 +712,9 @@ export default function SettingsModule(
                         </strong>
 
                         <span>
-                            Receipt printing, drawer pulses and
-                            kitchen printing remain separate
-                            hardware workflows.
+                            Receipt printing and drawer pulses
+                            remain separate from kitchen KOT
+                            printing.
                         </span>
                     </div>
                 </div>
@@ -548,7 +792,7 @@ function InformationRow(
         boolean;
 
         status?:
-        'good'
+        | 'good'
         | 'bad';
     },
 ) {
