@@ -37,16 +37,13 @@ return [
     |
     */
 
-    'allowed_origins' => [
-
-        /*
-         * Current LAN development host.
-         */
-        'http://192.168.1.3:3000',
-        'http://192.168.1.3:5173',
-        'http://192.168.1.3:5174',
-        'http://192.168.1.3:5175',
-    ],
+    'allowed_origins' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env(
+            'CORS_ALLOWED_ORIGINS',
+            ''
+        ))
+    ))),
 
     /*
     |--------------------------------------------------------------------------
@@ -66,10 +63,13 @@ return [
     |
     */
 
-    'allowed_origins_patterns' => [
-        '#^http://localhost:\d+$#',
-        '#^http://127\.0\.0\.1:\d+$#',
-    ],
+    // Localhost dev ports are never allowed in production.
+    'allowed_origins_patterns' => env('APP_ENV') === 'production'
+        ? []
+        : [
+            '#^http://localhost:\d+$#',
+            '#^http://127\.0\.0\.1:\d+$#',
+        ],
 
     /*
     |--------------------------------------------------------------------------
@@ -78,7 +78,12 @@ return [
     */
 
     'allowed_headers' => [
-        '*',
+        'Accept',
+        'Authorization',
+        'Content-Type',
+        'X-Requested-With',
+        'X-XSRF-TOKEN',
+        'Idempotency-Key',
     ],
 
     /*

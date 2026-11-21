@@ -46,7 +46,7 @@ class AppServiceProvider extends ServiceProvider
             'login',
             function (
                 Request $request
-            ): Limit {
+            ): array {
                 $login =
                     Str::lower(
                         trim(
@@ -58,13 +58,23 @@ class AppServiceProvider extends ServiceProvider
                         )
                     );
 
-                return Limit::perMinute(
-                    5
-                )->by(
-                    $login
-                        . '|'
-                        . $request->ip()
-                );
+                return [
+                    Limit::perMinute(
+                        5
+                    )->by(
+                        $login
+                            . '|'
+                            . $request->ip()
+                    ),
+
+                    // Per-IP cap across all logins (blocks password spraying).
+                    Limit::perMinute(
+                        20
+                    )->by(
+                        'ip:'
+                            . $request->ip()
+                    ),
+                ];
             }
         );
 

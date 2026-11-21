@@ -3155,12 +3155,10 @@ export default function TablesPage() {
                                         )
                                         : (
                                             <>
-                                                <div
+                                                <img
                                                     className="tables-qr-preview"
-                                                    dangerouslySetInnerHTML={{
-                                                        __html:
-                                                            qrSvg,
-                                                    }}
+                                                    alt="Table QR code"
+                                                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg)}`}
                                                 />
 
                                                 {

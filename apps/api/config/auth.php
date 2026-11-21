@@ -114,4 +114,15 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Token Lifetime
+    |--------------------------------------------------------------------------
+    |
+    | Hours a staff login token stays valid.
+    |
+    */
+
+    'token_ttl_hours' => (int) env('AUTH_TOKEN_TTL_HOURS', 12),
+
 ];

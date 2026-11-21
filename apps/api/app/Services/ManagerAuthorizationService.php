@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\ManagerAuthorizationException;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 final class ManagerAuthorizationService
@@ -57,6 +58,18 @@ final class ManagerAuthorizationService
         | Manager Credentials Required
         |--------------------------------------------------------------------------
         */
+
+        $throttleKey = 'manager-auth:' . $initiator->id;
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            throw new ManagerAuthorizationException(
+                message: 'Too many manager authorization attempts. Try again later.',
+
+                errorCode: 'MANAGER_AUTHORIZATION_THROTTLED',
+
+                status: 429
+            );
+        }
 
         $normalizedLogin =
             Str::lower(
@@ -157,6 +170,8 @@ final class ManagerAuthorizationService
                 userId: $initiator->id
             );
 
+            RateLimiter::hit($throttleKey, 300);
+
             throw new ManagerAuthorizationException(
                 message: 'Manager authorization failed.',
 
@@ -165,6 +180,8 @@ final class ManagerAuthorizationService
                 status: 403
             );
         }
+
+        RateLimiter::clear($throttleKey);
 
         $this->recordSuccess(
             initiator: $initiator,

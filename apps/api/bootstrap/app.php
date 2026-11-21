@@ -60,6 +60,14 @@ return Application::configure(
              */
             $middleware->statefulApi();
 
+            // Honor X-Forwarded-* only from explicitly trusted proxies
+            // (TRUSTED_PROXIES=ip1,ip2 or "*" when behind a controlled LB).
+            if ($proxies = env('TRUSTED_PROXIES')) {
+                $middleware->trustProxies(
+                    at: $proxies === '*' ? '*' : explode(',', $proxies)
+                );
+            }
+
             $middleware->alias([
                 'active' =>
                 EnsureUserIsActive::class,

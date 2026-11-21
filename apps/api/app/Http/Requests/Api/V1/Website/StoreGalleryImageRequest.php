@@ -19,6 +19,7 @@ class StoreGalleryImageRequest extends FormRequest
                 'image',
                 'mimes:jpg,jpeg,png,webp',
                 'max:5120',
+                'dimensions:min_width=200,min_height=200,max_width=6000,max_height=6000',
             ],
 
             'caption' => [

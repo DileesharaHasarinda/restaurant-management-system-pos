@@ -67,14 +67,24 @@ class AuthController extends Controller
                 ->first();
         }
 
+        /*
+         * Always run one hash comparison so unknown users cost the same
+         * as known ones (prevents username enumeration by timing).
+         */
+        $submittedPassword = $request
+            ->string('password')
+            ->toString();
+
+        if (! $user) {
+            Hash::make($submittedPassword);
+        }
+
+        $passwordMatches = $user
+            && Hash::check($submittedPassword, $user->password);
+
         if (
             ! $user
-            || ! Hash::check(
-                $request
-                    ->string('password')
-                    ->toString(),
-                $user->password
-            )
+            || ! $passwordMatches
         ) {
             $this->auditLogger->record(
                 action: 'AUTH_LOGIN_FAILED',
@@ -84,8 +94,14 @@ class AuthController extends Controller
                 entityId: $user?->id,
 
                 metadata: [
+                    /*
+                     * Unknown logins are hashed: users sometimes type
+                     * their password into the username field.
+                     */
                     'login' =>
-                    $login,
+                    $user
+                        ? $login
+                        : 'sha256:' . substr(hash('sha256', $login), 0, 16),
 
                     'device_name' =>
                     $deviceName,
@@ -146,7 +162,7 @@ class AuthController extends Controller
                 ])->save();
 
                 $expiresAt =
-                    now()->addDays(30);
+                    now()->addHours((int) config('auth.token_ttl_hours', 12));
 
                 $token =
                     $user->createToken(
