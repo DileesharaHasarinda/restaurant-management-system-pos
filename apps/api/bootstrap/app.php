@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateFromCookie;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Support\ApiResponse;
@@ -59,6 +60,17 @@ return Application::configure(
              * to work as well.
              */
             $middleware->statefulApi();
+
+            // Operations web authenticates via an httpOnly cookie (plain, not encrypted:
+            // the value is already an opaque Sanctum token).
+            $middleware->encryptCookies(except: [AuthenticateFromCookie::COOKIE]);
+            $middleware->api(prepend: [AuthenticateFromCookie::class]);
+
+            // Must run before Authenticate, which Laravel sorts to the front.
+            $middleware->prependToPriorityList(
+                before: \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+                prepend: AuthenticateFromCookie::class
+            );
 
             // Honor X-Forwarded-* only from explicitly trusted proxies
             // (TRUSTED_PROXIES=ip1,ip2 or "*" when behind a controlled LB).

@@ -10,6 +10,7 @@ use App\Http\Resources\UserSessionResource;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\TokenSessionService;
+use App\Http\Middleware\AuthenticateFromCookie;
 use App\Support\ApiResponse;
 use App\Support\DatabaseTransaction;
 use Illuminate\Http\JsonResponse;
@@ -206,13 +207,16 @@ class AuthController extends Controller
             'role.permissions'
         );
 
-        return ApiResponse::success(
+        $cookieMode = $request->header('X-Auth-Mode') === 'cookie';
+
+        $response = ApiResponse::success(
             data: [
                 'token_type' =>
                 'Bearer',
 
+                // Cookie-mode clients (Operations web) never see the token in JS.
                 'access_token' =>
-                $result['token'],
+                $cookieMode ? null : $result['token'],
 
                 'expires_at' =>
                 $result['expires_at'],
@@ -227,6 +231,22 @@ class AuthController extends Controller
             ],
             message: 'Login successful.'
         );
+
+        if ($cookieMode) {
+            $response->withCookie(cookie(
+                AuthenticateFromCookie::COOKIE,
+                $result['token'],
+                (int) config('auth.token_ttl_hours', 12) * 60,
+                '/',
+                null,
+                $request->isSecure(),
+                true,
+                false,
+                'strict'
+            ));
+        }
+
+        return $response;
     }
 
     public function me(
@@ -556,6 +576,8 @@ class AuthController extends Controller
         return ApiResponse::success(
             data: null,
             message: 'Logout successful.'
+        )->withCookie(
+            cookie()->forget(AuthenticateFromCookie::COOKIE)
         );
     }
 
@@ -613,6 +635,8 @@ class AuthController extends Controller
         return ApiResponse::success(
             data: $result,
             message: 'All sessions were revoked.'
+        )->withCookie(
+            cookie()->forget(AuthenticateFromCookie::COOKIE)
         );
     }
 }

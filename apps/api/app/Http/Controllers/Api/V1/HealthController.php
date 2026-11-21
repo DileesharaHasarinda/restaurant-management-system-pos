@@ -44,9 +44,6 @@ class HealthController extends Controller
             'application' =>
             config('app.name'),
 
-            'environment' =>
-            app()->environment(),
-
             'api_version' =>
             'v1',
 

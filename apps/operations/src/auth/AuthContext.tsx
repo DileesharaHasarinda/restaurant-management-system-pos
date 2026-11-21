@@ -180,11 +180,7 @@ export function AuthProvider(
                             false,
                         );
 
-                    authTokenStorage.set(
-                        response
-                            .data
-                            .access_token,
-                    );
+                    authTokenStorage.set();
 
                     setUser(
                         response

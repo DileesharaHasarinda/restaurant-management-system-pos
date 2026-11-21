@@ -19,20 +19,30 @@ export const API_BASE_URL =
 |--------------------------------------------------------------------------
 */
 
-const TOKEN_KEY = "restaurant-operations-token";
+/*
+ * The real token lives in an httpOnly cookie set by the API and is never
+ * readable from JS. sessionStorage only holds a non-secret "signed in"
+ * marker so the UI knows whether to call /auth/me.
+ */
+const SESSION_MARKER_KEY = "restaurant-operations-session";
 
 export const authTokenStorage = {
   get(): string | null {
-    return window.sessionStorage.getItem(TOKEN_KEY);
+    return window.sessionStorage.getItem(SESSION_MARKER_KEY);
   },
 
-  set(token: string): void {
-    window.sessionStorage.setItem(TOKEN_KEY, token);
+  set(): void {
+    window.sessionStorage.setItem(SESSION_MARKER_KEY, "1");
   },
 
   clear(): void {
-    window.sessionStorage.removeItem(TOKEN_KEY);
+    window.sessionStorage.removeItem(SESSION_MARKER_KEY);
   },
+};
+
+/** Headers required on every cookie-authenticated request (CSRF defense). */
+export const COOKIE_AUTH_HEADERS: Record<string, string> = {
+  "X-Requested-With": "XMLHttpRequest",
 };
 
 /*
@@ -121,11 +131,16 @@ async function request<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<ApiSuccess<T>> {
-  const { authenticated = true, headers, ...requestOptions } = options;
-
-  const token = authTokenStorage.get();
+  // Auth is cookie-based now; the flag is kept for call-site compatibility.
+  const { authenticated: _authenticated, headers, ...requestOptions } = options;
+  void _authenticated;
 
   const requestHeaders = new Headers(headers);
+
+  requestHeaders.set("X-Requested-With", "XMLHttpRequest");
+
+  // Ask the API to deliver the login token as an httpOnly cookie.
+  requestHeaders.set("X-Auth-Mode", "cookie");
 
   /*
   |--------------------------------------------------------------------------
@@ -163,10 +178,6 @@ async function request<T>(
   |--------------------------------------------------------------------------
   */
 
-  if (authenticated && token) {
-    requestHeaders.set("Authorization", `Bearer ${token}`);
-  }
-
   /*
   |--------------------------------------------------------------------------
   | HTTP Request
@@ -179,6 +190,7 @@ async function request<T>(
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...requestOptions,
       headers: requestHeaders,
+      credentials: "include",
     });
   } catch {
     throw new ApiError(

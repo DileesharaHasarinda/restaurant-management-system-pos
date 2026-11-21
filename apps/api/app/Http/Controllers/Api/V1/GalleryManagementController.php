@@ -13,6 +13,7 @@ use App\Services\AuditLogger;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Support\ImageSanitizer;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -77,15 +78,11 @@ class GalleryManagementController extends Controller
         $actor =
             $request->user();
 
-        $path =
-            $request
-            ->file(
-                'image'
-            )
-            ->store(
-                'website/gallery',
-                'public'
-            );
+        $path = ImageSanitizer::storeReencoded(
+            $request->file('image'),
+            'website/gallery',
+            'public'
+        );
 
         try {
             $image =

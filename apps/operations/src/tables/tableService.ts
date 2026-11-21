@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiError, api, authTokenStorage } from "../lib/api";
+import { API_BASE_URL, ApiError, api } from "../lib/api";
 
 import type {
   CreateTablePayload,
@@ -193,11 +193,7 @@ async function authenticatedFetch(endpoint: string): Promise<Response> {
 
   headers.set("Accept", "*/*");
 
-  const token = authTokenStorage.get();
-
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  headers.set("X-Requested-With", "XMLHttpRequest");
 
   let response: Response;
 
@@ -206,6 +202,8 @@ async function authenticatedFetch(endpoint: string): Promise<Response> {
       method: "GET",
 
       headers,
+
+      credentials: "include",
     });
   } catch {
     throw new ApiError(

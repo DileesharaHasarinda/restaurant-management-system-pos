@@ -1,5 +1,6 @@
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
+import type { ChannelAuthorizationData } from "pusher-js/types/src/core/auth/options";
 
 /*
 |--------------------------------------------------------------------------
@@ -222,13 +223,53 @@ export function connectStaffRealtime({
 
     authEndpoint: `${apiBaseUrl()}/broadcasting/auth`,
 
-    auth: {
-      headers: {
-        Accept: "application/json",
+    // Auth rides on the httpOnly session cookie, which pusher-js's built-in
+    // XHR authorizer cannot send cross-origin, so authorize via fetch.
+    authorizer: (channel: { name: string }) => ({
+      authorize: (
+        socketId: string,
+        callback: (
+          error: Error | null,
+          data: ChannelAuthorizationData | null
+        ) => void
+      ) => {
+        fetch(`${apiBaseUrl()}/broadcasting/auth`, {
+          method: "POST",
 
-        Authorization: `Bearer ${normalizedToken}`,
+          credentials: "include",
+
+          headers: {
+            Accept: "application/json",
+
+            "Content-Type": "application/json",
+
+            "X-Requested-With": "XMLHttpRequest",
+          },
+
+          body: JSON.stringify({
+            socket_id: socketId,
+
+            channel_name: channel.name,
+          }),
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`Broadcast auth failed (${response.status}).`);
+            }
+
+            callback(
+              null,
+              (await response.json()) as ChannelAuthorizationData
+            );
+          })
+          .catch((error: unknown) => {
+            callback(
+              error instanceof Error ? error : new Error(String(error)),
+              null
+            );
+          });
       },
-    },
+    }),
   });
 
   /*

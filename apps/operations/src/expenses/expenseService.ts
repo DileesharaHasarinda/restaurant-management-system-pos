@@ -199,16 +199,6 @@ function apiBaseUrl(): string {
   return value.replace(/\/+$/, "");
 }
 
-function authToken(): string {
-  const token = sessionStorage.getItem("restaurant-operations-token");
-
-  if (!token) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-
-  return token;
-}
-
 async function responseError(response: Response): Promise<Error> {
   try {
     const payload = await response.json();
@@ -244,8 +234,10 @@ export async function uploadExpenseReceipt(
     {
       method: "POST",
 
+      credentials: "include",
+
       headers: {
-        Authorization: `Bearer ${authToken()}`,
+        "X-Requested-With": "XMLHttpRequest",
 
         Accept: "application/json",
       },
@@ -281,8 +273,10 @@ export async function removeExpenseReceipt(
     {
       method: "DELETE",
 
+      credentials: "include",
+
       headers: {
-        Authorization: `Bearer ${authToken()}`,
+        "X-Requested-With": "XMLHttpRequest",
 
         Accept: "application/json",
       },
@@ -314,8 +308,10 @@ export async function downloadExpenseReceipt(expense: Expense): Promise<void> {
     {
       method: "GET",
 
+      credentials: "include",
+
       headers: {
-        Authorization: `Bearer ${authToken()}`,
+        "X-Requested-With": "XMLHttpRequest",
       },
     }
   );
