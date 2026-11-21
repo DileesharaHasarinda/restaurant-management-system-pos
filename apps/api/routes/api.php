@@ -328,6 +328,7 @@ Route::middleware(
                 Route::middleware([
                     'auth:sanctum',
                     'active',
+                    'ability:staff',
                 ])->group(
                     function (): void {
 
@@ -418,6 +419,7 @@ Route::middleware(
     Route::middleware([
         'auth:sanctum',
         'active',
+        'ability:staff',
     ])->group(function (): void {
 
         /*

@@ -99,9 +99,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_cashier_can_open_shift_with_opening_cash(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $response =
             $this->postJson(
@@ -225,9 +223,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_duplicate_open_shift_request_is_idempotent(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $requestId =
             (string)
@@ -323,9 +319,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_cashier_cannot_have_two_open_shifts(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->openShiftViaApi(
             openingCash: 10000
@@ -358,9 +352,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_current_shift_returns_open_shift_and_summary(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -412,9 +404,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_manual_cash_in_and_cash_out_update_expected_cash(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -560,9 +550,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_duplicate_manual_cash_movement_does_not_move_cash_twice(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -679,9 +667,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_cash_out_cannot_exceed_expected_drawer_balance(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -738,9 +724,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_phase_28_cash_sale_is_included_in_shift_expected_cash(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -847,9 +831,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_shift_summary_calculates_opening_sales_refunds_cash_in_and_cash_out(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -1059,9 +1041,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_shift_close_records_actual_cash_and_shortage(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -1238,9 +1218,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_shift_cannot_close_when_expected_cash_and_ledger_do_not_match(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -1309,9 +1287,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_closed_shift_cannot_receive_manual_cash_movements(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -1386,9 +1362,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_cashier_cannot_modify_or_close_another_cashiers_shift(): void
     {
-        Sanctum::actingAs(
-            $this->otherCashier
-        );
+        Sanctum::actingAs($this->otherCashier, ['staff']);
 
         $otherOpened =
             $this->openShiftViaApi(
@@ -1401,9 +1375,7 @@ class CashierShiftManagementTest extends TestCase
                 'data.shift.id'
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/cashier-shifts/{$otherShiftId}/cash-in",
@@ -1471,9 +1443,7 @@ class CashierShiftManagementTest extends TestCase
                 'CLOSED',
             ]);
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             '/api/v1/cashier-shifts/open',
@@ -1507,9 +1477,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_cashier_shift_routes_enforce_permissions(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(
@@ -1522,9 +1490,7 @@ class CashierShiftManagementTest extends TestCase
                 'data.shift.id'
             );
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             '/api/v1/cashier-shifts/current'
@@ -1627,9 +1593,7 @@ class CashierShiftManagementTest extends TestCase
 
     public function test_movement_history_returns_shift_cash_ledger(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $opened =
             $this->openShiftViaApi(

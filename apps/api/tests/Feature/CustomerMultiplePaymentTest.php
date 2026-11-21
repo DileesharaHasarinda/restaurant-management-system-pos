@@ -88,9 +88,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 openingFloat: 20000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $response =
             $this->postJson(
@@ -448,9 +446,7 @@ class CustomerMultiplePaymentTest extends TestCase
             ],
         ];
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -612,9 +608,7 @@ class CustomerMultiplePaymentTest extends TestCase
             (string)
             Str::uuid();
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -704,9 +698,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 grandTotal: 10000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -846,9 +838,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 grandTotal: 2000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $response =
             $this->postJson(
@@ -969,9 +959,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 openingFloat: 20000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         /*
          * CASH succeeds first internally.
@@ -1117,9 +1105,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 grandTotal: 1000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1184,9 +1170,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 openingFloat: 5000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1259,9 +1243,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 status: CashierShift::STATUS_CLOSED
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1326,9 +1308,7 @@ class CustomerMultiplePaymentTest extends TestCase
                 openingFloat: 5000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1374,9 +1354,7 @@ class CustomerMultiplePaymentTest extends TestCase
 
     public function test_void_paid_and_closed_business_day_invoices_cannot_receive_new_payment(): void
     {
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1537,9 +1515,7 @@ class CustomerMultiplePaymentTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1558,9 +1534,7 @@ class CustomerMultiplePaymentTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/invoices/{$invoice->id}/payments",
@@ -1620,9 +1594,7 @@ class CustomerMultiplePaymentTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             "/api/v1/invoices/{$invoice->id}/payments"

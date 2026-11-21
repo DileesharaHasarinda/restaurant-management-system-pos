@@ -227,9 +227,7 @@ class ExpenseManagementTest extends TestCase
                 'GAS'
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -440,9 +438,7 @@ class ExpenseManagementTest extends TestCase
                 'INTERNET'
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -975,9 +971,7 @@ class ExpenseManagementTest extends TestCase
                 'CLEANING'
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -1159,9 +1153,7 @@ class ExpenseManagementTest extends TestCase
                 'CLEANING'
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1440,9 +1432,7 @@ class ExpenseManagementTest extends TestCase
             )
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $response =
             $this->getJson(
@@ -1721,9 +1711,7 @@ class ExpenseManagementTest extends TestCase
         $expense =
             $result['expense'];
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1858,9 +1846,7 @@ class ExpenseManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             "/api/v1/expenses/{$expense->id}/receipt"
@@ -1875,9 +1861,7 @@ class ExpenseManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $storedPath =
             $expense
@@ -1992,9 +1976,7 @@ class ExpenseManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->getJson(
             '/api/v1/expenses'
@@ -2084,9 +2066,7 @@ class ExpenseManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->creatorOnly
-        );
+        Sanctum::actingAs($this->creatorOnly, ['staff']);
 
         $this->putJson(
             "/api/v1/expenses/{$expense->id}",
@@ -2120,9 +2100,7 @@ class ExpenseManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             '/api/v1/expenses'
@@ -2185,9 +2163,7 @@ class ExpenseManagementTest extends TestCase
         BusinessDay::query()
             ->delete();
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             '/api/v1/expenses',

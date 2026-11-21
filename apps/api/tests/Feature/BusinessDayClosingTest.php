@@ -153,9 +153,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_manager_can_view_current_business_day_closing_preview(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $response =
             $this->getJson(
@@ -204,9 +202,7 @@ class BusinessDayClosingTest extends TestCase
     {
         $this->createOpenTableSession();
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $preview =
             $this->getJson(
@@ -268,9 +264,7 @@ class BusinessDayClosingTest extends TestCase
             );
         }
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $preview =
             $this->getJson(
@@ -328,9 +322,7 @@ class BusinessDayClosingTest extends TestCase
             balanceDue: 1500
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $preview =
             $this->getJson(
@@ -373,9 +365,7 @@ class BusinessDayClosingTest extends TestCase
             difference: null
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $preview =
             $this->getJson(
@@ -408,9 +398,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_final_close_rechecks_blockers_after_preview(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
          * Preview says the day is currently safe.
@@ -464,9 +452,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_clean_business_day_closes_successfully(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -1076,9 +1062,7 @@ class BusinessDayClosingTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $response =
             $this->closeBusinessDay(
@@ -1301,9 +1285,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_exact_business_day_close_retry_is_idempotent(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -1351,9 +1333,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_same_closing_uuid_with_different_data_is_rejected(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $requestId =
             (string)
@@ -1406,9 +1386,7 @@ class BusinessDayClosingTest extends TestCase
         /*
          * No permission.
          */
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this
             ->getJson(
@@ -1421,9 +1399,7 @@ class BusinessDayClosingTest extends TestCase
         /*
          * View-only user can inspect.
          */
-        Sanctum::actingAs(
-            $this->viewer
-        );
+        Sanctum::actingAs($this->viewer, ['staff']);
 
         $this
             ->getJson(
@@ -1465,9 +1441,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_closed_business_day_snapshot_can_be_retrieved(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this
             ->closeBusinessDay()
@@ -1504,9 +1478,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_business_day_closing_snapshot_cannot_be_updated(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this
             ->closeBusinessDay()
@@ -1528,9 +1500,7 @@ class BusinessDayClosingTest extends TestCase
 
     public function test_business_day_closing_snapshot_cannot_be_deleted(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this
             ->closeBusinessDay()
@@ -1607,9 +1577,7 @@ class BusinessDayClosingTest extends TestCase
                 $this->manager->id,
             ]);
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
          * Expense itself does not block closing.

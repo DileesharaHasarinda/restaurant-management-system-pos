@@ -175,7 +175,7 @@ class AuthHardeningTest extends TestCase
         $payload = '<?php echo "pwned"; ?>';
         file_put_contents($source->getRealPath(), $payload, FILE_APPEND);
 
-        \Laravel\Sanctum\Sanctum::actingAs($admin);
+        \Laravel\Sanctum\Sanctum::actingAs($admin, ['staff']);
 
         $this->postJson('/api/v1/gallery', [
             'image' => $source,
@@ -188,5 +188,16 @@ class AuthHardeningTest extends TestCase
         $stored = \Illuminate\Support\Facades\Storage::disk('public')->get($files[0]);
         $this->assertStringNotContainsString('pwned', $stored);
         $this->assertNotFalse(@imagecreatefromstring($stored));
+    }
+
+    public function test_token_without_staff_ability_is_rejected(): void
+    {
+        $user = $this->user('limited1');
+
+        \Laravel\Sanctum\Sanctum::actingAs($user, ['something-else']);
+        $this->getJson('/api/v1/auth/me')->assertStatus(403);
+
+        \Laravel\Sanctum\Sanctum::actingAs($user, ['staff']);
+        $this->getJson('/api/v1/auth/me')->assertOk();
     }
 }

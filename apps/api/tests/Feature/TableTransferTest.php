@@ -405,9 +405,7 @@ class TableTransferTest extends TestCase
             )
             ->count();
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",
@@ -763,9 +761,7 @@ class TableTransferTest extends TestCase
             $this->destinationTable
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",
@@ -807,9 +803,7 @@ class TableTransferTest extends TestCase
                 2,
             ]);
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",
@@ -844,9 +838,7 @@ class TableTransferTest extends TestCase
                 RestaurantTable::STATUS_AVAILABLE,
             ]);
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",
@@ -871,9 +863,7 @@ class TableTransferTest extends TestCase
             $this->sourceTable
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",
@@ -899,9 +889,7 @@ class TableTransferTest extends TestCase
                 $this->sourceTable
             );
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->sourceTable->id}/transfer",

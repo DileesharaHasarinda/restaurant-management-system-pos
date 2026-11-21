@@ -44,6 +44,7 @@ return Application::configure(
                 'api',
                 'auth:sanctum',
                 EnsureUserIsActive::class,
+                'ability:staff',
             ],
         ]
     )

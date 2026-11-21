@@ -382,9 +382,7 @@ class TableMergeTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $response =
             $this->postJson(
@@ -840,9 +838,7 @@ class TableMergeTest extends TestCase
          * Here Table 06 is deliberately
          * selected as PRIMARY.
          */
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->secondaryTable->id}/merge",
@@ -912,9 +908,7 @@ class TableMergeTest extends TestCase
                 2
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",
@@ -985,9 +979,7 @@ class TableMergeTest extends TestCase
                 businessDay: $otherBusinessDay
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",
@@ -1118,9 +1110,7 @@ class TableMergeTest extends TestCase
                 now(),
             ]);
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",
@@ -1262,9 +1252,7 @@ class TableMergeTest extends TestCase
                 now(),
             ]);
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",
@@ -1304,9 +1292,7 @@ class TableMergeTest extends TestCase
             2
         );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",
@@ -1339,9 +1325,7 @@ class TableMergeTest extends TestCase
                 2
             );
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->postJson(
             "/api/v1/tables/{$this->primaryTable->id}/merge",

@@ -168,7 +168,7 @@ class AuthController extends Controller
                 $token =
                     $user->createToken(
                         $deviceName,
-                        ['*'],
+                        ['staff'],
                         $expiresAt
                     );
 

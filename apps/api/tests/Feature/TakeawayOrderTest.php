@@ -232,9 +232,7 @@ class TakeawayOrderTest extends TestCase
             (string)
             Str::uuid();
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $response =
             $this->postJson(
@@ -512,9 +510,7 @@ class TakeawayOrderTest extends TestCase
             (string)
             Str::uuid();
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             '/api/v1/takeaway/orders',
@@ -586,9 +582,7 @@ class TakeawayOrderTest extends TestCase
                 qrVisible: false
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $clientOrderId =
             (string)
@@ -838,9 +832,7 @@ class TakeawayOrderTest extends TestCase
          * Total:
          * 1450
          */
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $clientOrderId =
             (string)
@@ -1003,9 +995,7 @@ class TakeawayOrderTest extends TestCase
             ],
         ];
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             '/api/v1/takeaway/orders',
@@ -1094,9 +1084,7 @@ class TakeawayOrderTest extends TestCase
             (string)
             Str::uuid();
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             '/api/v1/takeaway/orders',
@@ -1177,9 +1165,7 @@ class TakeawayOrderTest extends TestCase
                 price: 500
             );
 
-        Sanctum::actingAs(
-            $this->waiter
-        );
+        Sanctum::actingAs($this->waiter, ['staff']);
 
         $this->postJson(
             '/api/v1/takeaway/orders',
@@ -1229,9 +1215,7 @@ class TakeawayOrderTest extends TestCase
             (string)
             Str::uuid();
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1700,9 +1684,7 @@ class TakeawayOrderTest extends TestCase
                 price: 600
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         foreach (
             range(

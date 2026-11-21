@@ -84,9 +84,7 @@ class CashDrawerHardwareTest extends TestCase
                 openingCash: 10000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $response =
             $this->postJson(
@@ -156,9 +154,7 @@ class CashDrawerHardwareTest extends TestCase
                 openingCash: 10000
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $requestId =
             (string)
@@ -244,9 +240,7 @@ class CashDrawerHardwareTest extends TestCase
                 user: $this->cashier
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $requestId =
             (string)
@@ -296,9 +290,7 @@ class CashDrawerHardwareTest extends TestCase
                 status: CashierShift::STATUS_CLOSED
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/cashier-shifts/{$shift->id}/manual-open",
@@ -329,9 +321,7 @@ class CashDrawerHardwareTest extends TestCase
                 user: $this->otherCashier
             );
 
-        Sanctum::actingAs(
-            $this->cashier
-        );
+        Sanctum::actingAs($this->cashier, ['staff']);
 
         $this->postJson(
             "/api/v1/cashier-shifts/{$shift->id}/manual-open",
@@ -362,9 +352,7 @@ class CashDrawerHardwareTest extends TestCase
                 user: $this->unauthorizedUser
             );
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->postJson(
             "/api/v1/cashier-shifts/{$shift->id}/manual-open",

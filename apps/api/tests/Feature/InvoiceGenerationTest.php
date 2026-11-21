@@ -148,9 +148,7 @@ class InvoiceGenerationTest extends TestCase
             lineTotal: 2500
         );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -380,9 +378,7 @@ class InvoiceGenerationTest extends TestCase
                 lineTotal: 400
             );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -836,9 +832,7 @@ class InvoiceGenerationTest extends TestCase
             lineTotal: 800
         );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         $response =
             $this->postJson(
@@ -993,9 +987,7 @@ class InvoiceGenerationTest extends TestCase
             lineTotal: 1500
         );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1138,9 +1130,7 @@ class InvoiceGenerationTest extends TestCase
                 status: OrderItem::STATUS_CANCELLED
             );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         $response =
             $this->postJson(
@@ -1204,9 +1194,7 @@ class InvoiceGenerationTest extends TestCase
             Order::STATUS_SENT_TO_KITCHEN,
         ];
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         foreach (
             $statuses
@@ -1255,9 +1243,7 @@ class InvoiceGenerationTest extends TestCase
             Order::STATUS_REJECTED,
         ];
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         foreach (
             $statuses
@@ -1345,9 +1331,7 @@ class InvoiceGenerationTest extends TestCase
             lineTotal: 500
         );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         $this->postJson(
             "/api/v1/table-sessions/{$session->id}/invoice"
@@ -1389,9 +1373,7 @@ class InvoiceGenerationTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->postJson(
             "/api/v1/orders/{$order->id}/invoice"
@@ -1409,9 +1391,7 @@ class InvoiceGenerationTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         $createResponse =
             $this->postJson(
@@ -1434,9 +1414,7 @@ class InvoiceGenerationTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             "/api/v1/invoices/{$invoiceId}"
@@ -1473,9 +1451,7 @@ class InvoiceGenerationTest extends TestCase
             lineTotal: 1000
         );
 
-        Sanctum::actingAs(
-            $this->billingUser
-        );
+        Sanctum::actingAs($this->billingUser, ['staff']);
 
         $this->postJson(
             "/api/v1/orders/{$order->id}/invoice"

@@ -187,9 +187,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 0.50
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -457,9 +455,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 0.50
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -579,9 +575,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 0.50
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -709,9 +703,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 1
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -846,9 +838,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 1
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -933,9 +923,7 @@ class StockAdjustmentManagementTest extends TestCase
 
     public function test_invalid_inventory_configuration_is_rejected_without_changes(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1110,9 +1098,7 @@ class StockAdjustmentManagementTest extends TestCase
                 averageCost: 1
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
          * Negative physical count.
@@ -1202,9 +1188,7 @@ class StockAdjustmentManagementTest extends TestCase
         BusinessDay::query()
             ->delete();
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             "/api/v1/inventory/ingredients/{$ingredient->id}/physical-count",
@@ -1295,9 +1279,7 @@ class StockAdjustmentManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->getJson(
             '/api/v1/inventory/stock-adjustments'
@@ -1319,9 +1301,7 @@ class StockAdjustmentManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             '/api/v1/inventory/stock-adjustments'

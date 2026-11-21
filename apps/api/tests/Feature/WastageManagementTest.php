@@ -239,9 +239,7 @@ class WastageManagementTest extends TestCase
                 averageCost: 0.50
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -585,9 +583,7 @@ class WastageManagementTest extends TestCase
                 averageCost: 2
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -714,9 +710,7 @@ class WastageManagementTest extends TestCase
                 averageCost: 1
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -816,9 +810,7 @@ class WastageManagementTest extends TestCase
                 averageCost: 1
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->postJson(
             '/api/v1/wastages',
@@ -884,9 +876,7 @@ class WastageManagementTest extends TestCase
                 averageCost: 10
             );
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $clientRequestId =
             (string)
@@ -955,9 +945,7 @@ class WastageManagementTest extends TestCase
 
     public function test_invalid_inventory_configuration_is_rejected_without_stock_changes(): void
     {
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         /*
         |--------------------------------------------------------------------------
@@ -1177,9 +1165,7 @@ class WastageManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->manager
-        );
+        Sanctum::actingAs($this->manager, ['staff']);
 
         $this->getJson(
             '/api/v1/wastages'
@@ -1201,9 +1187,7 @@ class WastageManagementTest extends TestCase
         |--------------------------------------------------------------------------
         */
 
-        Sanctum::actingAs(
-            $this->unauthorizedUser
-        );
+        Sanctum::actingAs($this->unauthorizedUser, ['staff']);
 
         $this->getJson(
             '/api/v1/wastages'
