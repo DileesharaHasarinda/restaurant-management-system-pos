@@ -239,7 +239,8 @@ class AuthController extends Controller
                 (int) config('auth.token_ttl_hours', 12) * 60,
                 '/',
                 null,
-                $request->isSecure(),
+                // Always Secure outside local dev (HTTP is only tolerated locally).
+                ! app()->environment('local', 'testing') || $request->isSecure(),
                 true,
                 false,
                 'strict'

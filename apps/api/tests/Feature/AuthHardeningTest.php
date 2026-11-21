@@ -127,11 +127,31 @@ class AuthHardeningTest extends TestCase
             ->withCredentials()
             ->getJson('/api/v1/auth/me')
             ->assertStatus(403)
-            ->assertJsonPath('code', 'CSRF_HEADER_REQUIRED');
+            ->assertJsonPath('code', 'CSRF_REJECTED');
 
+        // Header present but foreign origin -> rejected.
+        $this->withUnencryptedCookie('ops_token', $token)
+            ->withCredentials()
+            ->withHeaders([
+                'X-Requested-With' => 'XMLHttpRequest',
+                'Origin' => 'https://evil.example',
+            ])
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(403);
+
+        // No Origin/Referer at all -> rejected.
         $this->withUnencryptedCookie('ops_token', $token)
             ->withCredentials()
             ->withHeaders(['X-Requested-With' => 'XMLHttpRequest'])
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(403);
+
+        $this->withUnencryptedCookie('ops_token', $token)
+            ->withCredentials()
+            ->withHeaders([
+                'X-Requested-With' => 'XMLHttpRequest',
+                'Origin' => 'http://localhost:5174',
+            ])
             ->getJson('/api/v1/auth/me')
             ->assertOk();
     }
