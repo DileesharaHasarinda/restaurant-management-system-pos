@@ -50,6 +50,7 @@ import SettingsModule
     from './cashier/settings/SettingsModule';
 
 import type {
+    DineInSubmissionData,
     ProductSelection,
 } from './cashier/pos/types';
 
@@ -2923,6 +2924,150 @@ export default function CashierWorkspace(
 
     /*
     |--------------------------------------------------------------------------
+    | Create Cashier Dine-In Order
+    |--------------------------------------------------------------------------
+    |
+    | The cashier selects a table from the POS before this function is called.
+    |
+    | Laravel remains authoritative for:
+    | - opening/reusing the table session
+    | - validating menu prices and inventory requirements
+    | - assigning the business day
+    | - creating the order as DINE_IN / CASHIER / CONFIRMED
+    |
+    | Inventory is still deducted only by the normal Send To Kitchen lifecycle.
+    |--------------------------------------------------------------------------
+    */
+
+    const createDineIn =
+        async (
+            submission:
+                DineInSubmissionData,
+        ): Promise<boolean> => {
+            if (
+                cart.length
+                ===
+                0
+            ) {
+                setError(
+                    'Add at least one menu item before creating the dine-in order.',
+                );
+
+                return false;
+            }
+
+            setError(
+                null,
+            );
+
+            try {
+                const response =
+                    await api.post<ApiOrderResponse>(
+                        `/cashier/tables/${submission.tableId}/orders`,
+
+                        {
+                            client_order_id:
+                                submission.clientOrderId,
+
+                            guest_count:
+                                submission.guestCount,
+
+                            customer_name:
+                                submission.customerName,
+
+                            customer_phone:
+                                submission.customerPhone,
+
+                            notes:
+                                submission.notes,
+
+                            items:
+                                cart.map(
+                                    (
+                                        line,
+                                    ) => ({
+                                        menu_item_id:
+                                            line.item.id,
+
+                                        variant_id:
+                                            line.variant
+                                                ?.id
+                                            ??
+                                            null,
+
+                                        quantity:
+                                            line.quantity,
+
+                                        notes:
+                                            line.notes
+                                            ||
+                                            null,
+
+                                        addons:
+                                            line.addons.map(
+                                                (
+                                                    selected,
+                                                ) => ({
+                                                    addon_id:
+                                                        selected.addon.id,
+
+                                                    quantity:
+                                                        selected.quantity,
+                                                }),
+                                            ),
+                                    }),
+                                ),
+                        },
+                    );
+
+                const createdOrder =
+                    normalizeOrder(
+                        response.data,
+                    );
+
+                setSelectedOrder(
+                    createdOrder,
+                );
+
+                /*
+                 * Clear the shared POS cart only after Laravel successfully
+                 * creates or idempotently returns the dine-in order.
+                 */
+                setCart(
+                    [],
+                );
+
+                /*
+                 * The selected table may now be OCCUPIED and the new order
+                 * must immediately appear throughout the cashier workspace.
+                 */
+                await Promise.all([
+                    loadOrders(),
+                    loadTables(),
+                ]);
+
+                setActiveModule(
+                    'current-order',
+                );
+
+                return true;
+            } catch (
+            exception
+            ) {
+                /*
+                 * DineInDialog retains the same client UUID while it remains
+                 * open, allowing a safe idempotent retry.
+                 */
+                handleError(
+                    exception,
+                );
+
+                return false;
+            }
+        };
+
+    /*
+    |--------------------------------------------------------------------------
     | Create Takeaway
     |--------------------------------------------------------------------------
     */
@@ -3157,6 +3302,9 @@ export default function CashierWorkspace(
                             items={
                                 menuItems
                             }
+                            tables={
+                                tables
+                            }
                             cart={
                                 cart
                             }
@@ -3171,6 +3319,9 @@ export default function CashierWorkspace(
                             }
                             onRemove={
                                 removeCartLine
+                            }
+                            onDineIn={
+                                createDineIn
                             }
                             onTakeaway={
                                 () =>

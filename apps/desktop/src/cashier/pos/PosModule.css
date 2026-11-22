@@ -987,3 +987,397 @@
     grid-template-columns: 1fr;
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| POS Order Type Actions
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-order-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+
+  width: 100%;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button,
+.cashier-pos-feature .pos-feature-takeaway-button {
+  display: flex;
+  min-height: 58px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+
+  padding: 10px 12px;
+
+  border: 0;
+  border-radius: 12px;
+
+  font: inherit;
+  cursor: pointer;
+
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button {
+  background: #166534;
+  color: #ffffff;
+}
+
+.cashier-pos-feature .pos-feature-takeaway-button {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button:hover:not(:disabled),
+.cashier-pos-feature .pos-feature-takeaway-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button:disabled,
+.cashier-pos-feature .pos-feature-takeaway-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button span,
+.cashier-pos-feature .pos-feature-takeaway-button span {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-button small,
+.cashier-pos-feature .pos-feature-takeaway-button small {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  opacity: 0.82;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Dine In Dialog
+|--------------------------------------------------------------------------
+*/
+
+.cashier-pos-feature .pos-feature-dine-in-backdrop {
+  position: fixed;
+  z-index: 2000;
+  inset: 0;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.52);
+
+  backdrop-filter: blur(4px);
+}
+
+.cashier-pos-feature .pos-feature-dine-in-dialog {
+  display: flex;
+  width: min(900px, 100%);
+  max-height: calc(100vh - 48px);
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+}
+
+.cashier-pos-feature .pos-feature-dine-in-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 22px 24px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-header h2 {
+  margin: 5px 0 4px;
+
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-header p {
+  margin: 0;
+
+  color: #64748b;
+  font-size: 12px;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+  color: #475569;
+
+  font-size: 24px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-body {
+  display: grid;
+  gap: 22px;
+
+  padding: 22px 24px;
+
+  overflow-y: auto;
+}
+
+.cashier-pos-feature .pos-feature-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.cashier-pos-feature .pos-feature-table-option {
+  position: relative;
+
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 5px;
+
+  padding: 15px;
+
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  text-align: left;
+  cursor: pointer;
+
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.cashier-pos-feature .pos-feature-table-option:hover {
+  transform: translateY(-1px);
+
+  border-color: #94a3b8;
+}
+
+.cashier-pos-feature .pos-feature-table-option.active {
+  border-color: #166534;
+
+  background: #f0fdf4;
+}
+
+.cashier-pos-feature .pos-feature-table-number {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+
+  margin-bottom: 4px;
+
+  border-radius: 10px;
+
+  background: #f1f5f9;
+  color: #0f172a;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.cashier-pos-feature
+  .pos-feature-table-option.active
+  .pos-feature-table-number {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cashier-pos-feature .pos-feature-table-option strong {
+  font-size: 14px;
+}
+
+.cashier-pos-feature .pos-feature-table-option span,
+.cashier-pos-feature .pos-feature-table-option small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.cashier-pos-feature .pos-feature-table-option b {
+  margin-top: auto;
+  padding: 4px 7px;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+.cashier-pos-feature .pos-feature-table-option b.available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cashier-pos-feature .pos-feature-table-option b.occupied {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields label span {
+  color: #475569;
+
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields input,
+.cashier-pos-feature .pos-feature-dine-in-fields textarea {
+  width: 100%;
+
+  padding: 10px 11px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  outline: none;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields input {
+  min-height: 42px;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields textarea {
+  min-height: 82px;
+
+  resize: vertical;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-fields input:focus,
+.cashier-pos-feature .pos-feature-dine-in-fields textarea:focus {
+  border-color: #166534;
+
+  box-shadow: 0 0 0 3px rgba(22, 101, 52, 0.1);
+}
+
+.cashier-pos-feature .pos-feature-dine-in-notes {
+  grid-column: 1 / -1;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-empty {
+  display: grid;
+  min-height: 160px;
+  place-content: center;
+  gap: 5px;
+
+  color: #64748b;
+
+  text-align: center;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-empty strong {
+  color: #0f172a;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  padding: 16px 24px;
+
+  border-top: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-cancel,
+.cashier-pos-feature .pos-feature-dine-in-submit {
+  min-height: 44px;
+
+  padding: 0 18px;
+
+  border-radius: 10px;
+
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-cancel {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #475569;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-submit {
+  border: 1px solid #166534;
+
+  background: #166534;
+  color: #ffffff;
+}
+
+.cashier-pos-feature .pos-feature-dine-in-submit:disabled,
+.cashier-pos-feature .pos-feature-dine-in-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 700px) {
+  .cashier-pos-feature .pos-feature-dine-in-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .cashier-pos-feature .pos-feature-dine-in-notes {
+    grid-column: auto;
+  }
+
+  .cashier-pos-feature .pos-feature-order-actions {
+    grid-template-columns: 1fr;
+  }
+}

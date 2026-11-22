@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\BusinessDayClosingController;
 use App\Http\Controllers\Api\V1\CashDrawerController;
 use App\Http\Controllers\Api\V1\CashierShiftController;
+use App\Http\Controllers\Api\V1\CashierDineInOrderController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FoundationController;
@@ -2103,6 +2104,35 @@ Route::middleware(
             )
             ->name(
                 'v1.wastages.show'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cashier Dine-In Orders
+        |--------------------------------------------------------------------------
+        |
+        | Cashier-created dine-in orders are attached to a restaurant table
+        | and its open table session. The order is created as CONFIRMED and
+        | continues through the normal Send To Kitchen lifecycle.
+        |--------------------------------------------------------------------------
+        */
+
+        Route::post(
+            '/cashier/tables/{table}/orders',
+            [
+                CashierDineInOrderController::class,
+                'store',
+            ]
+        )
+            ->whereNumber(
+                'table'
+            )
+            ->middleware([
+                'permission:orders.create',
+                'permission:orders.confirm',
+            ])
+            ->name(
+                'v1.cashier.tables.orders.store'
             );
 
         /*

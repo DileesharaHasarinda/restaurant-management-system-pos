@@ -11,3 +11,17 @@ export interface ProductSelection {
 
   notes: string;
 }
+
+export interface DineInSubmissionData {
+  clientOrderId: string;
+
+  tableId: number;
+
+  guestCount: number;
+
+  customerName: string | null;
+
+  customerPhone: string | null;
+
+  notes: string | null;
+}

@@ -3,10 +3,25 @@ import { cartItemQuantity, cartLineTotal, cartUnitPrice, posMoney } from './help
 
 interface CartPanelProps {
     cart: CartLine[];
+
     total: number;
-    onChangeQuantity: (id: string, difference: number) => void;
-    onRemove: (id: string) => void;
-    onTakeaway: () => void;
+
+    onChangeQuantity:
+    (
+        id: string,
+        difference: number
+    ) => void;
+
+    onRemove:
+    (
+        id: string
+    ) => void;
+
+    onDineIn:
+    () => void;
+
+    onTakeaway:
+    () => void;
 }
 
 export default function CartPanel({
@@ -14,6 +29,7 @@ export default function CartPanel({
     total,
     onChangeQuantity,
     onRemove,
+    onDineIn,
     onTakeaway,
 }: CartPanelProps) {
     const quantity = cartItemQuantity(cart);
@@ -104,9 +120,47 @@ export default function CartPanel({
                     <span>Cashier dine-in order creation will be connected only after its Laravel endpoint is verified.</span>
                 </div> */}
 
-                <button type="button" className="pos-feature-takeaway-button" disabled={cart.length === 0} onClick={onTakeaway}>
-                    Continue as Takeaway
-                </button>
+                <div
+                    className="pos-feature-order-actions"
+                >
+                    <button
+                        type="button"
+                        className="pos-feature-dine-in-button"
+                        disabled={
+                            cart.length === 0
+                        }
+                        onClick={
+                            onDineIn
+                        }
+                    >
+                        <span>
+                            Dine In
+                        </span>
+
+                        <small>
+                            Select Table
+                        </small>
+                    </button>
+
+                    <button
+                        type="button"
+                        className="pos-feature-takeaway-button"
+                        disabled={
+                            cart.length === 0
+                        }
+                        onClick={
+                            onTakeaway
+                        }
+                    >
+                        <span>
+                            Takeaway
+                        </span>
+
+                        <small>
+                            Continue Order
+                        </small>
+                    </button>
+                </div>
             </footer>
         </aside>
     );
