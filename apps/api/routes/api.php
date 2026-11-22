@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\CashierShiftController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FoundationController;
+use App\Http\Controllers\Api\V1\GalleryImageDeletionController;
 use App\Http\Controllers\Api\V1\GalleryManagementController;
 use App\Http\Controllers\Api\V1\ExpenseCategoryController;
 use App\Http\Controllers\Api\V1\ExpenseController;
@@ -805,7 +806,8 @@ Route::middleware(
         |--------------------------------------------------------------------------
         |
         | Authorized staff can upload gallery images, edit captions / sort
-        | order, and enable or disable public visibility.
+        | order, enable or disable public visibility, and permanently delete
+        | gallery images.
         |
         */
 
@@ -869,6 +871,23 @@ Route::middleware(
             )
             ->name(
                 'v1.gallery.state'
+            );
+
+        Route::delete(
+            '/gallery/{galleryImage}',
+            [
+                GalleryImageDeletionController::class,
+                'destroy',
+            ]
+        )
+            ->whereNumber(
+                'galleryImage'
+            )
+            ->middleware(
+                'permission:website.manage'
+            )
+            ->name(
+                'v1.gallery.destroy'
             );
 
         /*

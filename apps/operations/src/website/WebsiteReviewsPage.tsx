@@ -18,6 +18,7 @@ import {
 
 import {
     approveReview,
+    deleteGalleryImage,
     deleteReview,
     getGalleryImages,
     getReviews,
@@ -227,6 +228,33 @@ export default function WebsiteReviewsPage() {
         setSuccess("");
         setError("");
     }
+
+    useEffect(
+        () => {
+            if (
+                !success
+            ) {
+                return;
+            }
+
+            const timer =
+                window.setTimeout(
+                    () => {
+                        setSuccess("");
+                    },
+                    3500,
+                );
+
+            return () => {
+                window.clearTimeout(
+                    timer,
+                );
+            };
+        },
+        [
+            success,
+        ],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -1136,6 +1164,52 @@ export default function WebsiteReviewsPage() {
                 image.is_active
                     ? "Gallery image disabled successfully."
                     : "Gallery image enabled successfully.",
+            );
+
+            await loadGallery();
+        } catch (
+        exception
+        ) {
+            setError(
+                errorMessage(
+                    exception,
+                ),
+            );
+        } finally {
+            setGalleryActionId(
+                null,
+            );
+        }
+    }
+
+    async function removeGalleryImage(
+        image:
+            GalleryImage,
+    ): Promise<void> {
+        const confirmed =
+            window.confirm(
+                "Permanently delete this gallery image? The image file will also be removed. This action cannot be undone.",
+            );
+
+        if (
+            !confirmed
+        ) {
+            return;
+        }
+
+        clearMessages();
+
+        setGalleryActionId(
+            image.id,
+        );
+
+        try {
+            await deleteGalleryImage(
+                image.id,
+            );
+
+            setSuccess(
+                "Gallery image deleted permanently.",
             );
 
             await loadGallery();
@@ -2129,6 +2203,9 @@ export default function WebsiteReviewsPage() {
                                                                         <button
                                                                             type="button"
                                                                             className="wm-button wm-secondary"
+                                                                            disabled={
+                                                                                busy
+                                                                            }
                                                                             onClick={
                                                                                 () =>
                                                                                     openEdit(
@@ -2163,6 +2240,22 @@ export default function WebsiteReviewsPage() {
                                                                                     ? "Disable"
                                                                                     : "Enable"
                                                                             }
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            className="wm-button wm-delete"
+                                                                            disabled={
+                                                                                busy
+                                                                            }
+                                                                            onClick={
+                                                                                () =>
+                                                                                    void removeGalleryImage(
+                                                                                        image,
+                                                                                    )
+                                                                            }
+                                                                        >
+                                                                            Delete
                                                                         </button>
                                                                     </div>
                                                                 </div>

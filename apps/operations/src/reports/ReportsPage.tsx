@@ -3904,6 +3904,7 @@ export default function ReportsPage() {
                     ? (
                         <div
                             className="reports-alert"
+                            role="alert"
                         >
                             <span>
                                 {error}
@@ -3911,6 +3912,7 @@ export default function ReportsPage() {
 
                             <button
                                 type="button"
+                                aria-label="Dismiss error"
                                 onClick={
                                     () =>
                                         setError(
@@ -3979,6 +3981,7 @@ export default function ReportsPage() {
 
             <form
                 className="reports-filter-card"
+                aria-label="Report filters"
                 onSubmit={
                     submitFilters
                 }
@@ -4470,6 +4473,12 @@ export default function ReportsPage() {
                                         === tab.id
                                         ? "active"
                                         : ""
+                                }
+                                aria-current={
+                                    activeTab
+                                        === tab.id
+                                        ? "true"
+                                        : undefined
                                 }
                                 onClick={
                                     () =>

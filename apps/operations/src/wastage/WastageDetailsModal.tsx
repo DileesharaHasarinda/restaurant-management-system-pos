@@ -3,86 +3,52 @@ import type {
 } from "./types";
 
 interface WastageDetailsModalProps {
-    wastage:
-    WastageRecord;
-
-    onClose:
-    () => void;
+    wastage: WastageRecord;
+    onClose: () => void;
 }
 
 const money =
     new Intl.NumberFormat(
         "en-LK",
         {
-            style:
-                "currency",
-
-            currency:
-                "LKR",
-
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
-        }
+            style: "currency",
+            currency: "LKR",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        },
     );
 
 function formatDateTime(
-    value:
-        string | null
+    value: string | null,
 ): string {
-    if (
-        !value
-    ) {
+    if (!value) {
         return "—";
     }
 
-    const date =
-        new Date(
-            value
-        );
+    const date = new Date(value);
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
+    if (Number.isNaN(date.getTime())) {
         return value;
     }
 
     return new Intl.DateTimeFormat(
         "en-LK",
         {
-            year:
-                "numeric",
-
-            month:
-                "short",
-
-            day:
-                "2-digit",
-
-            hour:
-                "2-digit",
-
-            minute:
-                "2-digit",
-        }
-    ).format(
-        date
-    );
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        },
+    ).format(date);
 }
 
-function quantityText(
-    value: number
-): string {
+function quantityText(value: number): string {
     return value.toLocaleString(
         "en-LK",
         {
-            maximumFractionDigits:
-                4,
-        }
+            maximumFractionDigits: 4,
+        },
     );
 }
 
@@ -96,6 +62,7 @@ export default function WastageDetailsModal({
                 className="wastage-modal wastage-details-modal"
                 role="dialog"
                 aria-modal="true"
+                aria-label={`Wastage details ${wastage.wastage_number}`}
             >
                 <div className="wastage-modal-header">
                     <div>
@@ -103,17 +70,11 @@ export default function WastageDetailsModal({
                             Wastage Details
                         </div>
 
-                        <h2>
-                            {
-                                wastage.wastage_number
-                            }
-                        </h2>
+                        <h2>{wastage.wastage_number}</h2>
 
                         <p>
-                            {
-                                wastage.ingredient?.name
-                                ?? "Unknown ingredient"
-                            }
+                            {wastage.ingredient?.name ??
+                                "Unknown ingredient"}
                         </p>
                     </div>
 
@@ -121,6 +82,7 @@ export default function WastageDetailsModal({
                         type="button"
                         className="wastage-icon-button"
                         onClick={onClose}
+                        aria-label="Close details"
                     >
                         ×
                     </button>
@@ -129,199 +91,116 @@ export default function WastageDetailsModal({
                 <div className="wastage-modal-body">
                     <section className="wastage-details-summary">
                         <article>
-                            <span>
-                                Status
-                            </span>
+                            <span>Status</span>
+                            <strong>{wastage.status}</strong>
+                        </article>
 
+                        <article>
+                            <span>Wasted At</span>
                             <strong>
-                                {
-                                    wastage.status
-                                }
+                                {formatDateTime(
+                                    wastage.wasted_at,
+                                )}
                             </strong>
                         </article>
 
                         <article>
-                            <span>
-                                Wasted At
-                            </span>
-
+                            <span>Reason</span>
                             <strong>
-                                {
-                                    formatDateTime(
-                                        wastage.wasted_at
-                                    )
-                                }
+                                {wastage.reason_label}
                             </strong>
                         </article>
 
                         <article>
-                            <span>
-                                Reason
-                            </span>
-
+                            <span>Estimated Cost</span>
                             <strong>
-                                {
-                                    wastage.reason_label
-                                }
-                            </strong>
-                        </article>
-
-                        <article>
-                            <span>
-                                Estimated Cost
-                            </span>
-
-                            <strong>
-                                {
-                                    money.format(
-                                        wastage.estimated_cost
-                                    )
-                                }
+                                {money.format(
+                                    wastage.estimated_cost,
+                                )}
                             </strong>
                         </article>
                     </section>
 
                     <section className="wastage-details-grid">
                         <article>
-                            <span>
-                                Ingredient
-                            </span>
-
+                            <span>Ingredient</span>
                             <strong>
-                                {
-                                    wastage.ingredient?.name
-                                    ?? "—"
-                                }
+                                {wastage.ingredient?.name ??
+                                    "—"}
                             </strong>
-
                             <small>
-                                {
-                                    wastage.ingredient?.sku
-                                    ?? "No SKU"
-                                }
+                                {wastage.ingredient?.sku ??
+                                    "No SKU"}
                             </small>
                         </article>
 
                         <article>
-                            <span>
-                                Entered Quantity
-                            </span>
-
+                            <span>Entered Quantity</span>
                             <strong>
-                                {
-                                    quantityText(
-                                        wastage.entered_quantity.quantity
-                                    )
-                                }
-
-                                {" "}
-
-                                {
-                                    wastage.entered_quantity.unit?.symbol
-                                    ?? ""
-                                }
+                                {quantityText(
+                                    wastage.entered_quantity
+                                        .quantity,
+                                )}{" "}
+                                {wastage.entered_quantity
+                                    .unit?.symbol ?? ""}
                             </strong>
                         </article>
 
                         <article>
-                            <span>
-                                Base Quantity
-                            </span>
-
+                            <span>Base Quantity</span>
                             <strong>
-                                {
-                                    quantityText(
-                                        wastage.base_quantity
-                                    )
-                                }
-
-                                {" "}
-
-                                {
-                                    wastage.ingredient?.base_unit?.symbol
-                                    ?? ""
-                                }
+                                {quantityText(
+                                    wastage.base_quantity,
+                                )}{" "}
+                                {wastage.ingredient?.base_unit
+                                    ?.symbol ?? ""}
                             </strong>
                         </article>
 
                         <article>
-                            <span>
-                                Current Stock
-                            </span>
-
+                            <span>Current Stock</span>
                             <strong>
-                                {
-                                    wastage.ingredient
-                                        ? quantityText(
-                                            wastage.ingredient.current_stock
-                                        )
-                                        : "—"
-                                }
-
-                                {" "}
-
-                                {
-                                    wastage.ingredient?.base_unit?.symbol
-                                    ?? ""
-                                }
+                                {wastage.ingredient
+                                    ? quantityText(
+                                        wastage.ingredient
+                                            .current_stock,
+                                    )
+                                    : "—"}{" "}
+                                {wastage.ingredient?.base_unit
+                                    ?.symbol ?? ""}
                             </strong>
                         </article>
                     </section>
 
-                    {
-                        wastage.reason
-                        && (
-                            <section className="wastage-note-box">
-                                <span>
-                                    Description
-                                </span>
-
-                                <p>
-                                    {
-                                        wastage.reason
-                                    }
-                                </p>
-                            </section>
-                        )
-                    }
+                    {wastage.reason && (
+                        <section className="wastage-note-box">
+                            <span>Description</span>
+                            <p>{wastage.reason}</p>
+                        </section>
+                    )}
 
                     <section className="wastage-record-meta">
                         <div>
-                            <span>
-                                Recorded By
-                            </span>
-
+                            <span>Recorded By</span>
                             <strong>
-                                {
-                                    wastage.created_by?.name
-                                    ?? "—"
-                                }
+                                {wastage.created_by?.name ??
+                                    "—"}
                             </strong>
                         </div>
 
                         <div>
-                            <span>
-                                Business Day ID
-                            </span>
-
+                            <span>Business Day ID</span>
                             <strong>
-                                {
-                                    wastage.business_day_id
-                                }
+                                {wastage.business_day_id}
                             </strong>
                         </div>
 
                         <div>
-                            <span>
-                                Created
-                            </span>
-
+                            <span>Created</span>
                             <strong>
-                                {
-                                    formatDateTime(
-                                        wastage.created_at
-                                    )
-                                }
+                                {formatDateTime(
+                                    wastage.created_at,
+                                )}
                             </strong>
                         </div>
                     </section>

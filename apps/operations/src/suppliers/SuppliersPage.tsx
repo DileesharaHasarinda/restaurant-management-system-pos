@@ -38,37 +38,22 @@ import "./SuppliersPage.css";
 |--------------------------------------------------------------------------
 */
 
-const EMPTY_PAGINATION:
-    SupplierPagination = {
-    current_page:
-        1,
-
-    per_page:
-        30,
-
-    total:
-        0,
-
-    last_page:
-        1,
+const EMPTY_PAGINATION: SupplierPagination = {
+    current_page: 1,
+    per_page: 30,
+    total: 0,
+    last_page: 1,
 };
 
 const money =
     new Intl.NumberFormat(
         "en-LK",
         {
-            style:
-                "currency",
-
-            currency:
-                "LKR",
-
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
-        }
+            style: "currency",
+            currency: "LKR",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        },
     );
 
 /*
@@ -77,15 +62,8 @@ const money =
 |--------------------------------------------------------------------------
 */
 
-function errorMessage(
-    error:
-        unknown
-): string {
-    if (
-        error instanceof Error
-        &&
-        error.message
-    ) {
+function errorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
         return error.message;
     }
 
@@ -93,43 +71,26 @@ function errorMessage(
 }
 
 function formatDate(
-    value:
-        string | null
+    value: string | null,
 ): string {
-    if (
-        !value
-    ) {
+    if (!value) {
         return "—";
     }
 
-    const date =
-        new Date(
-            value
-        );
+    const date = new Date(value);
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
+    if (Number.isNaN(date.getTime())) {
         return "—";
     }
 
     return new Intl.DateTimeFormat(
         "en-LK",
         {
-            year:
-                "numeric",
-
-            month:
-                "short",
-
-            day:
-                "2-digit",
-        }
-    ).format(
-        date
-    );
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+        },
+    ).format(date);
 }
 
 /*
@@ -139,264 +100,89 @@ function formatDate(
 */
 
 export default function SuppliersPage() {
-    const {
-        hasPermission,
-    } =
-        useAuth();
+    const { hasPermission } = useAuth();
 
-    const canManage =
-        hasPermission(
-            "suppliers.manage"
-        );
+    const canManage = hasPermission("suppliers.manage");
 
-    /*
-    |--------------------------------------------------------------------------
-    | Suppliers
-    |--------------------------------------------------------------------------
-    */
+    const [suppliers, setSuppliers] =
+        useState<Supplier[]>([]);
 
-    const [
-        suppliers,
-        setSuppliers,
-    ] =
-        useState<
-            Supplier[]
-        >(
-            []
-        );
+    const [pagination, setPagination] =
+        useState(EMPTY_PAGINATION);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pagination
-    |--------------------------------------------------------------------------
-    */
+    const [page, setPage] = useState(1);
 
-    const [
-        pagination,
-        setPagination,
-    ] =
-        useState(
-            EMPTY_PAGINATION
-        );
+    const [searchDraft, setSearchDraft] = useState("");
+    const [search, setSearch] = useState("");
 
-    const [
-        page,
-        setPage,
-    ] =
-        useState(
-            1
-        );
+    const [activeFilter, setActiveFilter] =
+        useState<boolean | null>(null);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Search / Filters
-    |--------------------------------------------------------------------------
-    */
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const [
-        searchDraft,
-        setSearchDraft,
-    ] =
-        useState(
-            ""
-        );
+    const [busySupplierId, setBusySupplierId] =
+        useState<number | null>(null);
 
-    const [
-        search,
-        setSearch,
-    ] =
-        useState(
-            ""
-        );
+    const [error, setError] = useState("");
+    const [message, setMessage] = useState("");
 
-    const [
-        activeFilter,
-        setActiveFilter,
-    ] =
-        useState<
-            boolean
-            |
-            null
-        >(
-            null
-        );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Loading / State
-    |--------------------------------------------------------------------------
-    */
-
-    const [
-        loading,
-        setLoading,
-    ] =
-        useState(
-            true
-        );
-
-    const [
-        refreshing,
-        setRefreshing,
-    ] =
-        useState(
-            false
-        );
-
-    const [
-        busySupplierId,
-        setBusySupplierId,
-    ] =
-        useState<
-            number
-            |
-            null
-        >(
-            null
-        );
-
-    const [
-        error,
-        setError,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        message,
-        setMessage,
-    ] =
-        useState(
-            ""
-        );
-
-    /*
-     * undefined = modal closed
-     * null      = create
-     * Supplier  = edit
-     */
-    const [
-        editingSupplier,
-        setEditingSupplier,
-    ] =
-        useState<
-            Supplier
-            |
-            null
-            |
-            undefined
-        >(
-            undefined
-        );
+    const [editingSupplier, setEditingSupplier] =
+        useState<Supplier | null | undefined>(undefined);
 
     /*
     |--------------------------------------------------------------------------
     | Data Loading
     |--------------------------------------------------------------------------
-    |
-    | silent = true:
-    |
-    | Used by realtime reconciliation.
-    |
-    | It keeps the existing supplier page visible and avoids interfering
-    | with the normal loading state while Laravel REST is queried again.
-    |--------------------------------------------------------------------------
     */
 
-    const loadSuppliers =
-        useCallback(
-            async (
-                silent:
-                    boolean = false
-            ): Promise<void> => {
-                try {
-                    const result =
-                        await getSuppliers({
-                            page,
+    const loadSuppliers = useCallback(
+        async (silent: boolean = false): Promise<void> => {
+            try {
+                const result = await getSuppliers({
+                    page,
+                    search,
+                    isActive: activeFilter,
+                    perPage: 30,
+                });
 
-                            search,
-
-                            isActive:
-                                activeFilter,
-
-                            perPage:
-                                30,
-                        });
-
-                    setSuppliers(
-                        result.suppliers
+                setSuppliers(result.suppliers);
+                setPagination(result.pagination);
+            } catch (caught) {
+                if (silent) {
+                    console.error(
+                        "Unable to reconcile realtime supplier data.",
+                        caught,
                     );
 
-                    setPagination(
-                        result.pagination
-                    );
-                } catch (
-                caught
-                ) {
-                    if (
-                        silent
-                    ) {
-                        console.error(
-                            "Unable to reconcile realtime supplier data.",
-                            caught
-                        );
-
-                        return;
-                    }
-
-                    setError(
-                        errorMessage(
-                            caught
-                        )
-                    );
-                } finally {
-                    if (
-                        !silent
-                    ) {
-                        setLoading(
-                            false
-                        );
-                    }
+                    return;
                 }
-            },
-            [
-                page,
-                search,
-                activeFilter,
-            ]
-        );
+
+                setError(errorMessage(caught));
+            } finally {
+                if (!silent) {
+                    setLoading(false);
+                }
+            }
+        },
+        [page, search, activeFilter],
+    );
 
     /*
     |--------------------------------------------------------------------------
     | Initial / Filter Loading
     |--------------------------------------------------------------------------
-    |
-    | Deferred invocation keeps Oxlint's set-state-in-effect rule clean while
-    | still synchronizing this page with the API.
-    |--------------------------------------------------------------------------
     */
 
-    useEffect(
-        () => {
-            const timeoutId =
-                window.setTimeout(
-                    () => {
-                        void loadSuppliers();
-                    },
-                    0
-                );
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            void loadSuppliers();
+        }, 0);
 
-            return () => {
-                window.clearTimeout(
-                    timeoutId
-                );
-            };
-        },
-        [
-            loadSuppliers,
-        ]
-    );
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [loadSuppliers]);
 
     /*
     |--------------------------------------------------------------------------
@@ -404,42 +190,25 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const activeOnPage =
-        useMemo(
-            () =>
-                suppliers.filter(
-                    (
-                        supplier
-                    ) =>
-                        supplier.is_active
-                ).length,
-            [
-                suppliers,
-            ]
-        );
+    const activeOnPage = useMemo(
+        () =>
+            suppliers.filter(
+                (supplier) => supplier.is_active,
+            ).length,
+        [suppliers],
+    );
 
-    const inactiveOnPage =
-        suppliers.length
-        -
-        activeOnPage;
+    const inactiveOnPage = suppliers.length - activeOnPage;
 
-    const visibleOutstanding =
-        useMemo(
-            () =>
-                suppliers.reduce(
-                    (
-                        total,
-                        supplier
-                    ) =>
-                        total
-                        +
-                        supplier.current_balance,
-                    0
-                ),
-            [
-                suppliers,
-            ]
-        );
+    const visibleOutstanding = useMemo(
+        () =>
+            suppliers.reduce(
+                (total, supplier) =>
+                    total + supplier.current_balance,
+                0,
+            ),
+        [suppliers],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -447,97 +216,38 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const submitSearch =
-        (
-            event:
-                FormEvent
-        ): void => {
-            event.preventDefault();
+    const submitSearch = (event: FormEvent): void => {
+        event.preventDefault();
 
-            const value =
-                searchDraft.trim();
+        const value = searchDraft.trim();
 
-            setError(
-                ""
-            );
+        setError("");
+        setMessage("");
+        setLoading(true);
 
-            setMessage(
-                ""
-            );
+        if (value === search && page === 1) {
+            void loadSuppliers();
+            return;
+        }
 
-            setLoading(
-                true
-            );
+        setPage(1);
+        setSearch(value);
+    };
 
-            if (
-                value
-                ===
-                search
-                &&
-                page
-                ===
-                1
-            ) {
-                void loadSuppliers();
+    const clearSearch = (): void => {
+        setError("");
+        setMessage("");
+        setSearchDraft("");
+        setLoading(true);
 
-                return;
-            }
+        if (search === "" && page === 1) {
+            void loadSuppliers();
+            return;
+        }
 
-            setPage(
-                1
-            );
-
-            setSearch(
-                value
-            );
-        };
-
-    /*
-    |--------------------------------------------------------------------------
-    | Clear Search
-    |--------------------------------------------------------------------------
-    */
-
-    const clearSearch =
-        (): void => {
-            setError(
-                ""
-            );
-
-            setMessage(
-                ""
-            );
-
-            setSearchDraft(
-                ""
-            );
-
-            setLoading(
-                true
-            );
-
-            if (
-                search
-                ===
-                ""
-                &&
-                page
-                ===
-                1
-            ) {
-                void loadSuppliers();
-
-                return;
-            }
-
-            setSearch(
-                ""
-            );
-
-            setPage(
-                1
-            );
-        };
+        setSearch("");
+        setPage(1);
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -545,45 +255,21 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const changeActiveFilter =
-        (
-            value:
-                boolean | null
-        ): void => {
-            setError(
-                ""
-            );
+    const changeActiveFilter = (
+        value: boolean | null,
+    ): void => {
+        setError("");
+        setMessage("");
+        setLoading(true);
 
-            setMessage(
-                ""
-            );
+        if (value === activeFilter && page === 1) {
+            void loadSuppliers();
+            return;
+        }
 
-            setLoading(
-                true
-            );
-
-            if (
-                value
-                ===
-                activeFilter
-                &&
-                page
-                ===
-                1
-            ) {
-                void loadSuppliers();
-
-                return;
-            }
-
-            setActiveFilter(
-                value
-            );
-
-            setPage(
-                1
-            );
-        };
+        setActiveFilter(value);
+        setPage(1);
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -591,30 +277,20 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const refresh =
-        async (): Promise<void> => {
-            if (
-                refreshing
-            ) {
-                return;
-            }
+    const refresh = async (): Promise<void> => {
+        if (refreshing) {
+            return;
+        }
 
-            setRefreshing(
-                true
-            );
+        setRefreshing(true);
+        setError("");
 
-            setError(
-                ""
-            );
-
-            try {
-                await loadSuppliers();
-            } finally {
-                setRefreshing(
-                    false
-                );
-            }
-        };
+        try {
+            await loadSuppliers();
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -622,133 +298,78 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const saveSupplier =
-        async (
-            submission:
-                SupplierEditorSubmission
-        ): Promise<void> => {
-            setError(
-                ""
+    const saveSupplier = async (
+        submission: SupplierEditorSubmission,
+    ): Promise<void> => {
+        setError("");
+        setMessage("");
+
+        if (editingSupplier === undefined) {
+            throw new Error(
+                "No supplier editor is currently open.",
             );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create
+        |--------------------------------------------------------------------------
+        */
+
+        if (editingSupplier === null) {
+            const created = await createSupplier({
+                name: submission.name,
+                phone: submission.phone,
+                email: submission.email,
+                address: submission.address,
+                notes: submission.notes,
+                is_active: submission.is_active,
+            });
+
+            setEditingSupplier(undefined);
 
             setMessage(
-                ""
+                `${created.supplier_code} — ${created.name} created successfully.`,
             );
 
-            if (
-                editingSupplier
-                ===
-                undefined
-            ) {
-                throw new Error(
-                    "No supplier editor is currently open."
-                );
+            setLoading(true);
+
+            if (page !== 1) {
+                setPage(1);
+            } else {
+                await loadSuppliers();
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Create
-            |--------------------------------------------------------------------------
-            */
+            return;
+        }
 
-            if (
-                editingSupplier
-                ===
-                null
-            ) {
-                const created =
-                    await createSupplier({
-                        name:
-                            submission.name,
+        /*
+        |--------------------------------------------------------------------------
+        | Update
+        |--------------------------------------------------------------------------
+        */
 
-                        phone:
-                            submission.phone,
+        const updated = await updateSupplier(
+            editingSupplier.id,
+            {
+                name: submission.name,
+                phone: submission.phone,
+                email: submission.email,
+                address: submission.address,
+                notes: submission.notes,
+            },
+        );
 
-                        email:
-                            submission.email,
+        setEditingSupplier(undefined);
 
-                        address:
-                            submission.address,
+        setMessage(
+            `${updated.supplier_code} — ${updated.name} updated successfully.`,
+        );
 
-                        notes:
-                            submission.notes,
+        setLoading(true);
 
-                        is_active:
-                            submission.is_active,
-                    });
-
-                setEditingSupplier(
-                    undefined
-                );
-
-                setMessage(
-                    `${created.supplier_code} — ${created.name} created successfully.`
-                );
-
-                setLoading(
-                    true
-                );
-
-                /*
-                 * Newly created suppliers should be easy to locate.
-                 * Return to the first page.
-                 */
-                if (
-                    page
-                    !==
-                    1
-                ) {
-                    setPage(
-                        1
-                    );
-                } else {
-                    await loadSuppliers();
-                }
-
-                return;
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Update
-            |--------------------------------------------------------------------------
-            */
-
-            const updated =
-                await updateSupplier(
-                    editingSupplier.id,
-                    {
-                        name:
-                            submission.name,
-
-                        phone:
-                            submission.phone,
-
-                        email:
-                            submission.email,
-
-                        address:
-                            submission.address,
-
-                        notes:
-                            submission.notes,
-                    }
-                );
-
-            setEditingSupplier(
-                undefined
-            );
-
-            setMessage(
-                `${updated.supplier_code} — ${updated.name} updated successfully.`
-            );
-
-            setLoading(
-                true
-            );
-
-            await loadSuppliers();
-        };
+        await loadSuppliers();
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -756,81 +377,54 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const toggleStatus =
-        async (
-            supplier:
-                Supplier
-        ): Promise<void> => {
-            if (
-                !canManage
-                ||
-                busySupplierId
-                !==
-                null
-            ) {
-                return;
-            }
+    const toggleStatus = async (
+        supplier: Supplier,
+    ): Promise<void> => {
+        if (
+            !canManage ||
+            busySupplierId !== null
+        ) {
+            return;
+        }
 
-            const nextStatus =
-                !supplier.is_active;
+        const nextStatus = !supplier.is_active;
 
-            const confirmed =
-                window.confirm(
-                    nextStatus
-                        ? `Activate supplier "${supplier.name}"?`
-                        : `Deactivate supplier "${supplier.name}"?`
-                );
+        const confirmed = window.confirm(
+            nextStatus
+                ? `Activate supplier "${supplier.name}"?`
+                : `Deactivate supplier "${supplier.name}"?`,
+        );
 
-            if (
-                !confirmed
-            ) {
-                return;
-            }
+        if (!confirmed) {
+            return;
+        }
 
-            setBusySupplierId(
-                supplier.id
-            );
+        setBusySupplierId(supplier.id);
+        setError("");
+        setMessage("");
 
-            setError(
-                ""
+        try {
+            const updated = await updateSupplierStatus(
+                supplier.id,
+                {
+                    is_active: nextStatus,
+                },
             );
 
             setMessage(
-                ""
+                `${updated.supplier_code} — ${updated.name} ${updated.is_active
+                    ? "activated"
+                    : "deactivated"
+                } successfully.`,
             );
 
-            try {
-                const updated =
-                    await updateSupplierStatus(
-                        supplier.id,
-                        {
-                            is_active:
-                                nextStatus,
-                        }
-                    );
-
-                setMessage(
-                    `${updated.supplier_code} — ${updated.name} ${updated.is_active
-                        ? "activated"
-                        : "deactivated"
-                    } successfully.`
-                );
-
-                await loadSuppliers();
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            } finally {
-                setBusySupplierId(
-                    null
-                );
-            }
-        };
+            await loadSuppliers();
+        } catch (caught) {
+            setError(errorMessage(caught));
+        } finally {
+            setBusySupplierId(null);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -838,108 +432,35 @@ export default function SuppliersPage() {
     |--------------------------------------------------------------------------
     */
 
-    const previousPage =
-        (): void => {
-            if (
-                page
-                <=
-                1
-                ||
-                loading
-            ) {
-                return;
-            }
+    const previousPage = (): void => {
+        if (page <= 1 || loading) {
+            return;
+        }
 
-            setLoading(
-                true
-            );
+        setLoading(true);
+        setPage((current) => Math.max(1, current - 1));
+    };
 
-            setPage(
-                (
-                    current
-                ) =>
-                    Math.max(
-                        1,
-                        current
-                        -
-                        1
-                    )
-            );
-        };
+    const nextPage = (): void => {
+        if (page >= pagination.last_page || loading) {
+            return;
+        }
 
-    const nextPage =
-        (): void => {
-            if (
-                page
-                >=
-                pagination.last_page
-                ||
-                loading
-            ) {
-                return;
-            }
-
-            setLoading(
-                true
-            );
-
-            setPage(
-                (
-                    current
-                ) =>
-                    current
-                    +
-                    1
-            );
-        };
+        setLoading(true);
+        setPage((current) => current + 1);
+    };
 
     /*
     |--------------------------------------------------------------------------
     | Realtime Reconciliation
     |--------------------------------------------------------------------------
-    |
-    | Supplier data can change through multiple business workflows:
-    |
-    | suppliers
-    |   - supplier created
-    |   - supplier edited
-    |   - supplier activated/deactivated
-    |
-    | purchases
-    |   - a completed purchase increases supplier outstanding balance
-    |
-    | supplier_payments
-    |   - supplier payments reduce outstanding balance
-    |
-    | Reverb is used only as an invalidation signal. Laravel remains the
-    | authoritative source for supplier balances and supplier master data.
-    |
-    | The refresh is silent:
-    |
-    | - no page reload
-    | - no loading flash
-    | - no Refresh button spinner
-    | - filters stay in place
-    | - pagination stays in place
-    | - an open SupplierFormModal is not replaced
-    |
-    | Not replacing editingSupplier is intentional because automatically
-    | replacing it could destroy unsaved supplier details being entered by
-    | the manager.
-    |--------------------------------------------------------------------------
     */
 
     useStaffRealtimeRefresh(
-        [
-            "suppliers",
-            "purchases",
-            "supplier_payments",
-        ],
+        ["suppliers", "purchases", "supplier_payments"],
         async () => {
-            await loadSuppliers(
-                true
-            );
-        }
+            await loadSuppliers(true);
+        },
     );
 
     /*
@@ -950,26 +471,19 @@ export default function SuppliersPage() {
 
     return (
         <div className="suppliers-page">
-            {/*
-            |--------------------------------------------------------------------------
-            | Header
-            |--------------------------------------------------------------------------
-            */}
-
             <header className="suppliers-page-header">
                 <div>
                     <div className="suppliers-eyebrow">
                         Purchasing
                     </div>
 
-                    <h1>
-                        Suppliers
-                    </h1>
+                    <h1>Suppliers</h1>
 
                     <p>
-                        Maintain supplier master records and monitor authoritative
-                        outstanding balances used by purchasing and supplier payment
-                        workflows.
+                        Maintain supplier master records and
+                        monitor authoritative outstanding
+                        balances used by purchasing and
+                        supplier payment workflows.
                     </p>
                 </div>
 
@@ -977,206 +491,112 @@ export default function SuppliersPage() {
                     <button
                         type="button"
                         className="suppliers-button suppliers-button-secondary"
-                        onClick={
-                            () =>
-                                void refresh()
-                        }
-                        disabled={
-                            refreshing
-                        }
+                        onClick={() => {
+                            void refresh();
+                        }}
+                        disabled={refreshing}
                     >
-                        {
-                            refreshing
-                                ? "Refreshing..."
-                                : "Refresh"
-                        }
+                        {refreshing
+                            ? "Refreshing..."
+                            : "Refresh"}
                     </button>
 
-                    {
-                        canManage
-                        && (
-                            <button
-                                type="button"
-                                className="suppliers-button suppliers-button-primary"
-                                onClick={
-                                    () =>
-                                        setEditingSupplier(
-                                            null
-                                        )
-                                }
-                            >
-                                + Add Supplier
-                            </button>
-                        )
-                    }
+                    {canManage && (
+                        <button
+                            type="button"
+                            className="suppliers-button suppliers-button-primary"
+                            onClick={() =>
+                                setEditingSupplier(null)
+                            }
+                        >
+                            + Add Supplier
+                        </button>
+                    )}
                 </div>
             </header>
 
-            {/*
-            |--------------------------------------------------------------------------
-            | Error
-            |--------------------------------------------------------------------------
-            */}
+            {error && (
+                <div
+                    className="suppliers-alert suppliers-alert-error"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
 
-            {
-                error
-                && (
-                    <div className="suppliers-alert suppliers-alert-error">
-                        {
-                            error
-                        }
-                    </div>
-                )
-            }
+            {message && (
+                <div
+                    className="suppliers-alert suppliers-alert-success"
+                    role="status"
+                >
+                    {message}
+                </div>
+            )}
 
-            {/*
-            |--------------------------------------------------------------------------
-            | Success
-            |--------------------------------------------------------------------------
-            */}
+            {!canManage && (
+                <div className="suppliers-alert suppliers-alert-info">
+                    Your account has read-only supplier
+                    access. Creating, editing, activating
+                    and deactivating suppliers requires{" "}
+                    <strong>suppliers.manage</strong>.
+                </div>
+            )}
 
-            {
-                message
-                && (
-                    <div className="suppliers-alert suppliers-alert-success">
-                        {
-                            message
-                        }
-                    </div>
-                )
-            }
-
-            {/*
-            |--------------------------------------------------------------------------
-            | Read-only Information
-            |--------------------------------------------------------------------------
-            */}
-
-            {
-                !canManage
-                && (
-                    <div className="suppliers-alert suppliers-alert-info">
-                        Your account has read-only supplier access. Creating, editing,
-                        activating and deactivating suppliers requires
-                        <strong>
-                            {" "}
-                            suppliers.manage
-                        </strong>
-                        .
-                    </div>
-                )
-            }
-
-            {/*
-            |--------------------------------------------------------------------------
-            | Summary
-            |--------------------------------------------------------------------------
-            */}
+            {/* ============================================
+                SUMMARY
+                ============================================ */}
 
             <section className="suppliers-summary-grid">
                 <article className="suppliers-summary-card">
-                    <span>
-                        Suppliers
-                    </span>
-
-                    <strong>
-                        {
-                            pagination.total
-                        }
-                    </strong>
-
-                    <small>
-                        Matching current filters
-                    </small>
+                    <span>Suppliers</span>
+                    <strong>{pagination.total}</strong>
+                    <small>Matching current filters</small>
                 </article>
 
                 <article className="suppliers-summary-card">
-                    <span>
-                        Active on Page
-                    </span>
-
-                    <strong>
-                        {
-                            activeOnPage
-                        }
-                    </strong>
-
-                    <small>
-                        Currently visible active records
-                    </small>
+                    <span>Active on Page</span>
+                    <strong>{activeOnPage}</strong>
+                    <small>Currently visible active records</small>
                 </article>
 
                 <article className="suppliers-summary-card">
-                    <span>
-                        Inactive on Page
-                    </span>
-
-                    <strong>
-                        {
-                            inactiveOnPage
-                        }
-                    </strong>
-
+                    <span>Inactive on Page</span>
+                    <strong>{inactiveOnPage}</strong>
                     <small>
                         Currently visible inactive records
                     </small>
                 </article>
 
                 <article className="suppliers-summary-card">
-                    <span>
-                        Visible Outstanding
-                    </span>
-
+                    <span>Visible Outstanding</span>
                     <strong className="suppliers-summary-money">
-                        {
-                            money.format(
-                                visibleOutstanding
-                            )
-                        }
+                        {money.format(visibleOutstanding)}
                     </strong>
-
                     <small>
                         Balance for suppliers on this page
                     </small>
                 </article>
             </section>
 
-            {/*
-            |--------------------------------------------------------------------------
-            | Main Panel
-            |--------------------------------------------------------------------------
-            */}
+            {/* ============================================
+                MAIN PANEL
+                ============================================ */}
 
             <section className="suppliers-panel">
                 <div className="suppliers-panel-header">
-                    {/*
-                    |--------------------------------------------------------------------------
-                    | Search
-                    |--------------------------------------------------------------------------
-                    */}
-
                     <form
                         className="suppliers-search"
-                        onSubmit={
-                            submitSearch
-                        }
+                        onSubmit={submitSearch}
                     >
                         <input
                             type="search"
-                            value={
-                                searchDraft
-                            }
-                            maxLength={
-                                150
-                            }
+                            value={searchDraft}
+                            maxLength={150}
                             placeholder="Search name, phone or email..."
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setSearchDraft(
-                                        event.target.value
-                                    )
+                            onChange={(event) =>
+                                setSearchDraft(
+                                    event.target.value,
+                                )
                             }
                         />
 
@@ -1187,43 +607,27 @@ export default function SuppliersPage() {
                             Search
                         </button>
 
-                        {
-                            search
-                            && (
-                                <button
-                                    type="button"
-                                    className="suppliers-button suppliers-button-secondary"
-                                    onClick={
-                                        clearSearch
-                                    }
-                                >
-                                    Clear
-                                </button>
-                            )
-                        }
+                        {search && (
+                            <button
+                                type="button"
+                                className="suppliers-button suppliers-button-secondary"
+                                onClick={clearSearch}
+                            >
+                                Clear
+                            </button>
+                        )}
                     </form>
-
-                    {/*
-                    |--------------------------------------------------------------------------
-                    | Status Filters
-                    |--------------------------------------------------------------------------
-                    */}
 
                     <div className="suppliers-filter-group">
                         <button
                             type="button"
                             className={
-                                activeFilter
-                                    ===
-                                    null
+                                activeFilter === null
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
-                            onClick={
-                                () =>
-                                    changeActiveFilter(
-                                        null
-                                    )
+                            onClick={() =>
+                                changeActiveFilter(null)
                             }
                         >
                             All
@@ -1232,17 +636,12 @@ export default function SuppliersPage() {
                         <button
                             type="button"
                             className={
-                                activeFilter
-                                    ===
-                                    true
+                                activeFilter === true
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
-                            onClick={
-                                () =>
-                                    changeActiveFilter(
-                                        true
-                                    )
+                            onClick={() =>
+                                changeActiveFilter(true)
                             }
                         >
                             Active
@@ -1251,17 +650,12 @@ export default function SuppliersPage() {
                         <button
                             type="button"
                             className={
-                                activeFilter
-                                    ===
-                                    false
+                                activeFilter === false
                                     ? "suppliers-filter suppliers-filter-active"
                                     : "suppliers-filter"
                             }
-                            onClick={
-                                () =>
-                                    changeActiveFilter(
-                                        false
-                                    )
+                            onClick={() =>
+                                changeActiveFilter(false)
                             }
                         >
                             Inactive
@@ -1269,433 +663,253 @@ export default function SuppliersPage() {
                     </div>
                 </div>
 
-                {/*
-                |--------------------------------------------------------------------------
-                | Supplier Records
-                |--------------------------------------------------------------------------
-                */}
+                {loading ? (
+                    <div className="suppliers-loading">
+                        Loading suppliers...
+                    </div>
+                ) : suppliers.length === 0 ? (
+                    <div className="suppliers-empty">
+                        <strong>No suppliers found</strong>
 
-                {
-                    loading
-                        ? (
-                            <div className="suppliers-loading">
-                                Loading suppliers...
-                            </div>
-                        )
-                        : suppliers.length
-                            ===
-                            0
-                            ? (
-                                <div className="suppliers-empty">
-                                    <strong>
-                                        No suppliers found
-                                    </strong>
+                        <p>
+                            Adjust the search or status filter
+                            and try again.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="suppliers-table-wrap">
+                        <table className="suppliers-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier</th>
+                                    <th>Contact</th>
+                                    <th>Address</th>
+                                    <th>Outstanding</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
 
-                                    <p>
-                                        Adjust the search or status filter and try again.
-                                    </p>
-                                </div>
-                            )
-                            : (
-                                <div className="suppliers-table-wrap">
-                                    <table className="suppliers-table">
-                                        <thead>
-                                            <tr>
-                                                <th>
-                                                    Supplier
-                                                </th>
+                                    {canManage && (
+                                        <th className="suppliers-actions-heading">
+                                            Actions
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
 
-                                                <th>
-                                                    Contact
-                                                </th>
+                            <tbody>
+                                {suppliers.map((supplier) => (
+                                    <tr key={supplier.id}>
+                                        <td>
+                                            <div className="suppliers-name-cell">
+                                                <strong>
+                                                    {supplier.name}
+                                                </strong>
 
-                                                <th>
-                                                    Address
-                                                </th>
+                                                <span>
+                                                    {
+                                                        supplier.supplier_code
+                                                    }
+                                                </span>
 
-                                                <th>
-                                                    Outstanding
-                                                </th>
+                                                {supplier.notes && (
+                                                    <small
+                                                        title={
+                                                            supplier.notes
+                                                        }
+                                                    >
+                                                        {
+                                                            supplier.notes
+                                                        }
+                                                    </small>
+                                                )}
+                                            </div>
+                                        </td>
 
-                                                <th>
-                                                    Status
-                                                </th>
+                                        <td>
+                                            <div className="suppliers-contact-cell">
+                                                {supplier.phone ? (
+                                                    <a
+                                                        href={`tel:${supplier.phone}`}
+                                                    >
+                                                        {
+                                                            supplier.phone
+                                                        }
+                                                    </a>
+                                                ) : (
+                                                    <span>
+                                                        No phone
+                                                    </span>
+                                                )}
 
-                                                <th>
-                                                    Updated
-                                                </th>
+                                                {supplier.email ? (
+                                                    <a
+                                                        href={`mailto:${supplier.email}`}
+                                                    >
+                                                        {
+                                                            supplier.email
+                                                        }
+                                                    </a>
+                                                ) : (
+                                                    <span>
+                                                        No email
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
 
-                                                {
-                                                    canManage
-                                                    && (
-                                                        <th className="suppliers-actions-heading">
-                                                            Actions
-                                                        </th>
-                                                    )
+                                        <td>
+                                            <span className="suppliers-address">
+                                                {supplier.address ||
+                                                    "—"}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <strong
+                                                className={
+                                                    supplier.current_balance >
+                                                        0
+                                                        ? "suppliers-balance suppliers-balance-due"
+                                                        : "suppliers-balance"
                                                 }
-                                            </tr>
-                                        </thead>
+                                            >
+                                                {money.format(
+                                                    supplier.current_balance,
+                                                )}
+                                            </strong>
 
-                                        <tbody>
-                                            {
-                                                suppliers.map(
-                                                    (
-                                                        supplier
-                                                    ) => (
-                                                        <tr
-                                                            key={
-                                                                supplier.id
-                                                            }
-                                                        >
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Supplier
-                                                            |--------------------------------------------------------------------------
-                                                            */}
+                                            {supplier.current_balance >
+                                                0 && (
+                                                    <small className="suppliers-due-label">
+                                                        Outstanding
+                                                    </small>
+                                                )}
+                                        </td>
 
-                                                            <td>
-                                                                <div className="suppliers-name-cell">
-                                                                    <strong>
-                                                                        {
-                                                                            supplier.name
-                                                                        }
-                                                                    </strong>
+                                        <td>
+                                            <span
+                                                className={
+                                                    supplier.is_active
+                                                        ? "suppliers-badge suppliers-badge-success"
+                                                        : "suppliers-badge suppliers-badge-muted"
+                                                }
+                                            >
+                                                {supplier.is_active
+                                                    ? "Active"
+                                                    : "Inactive"}
+                                            </span>
+                                        </td>
 
-                                                                    <span>
-                                                                        {
-                                                                            supplier.supplier_code
-                                                                        }
-                                                                    </span>
+                                        <td>
+                                            {formatDate(
+                                                supplier.updated_at,
+                                            )}
+                                        </td>
 
-                                                                    {
-                                                                        supplier.notes
-                                                                        && (
-                                                                            <small
-                                                                                title={
-                                                                                    supplier.notes
-                                                                                }
-                                                                            >
-                                                                                {
-                                                                                    supplier.notes
-                                                                                }
-                                                                            </small>
-                                                                        )
-                                                                    }
-                                                                </div>
-                                                            </td>
+                                        {canManage && (
+                                            <td>
+                                                <div className="suppliers-row-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="suppliers-small-button"
+                                                        onClick={() =>
+                                                            setEditingSupplier(
+                                                                supplier,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            busySupplierId !==
+                                                            null
+                                                        }
+                                                    >
+                                                        Edit
+                                                    </button>
 
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Contact
-                                                            |--------------------------------------------------------------------------
-                                                            */}
+                                                    <button
+                                                        type="button"
+                                                        className={
+                                                            supplier.is_active
+                                                                ? "suppliers-small-button suppliers-small-button-danger"
+                                                                : "suppliers-small-button suppliers-small-button-success"
+                                                        }
+                                                        onClick={() => {
+                                                            void toggleStatus(
+                                                                supplier,
+                                                            );
+                                                        }}
+                                                        disabled={
+                                                            busySupplierId !==
+                                                            null
+                                                        }
+                                                    >
+                                                        {busySupplierId ===
+                                                            supplier.id
+                                                            ? "Updating..."
+                                                            : supplier.is_active
+                                                                ? "Deactivate"
+                                                                : "Activate"}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
-                                                            <td>
-                                                                <div className="suppliers-contact-cell">
-                                                                    {
-                                                                        supplier.phone
-                                                                            ? (
-                                                                                <a
-                                                                                    href={
-                                                                                        `tel:${supplier.phone}`
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        supplier.phone
-                                                                                    }
-                                                                                </a>
-                                                                            )
-                                                                            : (
-                                                                                <span>
-                                                                                    No phone
-                                                                                </span>
-                                                                            )
-                                                                    }
+                {pagination.last_page > 1 && (
+                    <div className="suppliers-pagination">
+                        <span>
+                            {pagination.total} suppliers
+                        </span>
 
-                                                                    {
-                                                                        supplier.email
-                                                                            ? (
-                                                                                <a
-                                                                                    href={
-                                                                                        `mailto:${supplier.email}`
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        supplier.email
-                                                                                    }
-                                                                                </a>
-                                                                            )
-                                                                            : (
-                                                                                <span>
-                                                                                    No email
-                                                                                </span>
-                                                                            )
-                                                                    }
-                                                                </div>
-                                                            </td>
-
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Address
-                                                            |--------------------------------------------------------------------------
-                                                            */}
-
-                                                            <td>
-                                                                <span className="suppliers-address">
-                                                                    {
-                                                                        supplier.address
-                                                                        ||
-                                                                        "—"
-                                                                    }
-                                                                </span>
-                                                            </td>
-
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Outstanding Balance
-                                                            |--------------------------------------------------------------------------
-                                                            */}
-
-                                                            <td>
-                                                                <strong
-                                                                    className={
-                                                                        supplier.current_balance
-                                                                            >
-                                                                            0
-                                                                            ? "suppliers-balance suppliers-balance-due"
-                                                                            : "suppliers-balance"
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        money.format(
-                                                                            supplier.current_balance
-                                                                        )
-                                                                    }
-                                                                </strong>
-
-                                                                {
-                                                                    supplier.current_balance
-                                                                    >
-                                                                    0
-                                                                    && (
-                                                                        <small className="suppliers-due-label">
-                                                                            Outstanding
-                                                                        </small>
-                                                                    )
-                                                                }
-                                                            </td>
-
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Status
-                                                            |--------------------------------------------------------------------------
-                                                            */}
-
-                                                            <td>
-                                                                <span
-                                                                    className={
-                                                                        supplier.is_active
-                                                                            ? "suppliers-badge suppliers-badge-success"
-                                                                            : "suppliers-badge suppliers-badge-muted"
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        supplier.is_active
-                                                                            ? "Active"
-                                                                            : "Inactive"
-                                                                    }
-                                                                </span>
-                                                            </td>
-
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Updated
-                                                            |--------------------------------------------------------------------------
-                                                            */}
-
-                                                            <td>
-                                                                {
-                                                                    formatDate(
-                                                                        supplier.updated_at
-                                                                    )
-                                                                }
-                                                            </td>
-
-                                                            {/*
-                                                            |--------------------------------------------------------------------------
-                                                            | Actions
-                                                            |--------------------------------------------------------------------------
-                                                            */}
-
-                                                            {
-                                                                canManage
-                                                                && (
-                                                                    <td>
-                                                                        <div className="suppliers-row-actions">
-                                                                            <button
-                                                                                type="button"
-                                                                                className="suppliers-small-button"
-                                                                                onClick={
-                                                                                    () =>
-                                                                                        setEditingSupplier(
-                                                                                            supplier
-                                                                                        )
-                                                                                }
-                                                                                disabled={
-                                                                                    busySupplierId
-                                                                                    !==
-                                                                                    null
-                                                                                }
-                                                                            >
-                                                                                Edit
-                                                                            </button>
-
-                                                                            <button
-                                                                                type="button"
-                                                                                className={
-                                                                                    supplier.is_active
-                                                                                        ? "suppliers-small-button suppliers-small-button-danger"
-                                                                                        : "suppliers-small-button suppliers-small-button-success"
-                                                                                }
-                                                                                onClick={
-                                                                                    () =>
-                                                                                        void toggleStatus(
-                                                                                            supplier
-                                                                                        )
-                                                                                }
-                                                                                disabled={
-                                                                                    busySupplierId
-                                                                                    !==
-                                                                                    null
-                                                                                }
-                                                                            >
-                                                                                {
-                                                                                    busySupplierId
-                                                                                        ===
-                                                                                        supplier.id
-                                                                                        ? "Updating..."
-                                                                                        : supplier.is_active
-                                                                                            ? "Deactivate"
-                                                                                            : "Activate"
-                                                                                }
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
-                                                                )
-                                                            }
-                                                        </tr>
-                                                    )
-                                                )
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )
-                }
-
-                {/*
-                |--------------------------------------------------------------------------
-                | Pagination
-                |--------------------------------------------------------------------------
-                */}
-
-                {
-                    pagination.last_page
-                    >
-                    1
-                    && (
-                        <div className="suppliers-pagination">
-                            <span>
-                                {
-                                    pagination.total
+                        <div>
+                            <button
+                                type="button"
+                                className="suppliers-button suppliers-button-secondary"
+                                onClick={previousPage}
+                                disabled={
+                                    loading ||
+                                    pagination.current_page <= 1
                                 }
-                                {" suppliers"}
+                            >
+                                ← Previous
+                            </button>
+
+                            <span>
+                                Page{" "}
+                                {pagination.current_page} of{" "}
+                                {pagination.last_page}
                             </span>
 
-                            <div>
-                                <button
-                                    type="button"
-                                    className="suppliers-button suppliers-button-secondary"
-                                    onClick={
-                                        previousPage
-                                    }
-                                    disabled={
-                                        loading
-                                        ||
-                                        pagination.current_page
-                                        <=
-                                        1
-                                    }
-                                >
-                                    Previous
-                                </button>
-
-                                <span>
-                                    Page
-                                    {" "}
-                                    {
-                                        pagination.current_page
-                                    }
-                                    {" of "}
-                                    {
-                                        pagination.last_page
-                                    }
-                                </span>
-
-                                <button
-                                    type="button"
-                                    className="suppliers-button suppliers-button-secondary"
-                                    onClick={
-                                        nextPage
-                                    }
-                                    disabled={
-                                        loading
-                                        ||
-                                        pagination.current_page
-                                        >=
-                                        pagination.last_page
-                                    }
-                                >
-                                    Next
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                className="suppliers-button suppliers-button-secondary"
+                                onClick={nextPage}
+                                disabled={
+                                    loading ||
+                                    pagination.current_page >=
+                                    pagination.last_page
+                                }
+                            >
+                                Next →
+                            </button>
                         </div>
-                    )
-                }
+                    </div>
+                )}
             </section>
 
-            {/*
-            |--------------------------------------------------------------------------
-            | Supplier Form Modal
-            |--------------------------------------------------------------------------
-            |
-            | Realtime list updates intentionally do not replace this modal's
-            | supplier object. This prevents remote activity from wiping
-            | unsaved edits.
-            |--------------------------------------------------------------------------
-            */}
-
-            {
-                editingSupplier
-                !==
-                undefined
-                && (
-                    <SupplierFormModal
-                        supplier={
-                            editingSupplier
-                        }
-                        onClose={
-                            () =>
-                                setEditingSupplier(
-                                    undefined
-                                )
-                        }
-                        onSubmit={
-                            saveSupplier
-                        }
-                    />
-                )
-            }
+            {editingSupplier !== undefined && (
+                <SupplierFormModal
+                    supplier={editingSupplier}
+                    onClose={() =>
+                        setEditingSupplier(undefined)
+                    }
+                    onSubmit={saveSupplier}
+                />
+            )}
         </div>
     );
 }

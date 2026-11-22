@@ -88,7 +88,7 @@ class IngredientSeeder extends Seeder
                         'reorder_level' =>
                         0,
 
-                        'average_cost' =>
+                        'average_cost_per_base_unit' =>
                         0,
 
                         'track_stock' =>

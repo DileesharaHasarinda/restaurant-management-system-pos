@@ -177,3 +177,7 @@ export async function updateGalleryState(
 
   return response.data;
 }
+
+export async function deleteGalleryImage(imageId: number): Promise<void> {
+  await api.delete<null>(`/gallery/${imageId}`);
+}

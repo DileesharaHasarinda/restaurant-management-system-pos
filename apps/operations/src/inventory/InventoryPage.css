@@ -1,3 +1,8 @@
+/* ==========================================================================
+   Inventory Page — Professional Business Theme (Slate + Blue)
+   Readable typography · Modern cards · Consistent with Operations portal
+   ========================================================================== */
+
 .ops-inventory-page {
   display: grid;
   gap: 20px;
@@ -5,6 +10,11 @@
   min-width: 0;
 
   padding-bottom: 40px;
+
+  color: #0f172a;
+
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .ops-inventory-page *,
@@ -14,8 +24,8 @@
 }
 
 /* =========================================================
-   HEADER
-   ========================================================= */
+     HEADER
+     ========================================================= */
 
 .ops-inventory-header {
   display: flex;
@@ -27,25 +37,27 @@
   padding: 24px 28px;
 
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 16px;
 
   background: #ffffff;
 
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04),
+    0 8px 24px -12px rgba(15, 23, 42, 0.08);
 }
 
 .ops-inventory-header > div:first-child {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .ops-inventory-header > div:first-child > span {
   color: #2563eb;
 
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 600;
 
   letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .ops-inventory-header h2 {
@@ -53,7 +65,10 @@
 
   color: #0f172a;
 
-  font-size: 29px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .ops-inventory-header p {
@@ -63,120 +78,172 @@
 
   color: #64748b;
 
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
 }
 
 .ops-inventory-header-actions {
   display: flex;
   align-items: center;
 
-  gap: 8px;
+  gap: 10px;
 }
 
 .ops-inventory-header-actions button {
   min-height: 42px;
 
-  padding: 0 16px;
+  padding: 0 20px;
 
   border: 0;
   border-radius: 9px;
 
   color: #ffffff;
-  background: #0f172a;
+  background: #2563eb;
 
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25),
+    0 4px 12px -4px rgba(37, 99, 235, 0.4);
+
+  transition: background-color 0.2s ease, transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.ops-inventory-header-actions button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3),
+    0 8px 18px -6px rgba(37, 99, 235, 0.5);
+}
+
+.ops-inventory-header-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .ops-inventory-secondary-link {
   min-height: 42px;
 
-  padding: 0 14px;
+  padding: 0 18px;
 
   display: inline-flex;
   align-items: center;
 
-  border: 1px solid #d7e0ea;
+  border: 1px solid #cbd5e1;
   border-radius: 9px;
 
   color: #334155;
   background: #ffffff;
 
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 
   text-decoration: none;
+
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.ops-inventory-secondary-link:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 /* =========================================================
-   ALERT
-   ========================================================= */
+     ALERT
+     ========================================================= */
 
 .ops-inventory-alert {
-  padding: 13px 16px;
+  padding: 14px 18px;
 
   border: 1px solid #fecaca;
   border-radius: 11px;
 
-  color: #991b1b;
+  color: #b91c1c;
   background: #fef2f2;
 
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 /* =========================================================
-   SUMMARY
-   ========================================================= */
+     SUMMARY
+     ========================================================= */
 
 .ops-inventory-summary {
   display: grid;
 
   grid-template-columns: repeat(4, minmax(0, 1fr));
 
-  gap: 12px;
+  gap: 14px;
 }
 
 .ops-inventory-summary-card {
-  min-height: 112px;
+  min-height: 124px;
 
-  padding: 18px;
+  padding: 20px;
 
   display: grid;
   align-content: center;
 
-  gap: 4px;
+  gap: 6px;
 
   border: 1px solid #e2e8f0;
   border-radius: 14px;
 
   background: #ffffff;
+
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03),
+    0 4px 12px -6px rgba(15, 23, 42, 0.06);
+
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ops-inventory-summary-card:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05),
+    0 10px 24px -10px rgba(15, 23, 42, 0.12);
 }
 
 .ops-inventory-summary-card > span {
   color: #64748b;
 
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
+
+  letter-spacing: 0.02em;
 }
 
 .ops-inventory-summary-card > strong {
   color: #0f172a;
 
-  font-size: 25px;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
 }
 
 .ops-inventory-summary-card > small {
   color: #94a3b8;
 
-  font-size: 9px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .ops-inventory-summary-card.value {
   border-color: #bfdbfe;
 
-  background: #f8fbff;
+  background: #eff6ff;
 }
 
 .ops-inventory-summary-card.value > strong {
@@ -190,13 +257,13 @@
 }
 
 .ops-inventory-summary-card.warning > strong {
-  color: #a16207;
+  color: #b45309;
 }
 
 .ops-inventory-summary-card.danger {
   border-color: #fecaca;
 
-  background: #fff7f7;
+  background: #fef2f2;
 }
 
 .ops-inventory-summary-card.danger > strong {
@@ -204,8 +271,8 @@
 }
 
 /* =========================================================
-   PANEL
-   ========================================================= */
+     PANEL
+     ========================================================= */
 
 .ops-inventory-panel {
   overflow: hidden;
@@ -215,7 +282,8 @@
 
   background: #ffffff;
 
-  box-shadow: 0 7px 24px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03),
+    0 4px 12px -6px rgba(15, 23, 42, 0.06);
 }
 
 .ops-inventory-panel-header {
@@ -225,23 +293,26 @@
 
   gap: 18px;
 
-  padding: 18px 20px;
+  padding: 20px 22px;
 
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #f1f5f9;
+
+  background: #ffffff;
 }
 
 .ops-inventory-panel-header > div {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .ops-inventory-panel-header span {
   color: #2563eb;
 
-  font-size: 8px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 600;
 
-  letter-spacing: 0.11em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .ops-inventory-panel-header h3 {
@@ -249,42 +320,47 @@
 
   color: #0f172a;
 
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 .ops-inventory-panel-header p {
-  margin: 1px 0 0;
+  margin: 2px 0 0;
 
   color: #64748b;
 
-  font-size: 9px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .ops-inventory-panel-header > strong {
-  color: #475569;
+  color: #334155;
 
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* =========================================================
-   STOCK FILTERS
-   ========================================================= */
+     STOCK FILTERS
+     ========================================================= */
 
 .ops-inventory-stock-filters {
   display: grid;
 
   grid-template-columns:
     minmax(280px, 1fr)
-    180px
-    180px;
+    190px
+    190px;
 
-  gap: 8px;
+  gap: 10px;
 
-  padding: 12px 15px;
+  padding: 14px 20px;
 
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #f1f5f9;
 
-  background: #fafbfc;
+  background: #f8fafc;
 }
 
 .ops-inventory-stock-filters input,
@@ -293,29 +369,64 @@
 .ops-inventory-movement-filters select {
   width: 100%;
 
-  min-height: 40px;
+  min-height: 42px;
 
-  padding: 0 10px;
+  padding: 0 12px;
 
-  border: 1px solid #cfd8e3;
-  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
 
-  color: #334155;
+  color: #0f172a;
   background: #ffffff;
 
   outline: none;
 
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 400;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ops-inventory-stock-filters input::placeholder,
+.ops-inventory-movement-filters input::placeholder {
+  color: #94a3b8;
+}
+
+.ops-inventory-stock-filters input:hover,
+.ops-inventory-stock-filters select:hover,
+.ops-inventory-movement-filters input:hover,
+.ops-inventory-movement-filters select:hover {
+  border-color: #94a3b8;
+}
+
+.ops-inventory-stock-filters input:focus,
+.ops-inventory-stock-filters select:focus,
+.ops-inventory-movement-filters input:focus,
+.ops-inventory-movement-filters select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
 /* =========================================================
-   TABLES
-   ========================================================= */
+     TABLES
+     ========================================================= */
 
 .ops-inventory-table-wrap {
   width: 100%;
 
   overflow-x: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.ops-inventory-table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.ops-inventory-table-wrap::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .ops-inventory-table {
@@ -328,9 +439,9 @@
 
 .ops-inventory-table th,
 .ops-inventory-table td {
-  padding: 13px 15px;
+  padding: 14px 18px;
 
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #f1f5f9;
 
   text-align: left;
   vertical-align: middle;
@@ -340,18 +451,23 @@
   color: #64748b;
   background: #f8fafc;
 
-  font-size: 8px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 600;
 
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 
   text-transform: uppercase;
 }
 
 .ops-inventory-table td {
-  color: #475569;
+  color: #334155;
 
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.ops-inventory-table tbody tr {
+  transition: background-color 0.15s ease;
 }
 
 .ops-inventory-table tbody tr:last-child td {
@@ -359,172 +475,215 @@
 }
 
 .ops-inventory-table tbody tr:hover td {
-  background: #fbfdff;
+  background: #f8fafc;
 }
 
 .ops-inventory-ingredient {
   display: grid;
 
-  gap: 2px;
+  gap: 3px;
 }
 
 .ops-inventory-ingredient strong {
   color: #0f172a;
 
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .ops-inventory-ingredient span {
-  color: #94a3b8;
+  color: #64748b;
 
-  font-size: 8px;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .ops-inventory-ingredient small {
   width: max-content;
 
-  margin-top: 2px;
+  margin-top: 3px;
 
-  padding: 2px 5px;
+  padding: 3px 8px;
 
   border-radius: 999px;
 
-  color: #64748b;
+  color: #475569;
   background: #f1f5f9;
 
-  font-size: 7px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 600;
+
+  letter-spacing: 0.02em;
 }
 
 .ops-inventory-stock-quantity {
   color: #0f172a;
 
-  font-size: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .ops-inventory-unit-cost-label {
-  margin-left: 2px;
+  margin-left: 3px;
 
   color: #94a3b8;
 
-  font-size: 8px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .ops-inventory-history-button {
-  min-height: 31px;
+  min-height: 34px;
 
-  padding: 0 9px;
+  padding: 0 14px;
 
-  border: 1px solid #cfd8e3;
-  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
 
   color: #1d4ed8;
   background: #ffffff;
 
-  font-size: 8px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.ops-inventory-history-button:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e40af;
 }
 
 /* =========================================================
-   STOCK STATUS
-   ========================================================= */
+     STOCK STATUS BADGES
+     ========================================================= */
 
 .ops-inventory-stock-badge {
   display: inline-flex;
 
-  padding: 5px 8px;
+  padding: 5px 10px;
 
   border-radius: 999px;
 
-  font-size: 8px;
-  font-weight: 850;
+  font-size: 11px;
+  font-weight: 600;
+
+  letter-spacing: 0.02em;
+
+  white-space: nowrap;
 }
 
 .ops-inventory-stock-badge.in_stock {
-  color: #166534;
-  background: #dcfce7;
+  color: #047857;
+  background: #ecfdf5;
 }
 
 .ops-inventory-stock-badge.low_stock {
-  color: #92400e;
-  background: #fef3c7;
+  color: #b45309;
+  background: #fffbeb;
 }
 
 .ops-inventory-stock-badge.out_of_stock {
-  color: #991b1b;
-  background: #fee2e2;
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 /* =========================================================
-   MOVEMENT FILTERS
-   ========================================================= */
+     MOVEMENT FILTERS
+     ========================================================= */
 
 .ops-inventory-movement-filters {
   display: grid;
 
   grid-template-columns:
     minmax(220px, 1fr)
-    180px
-    180px
-    145px
-    145px
+    190px
+    190px
+    155px
+    155px
     auto;
 
   align-items: end;
 
-  gap: 8px;
+  gap: 10px;
 
-  padding: 12px 15px;
+  padding: 14px 20px;
 
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #f1f5f9;
 
-  background: #fafbfc;
+  background: #f8fafc;
 }
 
 .ops-inventory-movement-filters label {
   display: grid;
 
-  gap: 4px;
+  gap: 6px;
 }
 
 .ops-inventory-movement-filters label span {
-  color: #64748b;
+  color: #334155;
 
-  font-size: 8px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
+
+  letter-spacing: 0.01em;
 }
 
 .ops-inventory-movement-filters button {
-  min-height: 40px;
+  min-height: 42px;
 
-  padding: 0 16px;
+  padding: 0 22px;
 
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
 
   color: #ffffff;
-  background: #0f172a;
+  background: #2563eb;
 
-  font-size: 9px;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25),
+    0 4px 12px -4px rgba(37, 99, 235, 0.4);
+
+  transition: background-color 0.2s ease, transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.ops-inventory-movement-filters button:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3),
+    0 8px 18px -6px rgba(37, 99, 235, 0.5);
 }
 
 /* =========================================================
-   MOVEMENT BADGES
-   ========================================================= */
+     MOVEMENT BADGES
+     ========================================================= */
 
 .ops-inventory-movement-badge {
   display: inline-flex;
 
-  padding: 5px 7px;
+  padding: 5px 10px;
 
   border-radius: 999px;
 
   color: #334155;
   background: #f1f5f9;
 
-  font-size: 7px;
-  font-weight: 850;
+  font-size: 11px;
+  font-weight: 600;
+
+  letter-spacing: 0.02em;
 
   white-space: nowrap;
 }
@@ -533,41 +692,43 @@
 .ops-inventory-movement-badge.opening_balance,
 .ops-inventory-movement-badge.adjustment_in,
 .ops-inventory-movement-badge.cancellation_reversal {
-  color: #166534;
-  background: #dcfce7;
+  color: #047857;
+  background: #ecfdf5;
 }
 
 .ops-inventory-movement-badge.sale_consumption {
   color: #1d4ed8;
-  background: #dbeafe;
+  background: #eff6ff;
 }
 
 .ops-inventory-movement-badge.wastage {
   color: #b45309;
-  background: #fef3c7;
+  background: #fffbeb;
 }
 
 .ops-inventory-movement-badge.adjustment_out {
-  color: #991b1b;
-  background: #fee2e2;
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 .ops-inventory-positive {
-  color: #15803d;
+  color: #047857;
+  font-weight: 600;
 }
 
 .ops-inventory-negative {
   color: #b91c1c;
+  font-weight: 600;
 }
 
 /* =========================================================
-   REFERENCE
-   ========================================================= */
+     REFERENCE
+     ========================================================= */
 
 .ops-inventory-reference {
   display: grid;
 
-  gap: 2px;
+  gap: 3px;
 
   max-width: 220px;
 }
@@ -575,9 +736,11 @@
 .ops-inventory-reference strong {
   overflow: hidden;
 
-  color: #334155;
+  color: #0f172a;
 
-  font-size: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -588,15 +751,16 @@
 
   color: #94a3b8;
 
-  font-size: 8px;
+  font-size: 11px;
+  font-weight: 400;
 
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* =========================================================
-   PAGINATION
-   ========================================================= */
+     PAGINATION
+     ========================================================= */
 
 .ops-inventory-pagination {
   display: flex;
@@ -605,79 +769,96 @@
 
   gap: 15px;
 
-  padding: 12px 15px;
+  padding: 14px 20px;
 
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #f1f5f9;
 
   color: #64748b;
 
-  font-size: 9px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .ops-inventory-pagination > div {
   display: flex;
   align-items: center;
 
-  gap: 9px;
+  gap: 12px;
 }
 
 .ops-inventory-pagination button {
-  min-height: 32px;
+  min-height: 36px;
 
-  padding: 0 10px;
+  padding: 0 14px;
 
-  border: 1px solid #d7e0e8;
-  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
 
   color: #334155;
   background: #ffffff;
 
-  font-size: 8px;
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.ops-inventory-pagination button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 .ops-inventory-pagination button:disabled {
   opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* =========================================================
-   EMPTY / LOADING
-   ========================================================= */
+     EMPTY / LOADING
+     ========================================================= */
 
 .ops-inventory-empty {
-  min-height: 190px;
+  min-height: 200px;
 
   display: grid;
   place-content: center;
 
-  gap: 5px;
+  gap: 8px;
 
-  padding: 25px;
+  padding: 30px;
 
   text-align: center;
 }
 
 .ops-inventory-empty strong {
-  color: #334155;
+  color: #0f172a;
 
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .ops-inventory-empty span {
-  color: #94a3b8;
+  color: #64748b;
 
-  font-size: 9px;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .ops-inventory-movement-loading {
-  min-height: 180px;
+  min-height: 200px;
 
   display: grid;
   place-items: center;
 
   color: #64748b;
 
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .ops-inventory-loading {
@@ -688,19 +869,19 @@
 
   justify-items: center;
 
-  gap: 8px;
+  gap: 12px;
 
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 16px;
 
   background: #ffffff;
 }
 
 .ops-inventory-loading > span {
-  width: 35px;
-  height: 35px;
+  width: 40px;
+  height: 40px;
 
-  border: 4px solid #dbeafe;
+  border: 3px solid #dbeafe;
   border-top-color: #2563eb;
   border-radius: 50%;
 
@@ -710,7 +891,9 @@
 .ops-inventory-loading strong {
   color: #0f172a;
 
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 .ops-inventory-loading p {
@@ -718,7 +901,8 @@
 
   color: #64748b;
 
-  font-size: 10px;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 @keyframes ops-inventory-spin {
@@ -728,8 +912,8 @@
 }
 
 /* =========================================================
-   HISTORY MODAL
-   ========================================================= */
+     HISTORY MODAL
+     ========================================================= */
 
 .ops-inventory-modal-backdrop {
   position: fixed;
@@ -742,7 +926,21 @@
   display: grid;
   place-items: center;
 
-  background: rgba(15, 23, 42, 0.58);
+  background: rgba(15, 23, 42, 0.5);
+
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+
+  animation: opsInventoryFadeIn 0.2s ease both;
+}
+
+@keyframes opsInventoryFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .ops-inventory-history-modal {
@@ -754,11 +952,25 @@
 
   overflow: hidden;
 
-  border-radius: 18px;
+  border-radius: 16px;
 
   background: #ffffff;
 
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 24px 64px -20px rgba(15, 23, 42, 0.35),
+    0 8px 24px -12px rgba(15, 23, 42, 0.15);
+
+  animation: opsInventoryModalIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes opsInventoryModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .ops-inventory-history-modal > header {
@@ -768,24 +980,27 @@
 
   gap: 18px;
 
-  padding: 17px 20px;
+  padding: 20px 22px;
 
   border-bottom: 1px solid #e2e8f0;
+
+  background: #ffffff;
 }
 
 .ops-inventory-history-modal > header > div {
   display: grid;
 
-  gap: 2px;
+  gap: 4px;
 }
 
 .ops-inventory-history-modal > header span {
   color: #2563eb;
 
-  font-size: 8px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 600;
 
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .ops-inventory-history-modal > header h3 {
@@ -793,7 +1008,10 @@
 
   color: #0f172a;
 
-  font-size: 19px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .ops-inventory-history-modal > header p {
@@ -801,26 +1019,54 @@
 
   color: #64748b;
 
-  font-size: 9px;
+  font-size: 12.5px;
+  font-weight: 400;
 }
 
 .ops-inventory-history-modal > header button {
   width: 36px;
   height: 36px;
 
-  border: 0;
+  display: grid;
+  place-items: center;
+
+  border: 1px solid #e2e8f0;
   border-radius: 9px;
 
   color: #64748b;
-  background: #f1f5f9;
+  background: #f8fafc;
 
   font-size: 20px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.ops-inventory-history-modal > header button:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
 .ops-inventory-history-content {
   min-height: 0;
 
   overflow-y: auto;
+
+  background: #ffffff;
+}
+
+.ops-inventory-history-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ops-inventory-history-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
 }
 
 .ops-inventory-history-modal > footer {
@@ -828,11 +1074,13 @@
   align-items: center;
   justify-content: space-between;
 
-  gap: 10px;
+  gap: 12px;
 
-  padding: 8px 14px;
+  padding: 12px 20px;
 
   border-top: 1px solid #e2e8f0;
+
+  background: #ffffff;
 }
 
 .ops-inventory-history-modal > footer .ops-inventory-pagination {
@@ -844,23 +1092,39 @@
 }
 
 .ops-inventory-modal-close {
-  min-height: 35px;
+  min-height: 38px;
 
-  padding: 0 13px;
+  padding: 0 18px;
 
   border: 0;
   border-radius: 8px;
 
   color: #ffffff;
-  background: #0f172a;
+  background: #2563eb;
 
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25),
+    0 4px 12px -4px rgba(37, 99, 235, 0.4);
+
+  transition: background-color 0.2s ease, transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.ops-inventory-modal-close:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3),
+    0 8px 18px -6px rgba(37, 99, 235, 0.5);
 }
 
 /* =========================================================
-   RESPONSIVE
-   ========================================================= */
+     RESPONSIVE
+     ========================================================= */
 
 @media (max-width: 1250px) {
   .ops-inventory-movement-filters {
@@ -893,6 +1157,10 @@
     grid-template-columns: 1fr;
   }
 
+  .ops-inventory-header {
+    padding: 20px;
+  }
+
   .ops-inventory-header-actions {
     width: 100%;
 
@@ -912,10 +1180,35 @@
   }
 
   .ops-inventory-modal-backdrop {
-    padding: 7px;
+    padding: 8px;
   }
 
   .ops-inventory-history-modal {
-    max-height: calc(100vh - 14px);
+    max-height: calc(100vh - 16px);
+    border-radius: 13px;
+  }
+
+  .ops-inventory-history-modal > header {
+    padding: 16px 18px;
+  }
+}
+
+/* =========================================================
+     REDUCED MOTION
+     ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-inventory-modal-backdrop,
+  .ops-inventory-history-modal,
+  .ops-inventory-summary-card,
+  .ops-inventory-header-actions button,
+  .ops-inventory-secondary-link,
+  .ops-inventory-history-button,
+  .ops-inventory-pagination button,
+  .ops-inventory-movement-filters button,
+  .ops-inventory-modal-close,
+  .ops-inventory-history-modal > header button {
+    transition: none !important;
+    animation: none !important;
   }
 }

@@ -61,30 +61,17 @@ const money =
     new Intl.NumberFormat(
         "en-LK",
         {
-            style:
-                "currency",
-
-            currency:
-                "LKR",
-
-            minimumFractionDigits:
-                2,
+            style: "currency",
+            currency: "LKR",
+            minimumFractionDigits: 2,
         }
     );
 
-const EMPTY_PAGINATION:
-    PaginationMeta = {
-    current_page:
-        1,
-
-    per_page:
-        30,
-
-    total:
-        0,
-
-    last_page:
-        1,
+const EMPTY_PAGINATION: PaginationMeta = {
+    current_page: 1,
+    per_page: 30,
+    total: 0,
+    last_page: 1,
 };
 
 /*
@@ -94,175 +81,51 @@ const EMPTY_PAGINATION:
 */
 
 export default function MenuManagementPage() {
-    const {
-        hasPermission,
-    } =
-        useAuth();
+    const { hasPermission } = useAuth();
 
-    const canManage =
-        hasPermission(
-            "menu.manage"
-        );
+    const canManage = hasPermission("menu.manage");
 
-    const [
-        activeTab,
-        setActiveTab,
-    ] =
-        useState<MenuTab>(
-            "items"
-        );
+    const [activeTab, setActiveTab] = useState<MenuTab>("items");
 
-    const [
-        categories,
-        setCategories,
-    ] =
-        useState<MenuCategory[]>(
-            []
-        );
+    const [categories, setCategories] = useState<MenuCategory[]>([]);
+    const [items, setItems] = useState<MenuItem[]>([]);
+    const [addonGroups, setAddonGroups] = useState<MenuAddonGroup[]>([]);
+    const [addons, setAddons] = useState<MenuAddon[]>([]);
 
-    const [
-        items,
-        setItems,
-    ] =
-        useState<MenuItem[]>(
-            []
-        );
+    const [pagination, setPagination] =
+        useState(EMPTY_PAGINATION);
 
-    const [
-        addonGroups,
-        setAddonGroups,
-    ] =
-        useState<MenuAddonGroup[]>(
-            []
-        );
+    const [page, setPage] = useState(1);
 
-    const [
-        addons,
-        setAddons,
-    ] =
-        useState<MenuAddon[]>(
-            []
-        );
+    const [searchDraft, setSearchDraft] = useState("");
+    const [search, setSearch] = useState("");
 
-    const [
-        pagination,
-        setPagination,
-    ] =
-        useState(
-            EMPTY_PAGINATION
-        );
+    const [categoryFilter, setCategoryFilter] =
+        useState<number | null>(null);
 
-    const [
-        page,
-        setPage,
-    ] =
-        useState(
-            1
-        );
+    const [activeFilter, setActiveFilter] =
+        useState<boolean | null>(null);
 
-    const [
-        searchDraft,
-        setSearchDraft,
-    ] =
-        useState(
-            ""
-        );
+    const [availableFilter, setAvailableFilter] =
+        useState<boolean | null>(null);
 
-    const [
-        search,
-        setSearch,
-    ] =
-        useState(
-            ""
-        );
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
 
-    const [
-        categoryFilter,
-        setCategoryFilter,
-    ] =
-        useState<number | null>(
-            null
-        );
+    const [error, setError] = useState("");
+    const [message, setMessage] = useState("");
 
-    const [
-        activeFilter,
-        setActiveFilter,
-    ] =
-        useState<boolean | null>(
-            null
-        );
+    const [editingItem, setEditingItem] =
+        useState<MenuItem | null | undefined>(undefined);
 
-    const [
-        availableFilter,
-        setAvailableFilter,
-    ] =
-        useState<boolean | null>(
-            null
-        );
+    const [categoryModal, setCategoryModal] =
+        useState<MenuCategory | null | undefined>(undefined);
 
-    const [
-        loading,
-        setLoading,
-    ] =
-        useState(
-            true
-        );
+    const [addonGroupModal, setAddonGroupModal] =
+        useState(false);
 
-    const [
-        busy,
-        setBusy,
-    ] =
-        useState(
-            false
-        );
-
-    const [
-        error,
-        setError,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        message,
-        setMessage,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        editingItem,
-        setEditingItem,
-    ] =
-        useState<MenuItem | null | undefined>(
-            undefined
-        );
-
-    const [
-        categoryModal,
-        setCategoryModal,
-    ] =
-        useState<MenuCategory | null | undefined>(
-            undefined
-        );
-
-    const [
-        addonGroupModal,
-        setAddonGroupModal,
-    ] =
-        useState(
-            false
-        );
-
-    const [
-        addonModal,
-        setAddonModal,
-    ] =
-        useState(
-            false
-        );
+    const [addonModal, setAddonModal] =
+        useState(false);
 
     /*
     |--------------------------------------------------------------------------
@@ -270,38 +133,20 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const showError =
-        useCallback(
-            (
-                exception: unknown
-            ): void => {
-                if (
-                    exception
-                    instanceof
-                    ApiError
-                ) {
-                    const validation =
-                        Object
-                            .values(
-                                exception.errors
-                            )
-                            .flat()[0];
+    const showError = useCallback(
+        (exception: unknown): void => {
+            if (exception instanceof ApiError) {
+                const validation =
+                    Object.values(exception.errors).flat()[0];
 
-                    setError(
-                        validation
-                        ??
-                        exception.message
-                    );
+                setError(validation ?? exception.message);
+                return;
+            }
 
-                    return;
-                }
-
-                setError(
-                    "The request could not be completed."
-                );
-            },
-            []
-        );
+            setError("The request could not be completed.");
+        },
+        []
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -309,34 +154,21 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const loadCatalogs =
-        useCallback(
-            async (): Promise<void> => {
-                const [
-                    categoryData,
-                    groupData,
-                    addonData,
-                ] =
-                    await Promise.all([
-                        getMenuCategories(),
-                        getAddonGroups(),
-                        getAddons(),
-                    ]);
+    const loadCatalogs = useCallback(
+        async (): Promise<void> => {
+            const [categoryData, groupData, addonData] =
+                await Promise.all([
+                    getMenuCategories(),
+                    getAddonGroups(),
+                    getAddons(),
+                ]);
 
-                setCategories(
-                    categoryData
-                );
-
-                setAddonGroups(
-                    groupData
-                );
-
-                setAddons(
-                    addonData
-                );
-            },
-            []
-        );
+            setCategories(categoryData);
+            setAddonGroups(groupData);
+            setAddons(addonData);
+        },
+        []
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -344,41 +176,27 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const loadItems =
-        useCallback(
-            async (): Promise<void> => {
-                const result =
-                    await getMenuItems({
-                        page,
-
-                        search,
-
-                        categoryId:
-                            categoryFilter,
-
-                        isActive:
-                            activeFilter,
-
-                        isAvailable:
-                            availableFilter,
-                    });
-
-                setItems(
-                    result.items
-                );
-
-                setPagination(
-                    result.pagination
-                );
-            },
-            [
+    const loadItems = useCallback(
+        async (): Promise<void> => {
+            const result = await getMenuItems({
                 page,
                 search,
-                categoryFilter,
-                activeFilter,
-                availableFilter,
-            ]
-        );
+                categoryId: categoryFilter,
+                isActive: activeFilter,
+                isAvailable: availableFilter,
+            });
+
+            setItems(result.items);
+            setPagination(result.pagination);
+        },
+        [
+            page,
+            search,
+            categoryFilter,
+            activeFilter,
+            availableFilter,
+        ]
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -386,125 +204,45 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    /*
-|--------------------------------------------------------------------------
-| Initial Data
-|--------------------------------------------------------------------------
-|
-| Initial catalog/item reconciliation is deferred out of the synchronous
-| effect body.
-|
-| This keeps the effect compatible with React Compiler's
-| set-state-in-effect rule while still loading authoritative Laravel data
-| immediately after the component mounts or its item filters change.
-|--------------------------------------------------------------------------
-*/
+    useEffect(() => {
+        let cancelled = false;
 
-    useEffect(
-        () => {
-            let cancelled =
-                false;
+        const timeoutId = window.setTimeout(() => {
+            void Promise.all([
+                loadCatalogs(),
+                loadItems(),
+            ])
+                .catch((exception) => {
+                    if (cancelled) return;
+                    showError(exception);
+                })
+                .finally(() => {
+                    if (cancelled) return;
+                    setLoading(false);
+                });
+        }, 0);
 
-            const timeoutId =
-                window.setTimeout(
-                    () => {
-                        void Promise.all([
-                            loadCatalogs(),
-                            loadItems(),
-                        ])
-                            .catch(
-                                (
-                                    exception
-                                ) => {
-                                    if (
-                                        cancelled
-                                    ) {
-                                        return;
-                                    }
-
-                                    showError(
-                                        exception
-                                    );
-                                }
-                            )
-                            .finally(
-                                () => {
-                                    if (
-                                        cancelled
-                                    ) {
-                                        return;
-                                    }
-
-                                    setLoading(
-                                        false
-                                    );
-                                }
-                            );
-                    },
-                    0
-                );
-
-            return () => {
-                cancelled =
-                    true;
-
-                window.clearTimeout(
-                    timeoutId
-                );
-            };
-        },
-        [
-            loadCatalogs,
-            loadItems,
-            showError,
-        ]
-    );
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [loadCatalogs, loadItems, showError]);
 
     /*
     |--------------------------------------------------------------------------
     | Realtime Reconciliation
     |--------------------------------------------------------------------------
-    |
-    | Reverb acts only as an invalidation signal.
-    |
-    | Fresh authoritative menu data is always retrieved from Laravel.
-    |
-    | This refreshes:
-    |
-    | - Menu items
-    | - Categories
-    | - Add-on groups
-    | - Add-ons
-    | - Prices
-    | - Availability
-    | - Active/inactive state
-    | - Website visibility
-    | - Customer QR visibility
-    | - Photos
-    | - Variants/add-on associations returned by the menu API
-    |
-    | It intentionally does NOT close/recreate an open editor modal. This
-    | protects unsaved changes currently being entered by a manager.
-    |--------------------------------------------------------------------------
     */
 
     useStaffRealtimeRefresh(
-        [
-            "menu",
-        ],
+        ["menu"],
         async () => {
             try {
                 await Promise.all([
                     loadCatalogs(),
                     loadItems(),
                 ]);
-            } catch (
-            exception
-            ) {
-                /*
-                 * Realtime synchronization failure must not destroy the
-                 * current page. A later event or reconnect will retry.
-                 */
+            } catch (exception) {
                 console.error(
                     "Unable to reconcile realtime menu data.",
                     exception
@@ -519,47 +257,27 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const summary =
-        useMemo(
-            () => ({
-                categories:
-                    categories.length,
-
-                activeCategories:
-                    categories.filter(
-                        (
-                            category
-                        ) =>
-                            category.is_active
-                    ).length,
-
-                totalItems:
-                    pagination.total,
-
-                visibleItems:
-                    items.filter(
-                        (
-                            item
-                        ) =>
-                            item.is_active
-                            &&
-                            item.is_available
-                    ).length,
-
-                addonGroups:
-                    addonGroups.length,
-
-                addons:
-                    addons.length,
-            }),
-            [
-                categories,
-                items,
-                pagination.total,
-                addonGroups,
-                addons,
-            ]
-        );
+    const summary = useMemo(
+        () => ({
+            categories: categories.length,
+            activeCategories: categories.filter(
+                (category) => category.is_active
+            ).length,
+            totalItems: pagination.total,
+            visibleItems: items.filter(
+                (item) => item.is_active && item.is_available
+            ).length,
+            addonGroups: addonGroups.length,
+            addons: addons.length,
+        }),
+        [
+            categories,
+            items,
+            pagination.total,
+            addonGroups,
+            addons,
+        ]
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -567,21 +285,14 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const submitSearch =
-        (
-            event:
-                FormEvent<HTMLFormElement>
-        ): void => {
-            event.preventDefault();
+    const submitSearch = (
+        event: FormEvent<HTMLFormElement>
+    ): void => {
+        event.preventDefault();
 
-            setPage(
-                1
-            );
-
-            setSearch(
-                searchDraft.trim()
-            );
-        };
+        setPage(1);
+        setSearch(searchDraft.trim());
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -589,177 +300,96 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const saveItem =
-        async (
-            submission:
-                MenuItemEditorSubmission
-        ): Promise<void> => {
-            setBusy(
-                true
-            );
+    const saveItem = async (
+        submission: MenuItemEditorSubmission
+    ): Promise<void> => {
+        setBusy(true);
+        setError("");
+        setMessage("");
 
-            setError(
-                ""
-            );
+        try {
+            let saved: MenuItem;
 
-            setMessage(
-                ""
-            );
-
-            try {
-                let saved:
-                    MenuItem;
-
-                if (
-                    editingItem
-                ) {
-                    saved =
-                        await updateMenuItem(
-                            editingItem.id,
-
-                            {
-                                category_id:
-                                    submission.category_id,
-
-                                name:
-                                    submission.name,
-
-                                description:
-                                    submission.description,
-
-                                price:
-                                    submission.price,
-
-                                tax_rate:
-                                    submission.tax_rate,
-
-                                sort_order:
-                                    submission.sort_order,
-
-                                variants:
-                                    submission.variants,
-
-                                addons:
-                                    submission.addons,
-                            }
-                        );
-
-                    const stateChanged =
-                        saved.is_active
-                        !==
-                        submission.is_active
-                        ||
-                        saved.is_available
-                        !==
-                        submission.is_available
-                        ||
-                        saved.is_visible_on_website
-                        !==
-                        submission.is_visible_on_website
-                        ||
-                        saved.is_visible_on_qr
-                        !==
-                        submission.is_visible_on_qr;
-
-                    if (
-                        stateChanged
-                    ) {
-                        saved =
-                            await updateMenuItemState(
-                                saved.id,
-
-                                {
-                                    is_active:
-                                        submission.is_active,
-
-                                    is_available:
-                                        submission.is_available,
-
-                                    is_visible_on_website:
-                                        submission.is_visible_on_website,
-
-                                    is_visible_on_qr:
-                                        submission.is_visible_on_qr,
-                                }
-                            );
+            if (editingItem) {
+                saved = await updateMenuItem(
+                    editingItem.id,
+                    {
+                        category_id: submission.category_id,
+                        name: submission.name,
+                        description: submission.description,
+                        price: submission.price,
+                        tax_rate: submission.tax_rate,
+                        sort_order: submission.sort_order,
+                        variants: submission.variants,
+                        addons: submission.addons,
                     }
-                } else {
-                    saved =
-                        await createMenuItem({
-                            category_id:
-                                submission.category_id,
+                );
 
-                            name:
-                                submission.name,
+                const stateChanged =
+                    saved.is_active !== submission.is_active ||
+                    saved.is_available !== submission.is_available ||
+                    saved.is_visible_on_website !==
+                    submission.is_visible_on_website ||
+                    saved.is_visible_on_qr !==
+                    submission.is_visible_on_qr;
 
-                            description:
-                                submission.description,
-
-                            price:
-                                submission.price,
-
-                            tax_rate:
-                                submission.tax_rate,
-
-                            sort_order:
-                                submission.sort_order,
-
-                            is_active:
-                                submission.is_active,
-
-                            is_available:
-                                submission.is_available,
-
+                if (stateChanged) {
+                    saved = await updateMenuItemState(
+                        saved.id,
+                        {
+                            is_active: submission.is_active,
+                            is_available: submission.is_available,
                             is_visible_on_website:
                                 submission.is_visible_on_website,
-
                             is_visible_on_qr:
                                 submission.is_visible_on_qr,
-
-                            variants:
-                                submission.variants,
-
-                            addons:
-                                submission.addons,
-                        });
+                        }
+                    );
                 }
+            } else {
+                saved = await createMenuItem({
+                    category_id: submission.category_id,
+                    name: submission.name,
+                    description: submission.description,
+                    price: submission.price,
+                    tax_rate: submission.tax_rate,
+                    sort_order: submission.sort_order,
+                    is_active: submission.is_active,
+                    is_available: submission.is_available,
+                    is_visible_on_website:
+                        submission.is_visible_on_website,
+                    is_visible_on_qr:
+                        submission.is_visible_on_qr,
+                    variants: submission.variants,
+                    addons: submission.addons,
+                });
+            }
 
-                if (
+            if (submission.photo) {
+                saved = await uploadMenuItemPhoto(
+                    saved.id,
                     submission.photo
-                ) {
-                    saved =
-                        await uploadMenuItemPhoto(
-                            saved.id,
-                            submission.photo
-                        );
-                }
-
-                setEditingItem(
-                    undefined
-                );
-
-                setMessage(
-                    editingItem
-                        ? "Menu item updated successfully."
-                        : "Menu item created successfully."
-                );
-
-                await Promise.all([
-                    loadItems(),
-                    loadCatalogs(),
-                ]);
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
-                );
-            } finally {
-                setBusy(
-                    false
                 );
             }
-        };
+
+            setEditingItem(undefined);
+
+            setMessage(
+                editingItem
+                    ? "Menu item updated successfully."
+                    : "Menu item created successfully."
+            );
+
+            await Promise.all([
+                loadItems(),
+                loadCatalogs(),
+            ]);
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -767,98 +397,59 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const changeItemState =
-        async (
-            item:
-                MenuItem,
+    const changeItemState = async (
+        item: MenuItem,
+        field:
+            | "is_active"
+            | "is_available"
+            | "is_visible_on_website"
+            | "is_visible_on_qr"
+    ): Promise<void> => {
+        if (!canManage) return;
 
-            field:
-                "is_active"
-                |
-                "is_available"
-                |
-                "is_visible_on_website"
-                |
-                "is_visible_on_qr"
-        ): Promise<void> => {
-            if (
-                !canManage
-            ) {
-                return;
-            }
+        setBusy(true);
+        setError("");
 
-            setBusy(
-                true
+        try {
+            await updateMenuItemState(
+                item.id,
+                {
+                    [field]: !item[field],
+                }
             );
 
-            setError(
-                ""
-            );
+            await loadItems();
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
-            try {
-                await updateMenuItemState(
-                    item.id,
+    const removePhoto = async (
+        item: MenuItem
+    ): Promise<void> => {
+        if (
+            !window.confirm(
+                `Remove the photo from "${item.name}"?`
+            )
+        ) {
+            return;
+        }
 
-                    {
-                        [field]:
-                            !item[field],
-                    }
-                );
+        setBusy(true);
 
-                await loadItems();
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
-                );
-            } finally {
-                setBusy(
-                    false
-                );
-            }
-        };
+        try {
+            const updated = await removeMenuItemPhoto(item.id);
 
-    const removePhoto =
-        async (
-            item:
-                MenuItem
-        ): Promise<void> => {
-            if (
-                !window.confirm(
-                    `Remove the photo from "${item.name}"?`
-                )
-            ) {
-                return;
-            }
-
-            setBusy(
-                true
-            );
-
-            try {
-                const updated =
-                    await removeMenuItemPhoto(
-                        item.id
-                    );
-
-                setEditingItem(
-                    updated
-                );
-
-                await loadItems();
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
-                );
-            } finally {
-                setBusy(
-                    false
-                );
-            }
-        };
+            setEditingItem(updated);
+            await loadItems();
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -866,86 +457,52 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const saveCategory =
-        async (
-            payload:
-                CreateCategoryPayload
-        ): Promise<void> => {
-            setBusy(
-                true
-            );
+    const saveCategory = async (
+        payload: CreateCategoryPayload
+    ): Promise<void> => {
+        setBusy(true);
+        setError("");
 
-            setError(
-                ""
-            );
-
-            try {
-                if (
-                    categoryModal
-                ) {
-                    await updateMenuCategory(
-                        categoryModal.id,
-
-                        {
-                            name:
-                                payload.name,
-
-                            description:
-                                payload.description,
-
-                            sort_order:
-                                payload.sort_order,
-                        }
-                    );
-
-                    await updateMenuCategoryState(
-                        categoryModal.id,
-
-                        {
-                            is_active:
-                                payload.is_active,
-
-                            is_visible_on_website:
-                                payload.is_visible_on_website,
-
-                            is_visible_on_qr:
-                                payload.is_visible_on_qr,
-                        }
-                    );
-
-                    setMessage(
-                        "Category updated successfully."
-                    );
-                } else {
-                    await createMenuCategory(
-                        payload
-                    );
-
-                    setMessage(
-                        "Category created successfully."
-                    );
-                }
-
-                setCategoryModal(
-                    undefined
+        try {
+            if (categoryModal) {
+                await updateMenuCategory(
+                    categoryModal.id,
+                    {
+                        name: payload.name,
+                        description: payload.description,
+                        sort_order: payload.sort_order,
+                    }
                 );
 
-                await Promise.all([
-                    loadCatalogs(),
-                    loadItems(),
-                ]);
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
+                await updateMenuCategoryState(
+                    categoryModal.id,
+                    {
+                        is_active: payload.is_active,
+                        is_visible_on_website:
+                            payload.is_visible_on_website,
+                        is_visible_on_qr:
+                            payload.is_visible_on_qr,
+                    }
                 );
-            } finally {
-                setBusy(
-                    false
-                );
+
+                setMessage("Category updated successfully.");
+            } else {
+                await createMenuCategory(payload);
+                setMessage("Category created successfully.");
             }
-        };
+
+            setCategoryModal(undefined);
+
+            await Promise.all([
+                loadCatalogs(),
+                loadItems(),
+            ]);
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -953,85 +510,45 @@ export default function MenuManagementPage() {
     |--------------------------------------------------------------------------
     */
 
-    const saveAddonGroup =
-        async (
-            payload:
-                CreateAddonGroupPayload
-        ): Promise<void> => {
-            setBusy(
-                true
-            );
+    const saveAddonGroup = async (
+        payload: CreateAddonGroupPayload
+    ): Promise<void> => {
+        setBusy(true);
+        setError("");
 
-            setError(
-                ""
-            );
+        try {
+            await createAddonGroup(payload);
 
-            try {
-                await createAddonGroup(
-                    payload
-                );
+            setAddonGroupModal(false);
+            setMessage("Add-on group created successfully.");
 
-                setAddonGroupModal(
-                    false
-                );
+            await loadCatalogs();
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
-                setMessage(
-                    "Add-on group created successfully."
-                );
+    const saveAddon = async (
+        payload: CreateAddonPayload
+    ): Promise<void> => {
+        setBusy(true);
+        setError("");
 
-                await loadCatalogs();
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
-                );
-            } finally {
-                setBusy(
-                    false
-                );
-            }
-        };
+        try {
+            await createAddon(payload);
 
-    const saveAddon =
-        async (
-            payload:
-                CreateAddonPayload
-        ): Promise<void> => {
-            setBusy(
-                true
-            );
+            setAddonModal(false);
+            setMessage("Add-on created successfully.");
 
-            setError(
-                ""
-            );
-
-            try {
-                await createAddon(
-                    payload
-                );
-
-                setAddonModal(
-                    false
-                );
-
-                setMessage(
-                    "Add-on created successfully."
-                );
-
-                await loadCatalogs();
-            } catch (
-            exception
-            ) {
-                showError(
-                    exception
-                );
-            } finally {
-                setBusy(
-                    false
-                );
-            }
-        };
+            await loadCatalogs();
+        } catch (exception) {
+            showError(exception);
+        } finally {
+            setBusy(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -1043,925 +560,531 @@ export default function MenuManagementPage() {
         <section className="ops-menu-page">
             <header className="ops-menu-page-header">
                 <div>
-                    <span>
-                        RESTAURANT MENU
-                    </span>
+                    <span>Restaurant Menu</span>
 
-                    <h2>
-                        Menu Management
-                    </h2>
+                    <h2>Menu Management</h2>
 
                     <p>
-                        Manage categories, menu items, variants, pricing,
-                        customer visibility and add-ons.
+                        Manage categories, menu items, variants,
+                        pricing, customer visibility, and add-ons.
                     </p>
                 </div>
 
-                {
-                    canManage
-                    &&
-                    activeTab
-                    ===
-                    "items"
-                    &&
-                    (
-                        <button
-                            type="button"
-                            className="ops-menu-primary-button"
-                            disabled={
-                                categories.length
-                                ===
-                                0
-                            }
-                            onClick={
-                                () =>
-                                    setEditingItem(
-                                        null
-                                    )
-                            }
-                        >
-                            + New Menu Item
-                        </button>
-                    )
-                }
+                {canManage && activeTab === "items" && (
+                    <button
+                        type="button"
+                        className="ops-menu-primary-button"
+                        disabled={categories.length === 0}
+                        onClick={() => setEditingItem(null)}
+                    >
+                        + New Menu Item
+                    </button>
+                )}
             </header>
 
-            {
-                error
-                &&
-                (
-                    <div
-                        className="ops-menu-alert error"
-                        role="alert"
-                    >
-                        {
-                            error
-                        }
-                    </div>
-                )
-            }
+            {error && (
+                <div
+                    className="ops-menu-alert error"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
 
-            {
-                message
-                &&
-                (
-                    <div className="ops-menu-alert success">
-                        {
-                            message
-                        }
-                    </div>
-                )
-            }
+            {message && (
+                <div
+                    className="ops-menu-alert success"
+                    role="status"
+                >
+                    {message}
+                </div>
+            )}
 
             <div className="ops-menu-summary-grid">
                 <SummaryCard
                     label="Menu Items"
-                    value={
-                        summary.totalItems
-                    }
+                    value={summary.totalItems}
                 />
 
                 <SummaryCard
                     label="Categories"
-                    value={
-                        summary.categories
-                    }
-                    note={
-                        `${summary.activeCategories} active`
-                    }
+                    value={summary.categories}
+                    note={`${summary.activeCategories} active`}
                 />
 
                 <SummaryCard
                     label="Visible Items"
-                    value={
-                        summary.visibleItems
-                    }
+                    value={summary.visibleItems}
                     note="Current page"
                 />
 
                 <SummaryCard
                     label="Add-ons"
-                    value={
-                        summary.addons
-                    }
-                    note={
-                        `${summary.addonGroups} groups`
-                    }
+                    value={summary.addons}
+                    note={`${summary.addonGroups} groups`}
                 />
             </div>
 
             <nav className="ops-menu-tabs">
                 <Tab
                     label="Menu Items"
-                    active={
-                        activeTab
-                        ===
-                        "items"
-                    }
-                    onClick={
-                        () =>
-                            setActiveTab(
-                                "items"
-                            )
-                    }
+                    active={activeTab === "items"}
+                    onClick={() => setActiveTab("items")}
                 />
 
                 <Tab
                     label="Categories"
-                    active={
-                        activeTab
-                        ===
-                        "categories"
-                    }
-                    onClick={
-                        () =>
-                            setActiveTab(
-                                "categories"
-                            )
-                    }
+                    active={activeTab === "categories"}
+                    onClick={() => setActiveTab("categories")}
                 />
 
                 <Tab
                     label="Add-ons"
-                    active={
-                        activeTab
-                        ===
-                        "addons"
-                    }
-                    onClick={
-                        () =>
-                            setActiveTab(
-                                "addons"
-                            )
-                    }
+                    active={activeTab === "addons"}
+                    onClick={() => setActiveTab("addons")}
                 />
             </nav>
 
-            {
-                activeTab
-                ===
-                "items"
-                &&
-                (
-                    <>
-                        <form
-                            className="ops-menu-toolbar"
-                            onSubmit={
-                                submitSearch
+            {activeTab === "items" && (
+                <>
+                    <form
+                        className="ops-menu-toolbar"
+                        onSubmit={submitSearch}
+                    >
+                        <input
+                            type="search"
+                            placeholder="Search menu item, SKU, or description..."
+                            value={searchDraft}
+                            onChange={(event) =>
+                                setSearchDraft(event.target.value)
                             }
+                        />
+
+                        <select
+                            value={categoryFilter ?? ""}
+                            onChange={(event) => {
+                                setPage(1);
+                                setCategoryFilter(
+                                    event.target.value === ""
+                                        ? null
+                                        : Number(event.target.value)
+                                );
+                            }}
                         >
-                            <input
-                                type="search"
-                                placeholder="Search menu item, SKU or description..."
-                                value={
-                                    searchDraft
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) =>
-                                        setSearchDraft(
-                                            event.target.value
-                                        )
-                                }
-                            />
+                            <option value="">
+                                All Categories
+                            </option>
 
-                            <select
-                                value={
-                                    categoryFilter
-                                    ??
-                                    ""
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) => {
-                                        setPage(
-                                            1
-                                        );
-
-                                        setCategoryFilter(
-                                            event.target.value
-                                                ===
-                                                ""
-                                                ? null
-                                                : Number(
-                                                    event.target.value
-                                                )
-                                        );
-                                    }
-                                }
-                            >
-                                <option value="">
-                                    All Categories
+                            {categories.map((category) => (
+                                <option
+                                    key={category.id}
+                                    value={category.id}
+                                >
+                                    {category.name}
                                 </option>
+                            ))}
+                        </select>
 
-                                {
-                                    categories.map(
-                                        (
-                                            category
-                                        ) => (
-                                            <option
-                                                key={
-                                                    category.id
-                                                }
-                                                value={
-                                                    category.id
-                                                }
-                                            >
-                                                {
-                                                    category.name
-                                                }
-                                            </option>
-                                        )
-                                    )
-                                }
-                            </select>
+                        <select
+                            value={
+                                activeFilter === null
+                                    ? ""
+                                    : activeFilter
+                                        ? "1"
+                                        : "0"
+                            }
+                            onChange={(event) => {
+                                setPage(1);
+                                setActiveFilter(
+                                    event.target.value === ""
+                                        ? null
+                                        : event.target.value === "1"
+                                );
+                            }}
+                        >
+                            <option value="">
+                                All States
+                            </option>
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
 
-                            <select
-                                value={
-                                    activeFilter
-                                        ===
-                                        null
-                                        ? ""
-                                        : activeFilter
-                                            ? "1"
-                                            : "0"
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) => {
-                                        setPage(
-                                            1
-                                        );
+                        <select
+                            value={
+                                availableFilter === null
+                                    ? ""
+                                    : availableFilter
+                                        ? "1"
+                                        : "0"
+                            }
+                            onChange={(event) => {
+                                setPage(1);
+                                setAvailableFilter(
+                                    event.target.value === ""
+                                        ? null
+                                        : event.target.value === "1"
+                                );
+                            }}
+                        >
+                            <option value="">
+                                All Availability
+                            </option>
+                            <option value="1">Available</option>
+                            <option value="0">Unavailable</option>
+                        </select>
 
-                                        setActiveFilter(
-                                            event.target.value
-                                                ===
-                                                ""
-                                                ? null
-                                                : event.target.value
-                                                ===
-                                                "1"
-                                        );
-                                    }
-                                }
-                            >
-                                <option value="">
-                                    All States
-                                </option>
+                        <button type="submit">
+                            Search
+                        </button>
+                    </form>
 
-                                <option value="1">
-                                    Active
-                                </option>
+                    {loading ? (
+                        <LoadingState />
+                    ) : items.length === 0 ? (
+                        <EmptyState
+                            title="No menu items found"
+                            text="Create a menu item or change the current filters."
+                        />
+                    ) : (
+                        <div className="ops-menu-item-grid">
+                            {items.map((item) => (
+                                <MenuItemCard
+                                    key={item.id}
+                                    item={item}
+                                    canManage={canManage}
+                                    busy={busy}
+                                    onEdit={setEditingItem}
+                                    onToggle={changeItemState}
+                                />
+                            ))}
+                        </div>
+                    )}
 
-                                <option value="0">
-                                    Inactive
-                                </option>
-                            </select>
+                    <div className="ops-menu-pagination">
+                        <span>
+                            <strong>{pagination.total}</strong>{" "}
+                            menu items
+                        </span>
 
-                            <select
-                                value={
-                                    availableFilter
-                                        ===
-                                        null
-                                        ? ""
-                                        : availableFilter
-                                            ? "1"
-                                            : "0"
-                                }
-                                onChange={
-                                    (
-                                        event
-                                    ) => {
-                                        setPage(
-                                            1
-                                        );
-
-                                        setAvailableFilter(
-                                            event.target.value
-                                                ===
-                                                ""
-                                                ? null
-                                                : event.target.value
-                                                ===
-                                                "1"
-                                        );
-                                    }
-                                }
-                            >
-                                <option value="">
-                                    All Availability
-                                </option>
-
-                                <option value="1">
-                                    Available
-                                </option>
-
-                                <option value="0">
-                                    Unavailable
-                                </option>
-                            </select>
-
+                        <div>
                             <button
-                                type="submit"
-                            >
-                                Search
-                            </button>
-                        </form>
-
-                        {
-                            loading
-                                ? (
-                                    <LoadingState />
-                                )
-                                : items.length
-                                    ===
-                                    0
-                                    ? (
-                                        <EmptyState
-                                            title="No menu items found"
-                                            text="Create a menu item or change the current filters."
-                                        />
+                                type="button"
+                                disabled={page <= 1}
+                                onClick={() =>
+                                    setPage((current) =>
+                                        Math.max(1, current - 1)
                                     )
-                                    : (
-                                        <div className="ops-menu-item-grid">
-                                            {
-                                                items.map(
-                                                    (
-                                                        item
-                                                    ) => (
-                                                        <MenuItemCard
-                                                            key={
-                                                                item.id
-                                                            }
-                                                            item={
-                                                                item
-                                                            }
-                                                            canManage={
-                                                                canManage
-                                                            }
-                                                            busy={
-                                                                busy
-                                                            }
-                                                            onEdit={
-                                                                setEditingItem
-                                                            }
-                                                            onToggle={
-                                                                changeItemState
-                                                            }
-                                                        />
-                                                    )
-                                                )
-                                            }
-                                        </div>
-                                    )
-                        }
-
-                        <div className="ops-menu-pagination">
-                            <span>
-                                {
-                                    pagination.total
                                 }
-                                {" "}
-                                menu items
+                            >
+                                ← Previous
+                            </button>
+
+                            <span>
+                                Page{" "}
+                                <strong>
+                                    {pagination.current_page}
+                                </strong>{" "}
+                                of{" "}
+                                <strong>
+                                    {pagination.last_page}
+                                </strong>
                             </span>
 
-                            <div>
-                                <button
-                                    type="button"
-                                    disabled={
-                                        page <= 1
-                                    }
-                                    onClick={
-                                        () =>
-                                            setPage(
-                                                (
-                                                    current
-                                                ) =>
-                                                    Math.max(
-                                                        1,
-                                                        current - 1
-                                                    )
-                                            )
-                                    }
-                                >
-                                    Previous
-                                </button>
-
-                                <span>
-                                    Page
-                                    {" "}
-                                    {
-                                        pagination.current_page
-                                    }
-                                    {" "}
-                                    of
-                                    {" "}
-                                    {
-                                        pagination.last_page
-                                    }
-                                </span>
-
-                                <button
-                                    type="button"
-                                    disabled={
-                                        page
-                                        >=
-                                        pagination.last_page
-                                    }
-                                    onClick={
-                                        () =>
-                                            setPage(
-                                                (
-                                                    current
-                                                ) =>
-                                                    current + 1
-                                            )
-                                    }
-                                >
-                                    Next
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                disabled={
+                                    page >= pagination.last_page
+                                }
+                                onClick={() =>
+                                    setPage(
+                                        (current) => current + 1
+                                    )
+                                }
+                            >
+                                Next →
+                            </button>
                         </div>
-                    </>
-                )
-            }
+                    </div>
+                </>
+            )}
 
-            {
-                activeTab
-                ===
-                "categories"
-                &&
-                (
-                    <div className="ops-menu-panel">
+            {activeTab === "categories" && (
+                <div className="ops-menu-panel">
+                    <header className="ops-menu-panel-header">
+                        <div>
+                            <h3>Categories</h3>
+                            <p>
+                                Organize menu items and control
+                                website/QR visibility.
+                            </p>
+                        </div>
+
+                        {canManage && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setCategoryModal(null)
+                                }
+                            >
+                                + New Category
+                            </button>
+                        )}
+                    </header>
+
+                    <div className="ops-menu-category-list">
+                        {categories.map((category) => (
+                            <article key={category.id}>
+                                <div>
+                                    <strong>
+                                        {category.name}
+                                    </strong>
+
+                                    <span>
+                                        {category.description ??
+                                            "No description"}
+                                    </span>
+                                </div>
+
+                                <div className="ops-menu-category-count">
+                                    <strong>
+                                        {category.menu_items_count ??
+                                            0}
+                                    </strong>
+
+                                    <span>Items</span>
+                                </div>
+
+                                <div className="ops-menu-badges">
+                                    <StatusBadge
+                                        active={
+                                            category.is_active
+                                        }
+                                        activeText="Active"
+                                        inactiveText="Inactive"
+                                    />
+
+                                    <StatusBadge
+                                        active={
+                                            category.is_visible_on_website
+                                        }
+                                        activeText="Website"
+                                        inactiveText="Website Hidden"
+                                    />
+
+                                    <StatusBadge
+                                        active={
+                                            category.is_visible_on_qr
+                                        }
+                                        activeText="QR"
+                                        inactiveText="QR Hidden"
+                                    />
+                                </div>
+
+                                {canManage && (
+                                    <button
+                                        type="button"
+                                        className="ops-menu-edit-button"
+                                        onClick={() =>
+                                            setCategoryModal(category)
+                                        }
+                                    >
+                                        Edit
+                                    </button>
+                                )}
+                            </article>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === "addons" && (
+                <div className="ops-menu-addon-layout">
+                    <section className="ops-menu-panel">
                         <header className="ops-menu-panel-header">
                             <div>
-                                <h3>
-                                    Categories
-                                </h3>
-
+                                <h3>Add-on Groups</h3>
                                 <p>
-                                    Organize menu items and control website/QR visibility.
+                                    Group choices such as extras,
+                                    sauces, and toppings.
                                 </p>
                             </div>
 
-                            {
-                                canManage
-                                &&
-                                (
-                                    <button
-                                        type="button"
-                                        onClick={
-                                            () =>
-                                                setCategoryModal(
-                                                    null
-                                                )
-                                        }
-                                    >
-                                        + New Category
-                                    </button>
-                                )
-                            }
+                            {canManage && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setAddonGroupModal(true)
+                                    }
+                                >
+                                    + New Group
+                                </button>
+                            )}
                         </header>
 
-                        <div className="ops-menu-category-list">
-                            {
-                                categories.map(
-                                    (
-                                        category
-                                    ) => (
-                                        <article
-                                            key={
-                                                category.id
-                                            }
-                                        >
-                                            <div>
-                                                <strong>
-                                                    {
-                                                        category.name
-                                                    }
-                                                </strong>
+                        <div className="ops-menu-addon-groups">
+                            {addonGroups.map((group) => (
+                                <article key={group.id}>
+                                    <div>
+                                        <strong>
+                                            {group.name}
+                                        </strong>
 
-                                                <span>
-                                                    {
-                                                        category.description
-                                                        ??
-                                                        "No description"
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div className="ops-menu-category-count">
-                                                <strong>
-                                                    {
-                                                        category.menu_items_count
-                                                        ??
-                                                        0
-                                                    }
-                                                </strong>
-
-                                                <span>
-                                                    Items
-                                                </span>
-                                            </div>
-
-                                            <div className="ops-menu-badges">
-                                                <StatusBadge
-                                                    active={
-                                                        category.is_active
-                                                    }
-                                                    activeText="Active"
-                                                    inactiveText="Inactive"
-                                                />
-
-                                                <StatusBadge
-                                                    active={
-                                                        category.is_visible_on_website
-                                                    }
-                                                    activeText="Website"
-                                                    inactiveText="Website Hidden"
-                                                />
-
-                                                <StatusBadge
-                                                    active={
-                                                        category.is_visible_on_qr
-                                                    }
-                                                    activeText="QR"
-                                                    inactiveText="QR Hidden"
-                                                />
-                                            </div>
-
-                                            {
-                                                canManage
-                                                &&
-                                                (
-                                                    <button
-                                                        type="button"
-                                                        className="ops-menu-edit-button"
-                                                        onClick={
-                                                            () =>
-                                                                setCategoryModal(
-                                                                    category
-                                                                )
-                                                        }
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                )
-                                            }
-                                        </article>
-                                    )
-                                )
-                            }
-                        </div>
-                    </div>
-                )
-            }
-
-            {
-                activeTab
-                ===
-                "addons"
-                &&
-                (
-                    <div className="ops-menu-addon-layout">
-                        <section className="ops-menu-panel">
-                            <header className="ops-menu-panel-header">
-                                <div>
-                                    <h3>
-                                        Add-on Groups
-                                    </h3>
-
-                                    <p>
-                                        Group choices such as extras, sauces and toppings.
-                                    </p>
-                                </div>
-
-                                {
-                                    canManage
-                                    &&
-                                    (
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                () =>
-                                                    setAddonGroupModal(
-                                                        true
-                                                    )
-                                            }
-                                        >
-                                            + New Group
-                                        </button>
-                                    )
-                                }
-                            </header>
-
-                            <div className="ops-menu-addon-groups">
-                                {
-                                    addonGroups.map(
-                                        (
-                                            group
-                                        ) => (
-                                            <article
-                                                key={
-                                                    group.id
-                                                }
-                                            >
-                                                <div>
-                                                    <strong>
-                                                        {
-                                                            group.name
-                                                        }
-                                                    </strong>
-
-                                                    <span>
-                                                        {
-                                                            group.description
-                                                            ??
-                                                            "No description"
-                                                        }
-                                                    </span>
-                                                </div>
-
-                                                <div>
-                                                    <StatusBadge
-                                                        active={
-                                                            group.is_active
-                                                        }
-                                                        activeText="Active"
-                                                        inactiveText="Inactive"
-                                                    />
-
-                                                    {
-                                                        group.is_required
-                                                        &&
-                                                        (
-                                                            <span className="ops-menu-badge required">
-                                                                Required
-                                                            </span>
-                                                        )
-                                                    }
-                                                </div>
-
-                                                <small>
-                                                    {
-                                                        group.addons.length
-                                                    }
-                                                    {" "}
-                                                    add-ons
-                                                </small>
-                                            </article>
-                                        )
-                                    )
-                                }
-                            </div>
-                        </section>
-
-                        <section className="ops-menu-panel">
-                            <header className="ops-menu-panel-header">
-                                <div>
-                                    <h3>
-                                        Add-ons
-                                    </h3>
-
-                                    <p>
-                                        Optional extras available for menu items.
-                                    </p>
-                                </div>
-
-                                {
-                                    canManage
-                                    &&
-                                    (
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                addonGroups.length
-                                                ===
-                                                0
-                                            }
-                                            onClick={
-                                                () =>
-                                                    setAddonModal(
-                                                        true
-                                                    )
-                                            }
-                                        >
-                                            + New Add-on
-                                        </button>
-                                    )
-                                }
-                            </header>
-
-                            {
-                                canManage
-                                &&
-                                (
-                                    <div className="ops-menu-backend-note">
-                                        Your current Laravel API supports creating add-ons,
-                                        but does not yet expose add-on update routes.
+                                        <span>
+                                            {group.description ??
+                                                "No description"}
+                                        </span>
                                     </div>
-                                )
-                            }
 
-                            <div className="ops-menu-addon-list">
-                                {
-                                    addons.map(
-                                        (
-                                            addon
-                                        ) => (
-                                            <article
-                                                key={
-                                                    addon.id
-                                                }
-                                            >
-                                                <div>
-                                                    <strong>
-                                                        {
-                                                            addon.name
-                                                        }
-                                                    </strong>
+                                    <div className="ops-menu-badges">
+                                        <StatusBadge
+                                            active={
+                                                group.is_active
+                                            }
+                                            activeText="Active"
+                                            inactiveText="Inactive"
+                                        />
 
-                                                    <span>
-                                                        {
-                                                            addonGroups.find(
-                                                                (
-                                                                    group
-                                                                ) =>
-                                                                    group.id
-                                                                    ===
-                                                                    addon.addon_group_id
-                                                            )?.name
-                                                            ??
-                                                            "Unknown Group"
-                                                        }
-                                                    </span>
-                                                </div>
+                                        {group.is_required && (
+                                            <span className="ops-menu-badge required">
+                                                Required
+                                            </span>
+                                        )}
+                                    </div>
 
-                                                <strong>
-                                                    {
-                                                        money.format(
-                                                            addon.base_price
-                                                        )
-                                                    }
-                                                </strong>
+                                    <small>
+                                        {group.addons.length} add-ons
+                                    </small>
+                                </article>
+                            ))}
+                        </div>
+                    </section>
 
-                                                <div className="ops-menu-badges">
-                                                    <StatusBadge
-                                                        active={
-                                                            addon.is_active
-                                                        }
-                                                        activeText="Active"
-                                                        inactiveText="Inactive"
-                                                    />
-
-                                                    <StatusBadge
-                                                        active={
-                                                            addon.is_available
-                                                        }
-                                                        activeText="Available"
-                                                        inactiveText="Unavailable"
-                                                    />
-
-                                                    {
-                                                        addon.consumes_inventory
-                                                        &&
-                                                        (
-                                                            <span className="ops-menu-badge inventory">
-                                                                Inventory
-                                                            </span>
-                                                        )
-                                                    }
-                                                </div>
-                                            </article>
-                                        )
-                                    )
-                                }
+                    <section className="ops-menu-panel">
+                        <header className="ops-menu-panel-header">
+                            <div>
+                                <h3>Add-ons</h3>
+                                <p>
+                                    Optional extras available for
+                                    menu items.
+                                </p>
                             </div>
-                        </section>
-                    </div>
-                )
-            }
 
-            {
-                editingItem
-                !==
-                undefined
-                &&
-                (
-                    <MenuItemFormModal
-                        key={
-                            editingItem
-                                ?.id
-                            ??
-                            "new-item"
-                        }
-                        item={
-                            editingItem
-                        }
-                        categories={
-                            categories
-                        }
-                        addons={
-                            addons
-                        }
-                        busy={
-                            busy
-                        }
-                        onClose={
-                            () =>
-                                setEditingItem(
-                                    undefined
-                                )
-                        }
-                        onSave={
-                            saveItem
-                        }
-                        onRemovePhoto={
-                            removePhoto
-                        }
-                    />
-                )
-            }
+                            {canManage && (
+                                <button
+                                    type="button"
+                                    disabled={
+                                        addonGroups.length === 0
+                                    }
+                                    onClick={() =>
+                                        setAddonModal(true)
+                                    }
+                                >
+                                    + New Add-on
+                                </button>
+                            )}
+                        </header>
 
-            {
-                categoryModal
-                !==
-                undefined
-                &&
-                (
-                    <CategoryModal
-                        key={
-                            categoryModal
-                                ?.id
-                            ??
-                            "new-category"
-                        }
-                        category={
-                            categoryModal
-                        }
-                        busy={
-                            busy
-                        }
-                        onClose={
-                            () =>
-                                setCategoryModal(
-                                    undefined
-                                )
-                        }
-                        onSave={
-                            saveCategory
-                        }
-                    />
-                )
-            }
+                        {canManage && (
+                            <div className="ops-menu-backend-note">
+                                Your current Laravel API supports
+                                creating add-ons but does not yet
+                                expose add-on update routes.
+                            </div>
+                        )}
 
-            {
-                addonGroupModal
-                &&
-                (
-                    <AddonGroupModal
-                        busy={
-                            busy
-                        }
-                        onClose={
-                            () =>
-                                setAddonGroupModal(
-                                    false
-                                )
-                        }
-                        onSave={
-                            saveAddonGroup
-                        }
-                    />
-                )
-            }
+                        <div className="ops-menu-addon-list">
+                            {addons.map((addon) => (
+                                <article key={addon.id}>
+                                    <div>
+                                        <strong>
+                                            {addon.name}
+                                        </strong>
 
-            {
-                addonModal
-                &&
-                (
-                    <AddonModal
-                        groups={
-                            addonGroups
-                        }
-                        busy={
-                            busy
-                        }
-                        onClose={
-                            () =>
-                                setAddonModal(
-                                    false
-                                )
-                        }
-                        onSave={
-                            saveAddon
-                        }
-                    />
-                )
-            }
+                                        <span>
+                                            {addonGroups.find(
+                                                (group) =>
+                                                    group.id ===
+                                                    addon.addon_group_id
+                                            )?.name ??
+                                                "Unknown Group"}
+                                        </span>
+                                    </div>
+
+                                    <strong>
+                                        {money.format(
+                                            addon.base_price
+                                        )}
+                                    </strong>
+
+                                    <div className="ops-menu-badges">
+                                        <StatusBadge
+                                            active={
+                                                addon.is_active
+                                            }
+                                            activeText="Active"
+                                            inactiveText="Inactive"
+                                        />
+
+                                        <StatusBadge
+                                            active={
+                                                addon.is_available
+                                            }
+                                            activeText="Available"
+                                            inactiveText="Unavailable"
+                                        />
+
+                                        {addon.consumes_inventory && (
+                                            <span className="ops-menu-badge inventory">
+                                                Inventory
+                                            </span>
+                                        )}
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    </section>
+                </div>
+            )}
+
+            {editingItem !== undefined && (
+                <MenuItemFormModal
+                    key={editingItem?.id ?? "new-item"}
+                    item={editingItem}
+                    categories={categories}
+                    addons={addons}
+                    busy={busy}
+                    onClose={() => setEditingItem(undefined)}
+                    onSave={saveItem}
+                    onRemovePhoto={removePhoto}
+                />
+            )}
+
+            {categoryModal !== undefined && (
+                <CategoryModal
+                    key={categoryModal?.id ?? "new-category"}
+                    category={categoryModal}
+                    busy={busy}
+                    onClose={() => setCategoryModal(undefined)}
+                    onSave={saveCategory}
+                />
+            )}
+
+            {addonGroupModal && (
+                <AddonGroupModal
+                    busy={busy}
+                    onClose={() => setAddonGroupModal(false)}
+                    onSave={saveAddonGroup}
+                />
+            )}
+
+            {addonModal && (
+                <AddonModal
+                    groups={addonGroups}
+                    busy={busy}
+                    onClose={() => setAddonModal(false)}
+                    onSave={saveAddon}
+                />
+            )}
         </section>
     );
 }
@@ -1980,234 +1103,140 @@ function MenuItemCard(
         onEdit,
         onToggle,
     }: {
-        item:
-        MenuItem;
-
-        canManage:
-        boolean;
-
-        busy:
-        boolean;
-
-        onEdit:
-        (
-            item:
-                MenuItem
-        ) => void;
-
-        onToggle:
-        (
-            item:
-                MenuItem,
-
+        item: MenuItem;
+        canManage: boolean;
+        busy: boolean;
+        onEdit: (item: MenuItem) => void;
+        onToggle: (
+            item: MenuItem,
             field:
-                "is_active"
-                |
-                "is_available"
-                |
-                "is_visible_on_website"
-                |
-                "is_visible_on_qr"
+                | "is_active"
+                | "is_available"
+                | "is_visible_on_website"
+                | "is_visible_on_qr"
         ) => Promise<void>;
     }
 ) {
     return (
         <article className="ops-menu-item-card">
             <div className="ops-menu-item-photo">
-                {
-                    item.photo_url
-                        ? (
-                            <img
-                                src={
-                                    item.photo_url
-                                }
-                                alt={
-                                    item.name
-                                }
-                            />
-                        )
-                        : (
-                            <span>
-                                MENU
-                            </span>
-                        )
-                }
+                {item.photo_url ? (
+                    <img
+                        src={item.photo_url}
+                        alt={item.name}
+                    />
+                ) : (
+                    <span>Menu</span>
+                )}
             </div>
 
             <div className="ops-menu-item-content">
                 <div className="ops-menu-item-heading">
                     <div>
                         <span>
-                            {
-                                item.category
-                                    ?.name
-                                ??
-                                "Uncategorized"
-                            }
+                            {item.category?.name ??
+                                "Uncategorized"}
                         </span>
 
-                        <h3>
-                            {
-                                item.name
-                            }
-                        </h3>
+                        <h3>{item.name}</h3>
                     </div>
 
                     <strong>
-                        {
-                            money.format(
-                                item.price
-                            )
-                        }
+                        {money.format(item.price)}
                     </strong>
                 </div>
 
                 <p>
-                    {
-                        item.description
-                        ??
-                        "No description"
-                    }
+                    {item.description ?? "No description"}
                 </p>
 
                 <div className="ops-menu-badges">
                     <StatusBadge
-                        active={
-                            item.is_active
-                        }
+                        active={item.is_active}
                         activeText="Active"
                         inactiveText="Inactive"
                     />
 
                     <StatusBadge
-                        active={
-                            item.is_available
-                        }
+                        active={item.is_available}
                         activeText="Available"
                         inactiveText="Unavailable"
                     />
 
-                    {
-                        item.has_variants
-                        &&
-                        (
-                            <span className="ops-menu-badge info">
-                                {
-                                    item.variants.length
-                                }
-                                {" "}
-                                Variants
-                            </span>
-                        )
-                    }
+                    {item.has_variants && (
+                        <span className="ops-menu-badge info">
+                            {item.variants.length} Variants
+                        </span>
+                    )}
 
-                    {
-                        item.addons.length
-                        >
-                        0
-                        &&
-                        (
-                            <span className="ops-menu-badge info">
-                                {
-                                    item.addons.length
-                                }
-                                {" "}
-                                Add-ons
-                            </span>
-                        )
-                    }
+                    {item.addons.length > 0 && (
+                        <span className="ops-menu-badge info">
+                            {item.addons.length} Add-ons
+                        </span>
+                    )}
                 </div>
 
                 <div className="ops-menu-visibility-row">
                     <span>
-                        Website:
-                        {" "}
+                        Website:{" "}
                         <strong>
-                            {
-                                item.is_visible_on_website
-                                    ? "Visible"
-                                    : "Hidden"
-                            }
+                            {item.is_visible_on_website
+                                ? "Visible"
+                                : "Hidden"}
                         </strong>
                     </span>
 
                     <span>
-                        QR:
-                        {" "}
+                        QR:{" "}
                         <strong>
-                            {
-                                item.is_visible_on_qr
-                                    ? "Visible"
-                                    : "Hidden"
-                            }
+                            {item.is_visible_on_qr
+                                ? "Visible"
+                                : "Hidden"}
                         </strong>
                     </span>
                 </div>
 
-                {
-                    canManage
-                    &&
-                    (
-                        <div className="ops-menu-item-actions">
-                            <button
-                                type="button"
-                                disabled={
-                                    busy
-                                }
-                                onClick={
-                                    () =>
-                                        onEdit(
-                                            item
-                                        )
-                                }
-                            >
-                                Edit
-                            </button>
+                {canManage && (
+                    <div className="ops-menu-item-actions">
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onEdit(item)}
+                        >
+                            Edit
+                        </button>
 
-                            <button
-                                type="button"
-                                disabled={
-                                    busy
-                                }
-                                onClick={
-                                    () => {
-                                        void onToggle(
-                                            item,
-                                            "is_available"
-                                        );
-                                    }
-                                }
-                            >
-                                {
-                                    item.is_available
-                                        ? "Make Unavailable"
-                                        : "Make Available"
-                                }
-                            </button>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                                void onToggle(
+                                    item,
+                                    "is_available"
+                                );
+                            }}
+                        >
+                            {item.is_available
+                                ? "Make Unavailable"
+                                : "Make Available"}
+                        </button>
 
-                            <button
-                                type="button"
-                                disabled={
-                                    busy
-                                }
-                                onClick={
-                                    () => {
-                                        void onToggle(
-                                            item,
-                                            "is_active"
-                                        );
-                                    }
-                                }
-                            >
-                                {
-                                    item.is_active
-                                        ? "Deactivate"
-                                        : "Activate"
-                                }
-                            </button>
-                        </div>
-                    )
-                }
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                                void onToggle(
+                                    item,
+                                    "is_active"
+                                );
+                            }}
+                        >
+                            {item.is_active
+                                ? "Deactivate"
+                                : "Activate"}
+                        </button>
+                    </div>
+                )}
             </div>
         </article>
     );
@@ -2226,139 +1255,62 @@ function CategoryModal(
         onClose,
         onSave,
     }: {
-        category:
-        MenuCategory | null;
-
-        busy:
-        boolean;
-
-        onClose:
-        () => void;
-
-        onSave:
-        (
-            payload:
-                CreateCategoryPayload
+        category: MenuCategory | null;
+        busy: boolean;
+        onClose: () => void;
+        onSave: (
+            payload: CreateCategoryPayload
         ) => Promise<void>;
     }
 ) {
-    const [
-        name,
-        setName,
-    ] =
-        useState(
-            category?.name
-            ??
-            ""
-        );
-
-    const [
-        description,
-        setDescription,
-    ] =
-        useState(
-            category?.description
-            ??
-            ""
-        );
-
-    const [
-        sortOrder,
-        setSortOrder,
-    ] =
-        useState(
-            category?.sort_order
-            ??
-            0
-        );
-
-    const [
-        active,
-        setActive,
-    ] =
-        useState(
-            category?.is_active
-            ??
-            true
-        );
-
-    const [
-        website,
-        setWebsite,
-    ] =
-        useState(
-            category?.is_visible_on_website
-            ??
-            true
-        );
-
-    const [
-        qr,
-        setQr,
-    ] =
-        useState(
-            category?.is_visible_on_qr
-            ??
-            true
-        );
+    const [name, setName] = useState(category?.name ?? "");
+    const [description, setDescription] =
+        useState(category?.description ?? "");
+    const [sortOrder, setSortOrder] =
+        useState(category?.sort_order ?? 0);
+    const [active, setActive] =
+        useState(category?.is_active ?? true);
+    const [website, setWebsite] =
+        useState(category?.is_visible_on_website ?? true);
+    const [qr, setQr] =
+        useState(category?.is_visible_on_qr ?? true);
 
     return (
         <div className="ops-menu-modal-backdrop">
             <form
                 className="ops-menu-modal small"
-                onSubmit={
-                    (
-                        event
-                    ) => {
-                        event.preventDefault();
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                        void onSave({
-                            name:
-                                name.trim(),
-
-                            description:
-                                description.trim()
-                                    ===
-                                    ""
-                                    ? null
-                                    : description.trim(),
-
-                            sort_order:
-                                sortOrder,
-
-                            is_active:
-                                active,
-
-                            is_visible_on_website:
-                                website,
-
-                            is_visible_on_qr:
-                                qr,
-                        });
-                    }
-                }
+                    void onSave({
+                        name: name.trim(),
+                        description:
+                            description.trim() === ""
+                                ? null
+                                : description.trim(),
+                        sort_order: sortOrder,
+                        is_active: active,
+                        is_visible_on_website: website,
+                        is_visible_on_qr: qr,
+                    });
+                }}
             >
                 <header className="ops-menu-modal-header">
                     <div>
-                        <span>
-                            CATEGORY
-                        </span>
+                        <span>Category</span>
 
                         <h3>
-                            {
-                                category
-                                    ? "Edit Category"
-                                    : "New Category"
-                            }
+                            {category
+                                ? "Edit Category"
+                                : "New Category"}
                         </h3>
                     </div>
 
                     <button
                         type="button"
                         className="ops-menu-modal-close"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
+                        aria-label="Close"
                     >
                         ×
                     </button>
@@ -2366,106 +1318,58 @@ function CategoryModal(
 
                 <div className="ops-menu-simple-form">
                     <label>
-                        <span>
-                            Name *
-                        </span>
-
+                        <span>Name *</span>
                         <input
                             required
-                            maxLength={
-                                150
-                            }
-                            value={
-                                name
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setName(
-                                        event.target.value
-                                    )
+                            maxLength={150}
+                            value={name}
+                            onChange={(event) =>
+                                setName(event.target.value)
                             }
                         />
                     </label>
 
                     <label>
-                        <span>
-                            Description
-                        </span>
-
+                        <span>Description</span>
                         <textarea
-                            rows={
-                                4
-                            }
-                            value={
-                                description
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setDescription(
-                                        event.target.value
-                                    )
+                            rows={4}
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
                             }
                         />
                     </label>
 
                     <label>
-                        <span>
-                            Sort Order
-                        </span>
-
+                        <span>Sort Order</span>
                         <input
                             type="number"
                             min="0"
-                            value={
-                                sortOrder
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setSortOrder(
-                                        Number(
-                                            event.target.value
-                                        )
-                                        ||
-                                        0
-                                    )
+                            value={sortOrder}
+                            onChange={(event) =>
+                                setSortOrder(
+                                    Number(event.target.value) || 0
+                                )
                             }
                         />
                     </label>
 
                     <ToggleInput
                         label="Active"
-                        checked={
-                            active
-                        }
-                        onChange={
-                            setActive
-                        }
+                        checked={active}
+                        onChange={setActive}
                     />
 
                     <ToggleInput
                         label="Visible on Website"
-                        checked={
-                            website
-                        }
-                        onChange={
-                            setWebsite
-                        }
+                        checked={website}
+                        onChange={setWebsite}
                     />
 
                     <ToggleInput
                         label="Visible on Customer QR"
-                        checked={
-                            qr
-                        }
-                        onChange={
-                            setQr
-                        }
+                        checked={qr}
+                        onChange={setQr}
                     />
                 </div>
 
@@ -2473,9 +1377,7 @@ function CategoryModal(
                     <button
                         type="button"
                         className="secondary"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
                     >
                         Cancel
                     </button>
@@ -2483,15 +1385,9 @@ function CategoryModal(
                     <button
                         type="submit"
                         className="primary"
-                        disabled={
-                            busy
-                        }
+                        disabled={busy}
                     >
-                        {
-                            busy
-                                ? "Saving..."
-                                : "Save Category"
-                        }
+                        {busy ? "Saving..." : "Save Category"}
                     </button>
                 </footer>
             </form>
@@ -2511,93 +1407,47 @@ function AddonGroupModal(
         onClose,
         onSave,
     }: {
-        busy:
-        boolean;
-
-        onClose:
-        () => void;
-
-        onSave:
-        (
-            payload:
-                CreateAddonGroupPayload
+        busy: boolean;
+        onClose: () => void;
+        onSave: (
+            payload: CreateAddonGroupPayload
         ) => Promise<void>;
     }
 ) {
-    const [
-        name,
-        setName,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        description,
-        setDescription,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        required,
-        setRequired,
-    ] =
-        useState(
-            false
-        );
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [required, setRequired] = useState(false);
 
     return (
         <div className="ops-menu-modal-backdrop">
             <form
                 className="ops-menu-modal small"
-                onSubmit={
-                    (
-                        event
-                    ) => {
-                        event.preventDefault();
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                        void onSave({
-                            name:
-                                name.trim(),
-
-                            description:
-                                description.trim()
-                                    ===
-                                    ""
-                                    ? null
-                                    : description.trim(),
-
-                            is_required:
-                                required,
-
-                            is_active:
-                                true,
-
-                            sort_order:
-                                0,
-                        });
-                    }
-                }
+                    void onSave({
+                        name: name.trim(),
+                        description:
+                            description.trim() === ""
+                                ? null
+                                : description.trim(),
+                        is_required: required,
+                        is_active: true,
+                        sort_order: 0,
+                    });
+                }}
             >
                 <header className="ops-menu-modal-header">
                     <div>
-                        <span>
-                            ADD-ON GROUP
-                        </span>
-
-                        <h3>
-                            New Add-on Group
-                        </h3>
+                        <span>Add-on Group</span>
+                        <h3>New Add-on Group</h3>
                     </div>
 
                     <button
                         type="button"
                         className="ops-menu-modal-close"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
+                        aria-label="Close"
                     >
                         ×
                     </button>
@@ -2605,57 +1455,31 @@ function AddonGroupModal(
 
                 <div className="ops-menu-simple-form">
                     <label>
-                        <span>
-                            Group Name *
-                        </span>
-
+                        <span>Group Name *</span>
                         <input
                             required
-                            value={
-                                name
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setName(
-                                        event.target.value
-                                    )
+                            value={name}
+                            onChange={(event) =>
+                                setName(event.target.value)
                             }
                         />
                     </label>
 
                     <label>
-                        <span>
-                            Description
-                        </span>
-
+                        <span>Description</span>
                         <textarea
-                            rows={
-                                4
-                            }
-                            value={
-                                description
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setDescription(
-                                        event.target.value
-                                    )
+                            rows={4}
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
                             }
                         />
                     </label>
 
                     <ToggleInput
                         label="Customer must select from this group"
-                        checked={
-                            required
-                        }
-                        onChange={
-                            setRequired
-                        }
+                        checked={required}
+                        onChange={setRequired}
                     />
                 </div>
 
@@ -2663,9 +1487,7 @@ function AddonGroupModal(
                     <button
                         type="button"
                         className="secondary"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
                     >
                         Cancel
                     </button>
@@ -2673,15 +1495,9 @@ function AddonGroupModal(
                     <button
                         type="submit"
                         className="primary"
-                        disabled={
-                            busy
-                        }
+                        disabled={busy}
                     >
-                        {
-                            busy
-                                ? "Creating..."
-                                : "Create Group"
-                        }
+                        {busy ? "Creating..." : "Create Group"}
                     </button>
                 </footer>
             </form>
@@ -2702,99 +1518,47 @@ function AddonModal(
         onClose,
         onSave,
     }: {
-        groups:
-        MenuAddonGroup[];
-
-        busy:
-        boolean;
-
-        onClose:
-        () => void;
-
-        onSave:
-        (
-            payload:
-                CreateAddonPayload
+        groups: MenuAddonGroup[];
+        busy: boolean;
+        onClose: () => void;
+        onSave: (
+            payload: CreateAddonPayload
         ) => Promise<void>;
     }
 ) {
-    const [
-        groupId,
-        setGroupId,
-    ] =
-        useState(
-            groups[0]?.id
-            ??
-            0
-        );
-
-    const [
-        name,
-        setName,
-    ] =
-        useState(
-            ""
-        );
-
-    const [
-        price,
-        setPrice,
-    ] =
-        useState(
-            "0"
-        );
+    const [groupId, setGroupId] =
+        useState(groups[0]?.id ?? 0);
+    const [name, setName] = useState("");
+    const [price, setPrice] = useState("0");
 
     return (
         <div className="ops-menu-modal-backdrop">
             <form
                 className="ops-menu-modal small"
-                onSubmit={
-                    (
-                        event
-                    ) => {
-                        event.preventDefault();
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                        void onSave({
-                            addon_group_id:
-                                groupId,
-
-                            name:
-                                name.trim(),
-
-                            price:
-                                Number(
-                                    price
-                                ),
-
-                            is_available:
-                                true,
-
-                            is_active:
-                                true,
-
-                            sort_order:
-                                0,
-                        });
-                    }
-                }
+                    void onSave({
+                        addon_group_id: groupId,
+                        name: name.trim(),
+                        price: Number(price),
+                        is_available: true,
+                        is_active: true,
+                        sort_order: 0,
+                    });
+                }}
             >
                 <header className="ops-menu-modal-header">
                     <div>
-                        <span>
-                            ADD-ON
-                        </span>
-
-                        <h3>
-                            New Add-on
-                        </h3>
+                        <span>Add-on</span>
+                        <h3>New Add-on</h3>
                     </div>
 
                     <button
                         type="button"
                         className="ops-menu-modal-close"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
+                        aria-label="Close"
                     >
                         ×
                     </button>
@@ -2802,89 +1566,47 @@ function AddonModal(
 
                 <div className="ops-menu-simple-form">
                     <label>
-                        <span>
-                            Add-on Group *
-                        </span>
-
+                        <span>Add-on Group *</span>
                         <select
-                            value={
-                                groupId
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setGroupId(
-                                        Number(
-                                            event.target.value
-                                        )
-                                    )
-                            }
-                        >
-                            {
-                                groups.map(
-                                    (
-                                        group
-                                    ) => (
-                                        <option
-                                            key={
-                                                group.id
-                                            }
-                                            value={
-                                                group.id
-                                            }
-                                        >
-                                            {
-                                                group.name
-                                            }
-                                        </option>
-                                    )
+                            value={groupId}
+                            onChange={(event) =>
+                                setGroupId(
+                                    Number(event.target.value)
                                 )
                             }
+                        >
+                            {groups.map((group) => (
+                                <option
+                                    key={group.id}
+                                    value={group.id}
+                                >
+                                    {group.name}
+                                </option>
+                            ))}
                         </select>
                     </label>
 
                     <label>
-                        <span>
-                            Add-on Name *
-                        </span>
-
+                        <span>Add-on Name *</span>
                         <input
                             required
-                            value={
-                                name
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setName(
-                                        event.target.value
-                                    )
+                            value={name}
+                            onChange={(event) =>
+                                setName(event.target.value)
                             }
                         />
                     </label>
 
                     <label>
-                        <span>
-                            Price (Rs.) *
-                        </span>
-
+                        <span>Price (Rs.) *</span>
                         <input
                             type="number"
                             min="0"
                             step="0.01"
                             required
-                            value={
-                                price
-                            }
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setPrice(
-                                        event.target.value
-                                    )
+                            value={price}
+                            onChange={(event) =>
+                                setPrice(event.target.value)
                             }
                         />
                     </label>
@@ -2894,9 +1616,7 @@ function AddonModal(
                     <button
                         type="button"
                         className="secondary"
-                        onClick={
-                            onClose
-                        }
+                        onClick={onClose}
                     >
                         Cancel
                     </button>
@@ -2904,17 +1624,9 @@ function AddonModal(
                     <button
                         type="submit"
                         className="primary"
-                        disabled={
-                            busy
-                            ||
-                            groupId <= 0
-                        }
+                        disabled={busy || groupId <= 0}
                     >
-                        {
-                            busy
-                                ? "Creating..."
-                                : "Create Add-on"
-                        }
+                        {busy ? "Creating..." : "Create Add-on"}
                     </button>
                 </footer>
             </form>
@@ -2934,41 +1646,16 @@ function SummaryCard(
         value,
         note,
     }: {
-        label:
-        string;
-
-        value:
-        number;
-
-        note?:
-        string;
+        label: string;
+        value: number;
+        note?: string;
     }
 ) {
     return (
         <article className="ops-menu-summary-card">
-            <span>
-                {
-                    label
-                }
-            </span>
-
-            <strong>
-                {
-                    value
-                }
-            </strong>
-
-            {
-                note
-                &&
-                (
-                    <small>
-                        {
-                            note
-                        }
-                    </small>
-                )
-            }
+            <span>{label}</span>
+            <strong>{value}</strong>
+            {note && <small>{note}</small>}
         </article>
     );
 }
@@ -2979,31 +1666,18 @@ function Tab(
         active,
         onClick,
     }: {
-        label:
-        string;
-
-        active:
-        boolean;
-
-        onClick:
-        () => void;
+        label: string;
+        active: boolean;
+        onClick: () => void;
     }
 ) {
     return (
         <button
             type="button"
-            className={
-                active
-                    ? "active"
-                    : ""
-            }
-            onClick={
-                onClick
-            }
+            className={active ? "active" : ""}
+            onClick={onClick}
         >
-            {
-                label
-            }
+            {label}
         </button>
     );
 }
@@ -3014,14 +1688,9 @@ function StatusBadge(
         activeText,
         inactiveText,
     }: {
-        active:
-        boolean;
-
-        activeText:
-        string;
-
-        inactiveText:
-        string;
+        active: boolean;
+        activeText: string;
+        inactiveText: string;
     }
 ) {
     return (
@@ -3032,11 +1701,7 @@ function StatusBadge(
                     : "ops-menu-badge muted"
             }
         >
-            {
-                active
-                    ? activeText
-                    : inactiveText
-            }
+            {active ? activeText : inactiveText}
         </span>
     );
 }
@@ -3047,41 +1712,22 @@ function ToggleInput(
         checked,
         onChange,
     }: {
-        label:
-        string;
-
-        checked:
-        boolean;
-
-        onChange:
-        (
-            value:
-                boolean
-        ) => void;
+        label: string;
+        checked: boolean;
+        onChange: (value: boolean) => void;
     }
 ) {
     return (
         <label className="ops-menu-simple-toggle">
             <input
                 type="checkbox"
-                checked={
-                    checked
-                }
-                onChange={
-                    (
-                        event
-                    ) =>
-                        onChange(
-                            event.target.checked
-                        )
+                checked={checked}
+                onChange={(event) =>
+                    onChange(event.target.checked)
                 }
             />
 
-            <span>
-                {
-                    label
-                }
-            </span>
+            <span>{label}</span>
         </label>
     );
 }
@@ -3099,26 +1745,14 @@ function EmptyState(
         title,
         text,
     }: {
-        title:
-        string;
-
-        text:
-        string;
+        title: string;
+        text: string;
     }
 ) {
     return (
         <div className="ops-menu-empty">
-            <strong>
-                {
-                    title
-                }
-            </strong>
-
-            <span>
-                {
-                    text
-                }
-            </span>
+            <strong>{title}</strong>
+            <span>{text}</span>
         </div>
     );
 }

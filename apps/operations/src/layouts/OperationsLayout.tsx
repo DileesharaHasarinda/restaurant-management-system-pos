@@ -351,6 +351,21 @@ export default function OperationsLayout() {
                 ? 'Connecting'
                 : 'Reconnecting';
 
+    const realtimeTone =
+        realtimeState
+            ===
+            'connected'
+            ? 'live'
+            : realtimeState
+                ===
+                'connecting'
+                ||
+                realtimeState
+                ===
+                'initialized'
+                ? 'connecting'
+                : 'reconnecting';
+
     const handleLogout =
         async (): Promise<void> => {
             if (
@@ -403,16 +418,16 @@ export default function OperationsLayout() {
             >
                 <header className="ops-brand">
                     <div className="ops-brand-mark">
-                        RM
+                        PV
                     </div>
 
                     <div>
                         <strong>
-                            Restaurant
+                            Palmyra by Vora
                         </strong>
 
                         <span>
-                            Management System
+                            Operations Portal
                         </span>
                     </div>
 
@@ -573,8 +588,8 @@ export default function OperationsLayout() {
                         </button>
 
                         <div>
-                            <span>
-                                OPERATIONS
+                            <span className="ops-topbar-eyebrow">
+                                PALMYRA BY VORA
                             </span>
 
                             <h1>
@@ -586,8 +601,17 @@ export default function OperationsLayout() {
                     </div>
 
                     <div className="ops-topbar-user">
-                        <div>
+                        <div
+                            className={
+                                `ops-topbar-status ops-topbar-status-${realtimeTone}`
+                            }
+                        >
                             <strong>
+                                <span
+                                    className="ops-realtime-dot"
+                                    aria-hidden="true"
+                                />
+
                                 {
                                     realtimeLabel
                                 }

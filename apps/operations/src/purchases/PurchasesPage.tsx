@@ -47,94 +47,54 @@ import type {
 
 import "./PurchasesPage.css";
 
-const EMPTY_PAGINATION:
-    PurchasePagination = {
-    current_page:
-        1,
-
-    per_page:
-        30,
-
-    total:
-        0,
-
-    last_page:
-        1,
+const EMPTY_PAGINATION: PurchasePagination = {
+    current_page: 1,
+    per_page: 30,
+    total: 0,
+    last_page: 1,
 };
 
 interface FilterState {
     search: string;
-
     supplierId: string;
-
     status: "" | PurchaseStatus;
-
     dateFrom: string;
-
     dateTo: string;
 }
 
-const EMPTY_FILTERS:
-    FilterState = {
-    search:
-        "",
-
-    supplierId:
-        "",
-
-    status:
-        "",
-
-    dateFrom:
-        "",
-
-    dateTo:
-        "",
+const EMPTY_FILTERS: FilterState = {
+    search: "",
+    supplierId: "",
+    status: "",
+    dateFrom: "",
+    dateTo: "",
 };
 
 const money =
     new Intl.NumberFormat(
         "en-LK",
         {
-            style:
-                "currency",
-
-            currency:
-                "LKR",
-
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
-        }
+            style: "currency",
+            currency: "LKR",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        },
     );
 
-function errorMessage(
-    error: unknown
-): string {
-    if (
-        error instanceof Error
-        && error.message
-    ) {
+function errorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
         return error.message;
     }
 
     return "The purchase operation could not be completed.";
 }
 
-function statusClass(
-    status: PurchaseStatus
-): string {
-    if (
-        status === "COMPLETED"
-    ) {
+function statusClass(status: PurchaseStatus): string {
+    if (status === "COMPLETED") {
         return "purchases-badge purchases-badge-success";
     }
 
-    if (
-        status === "CANCELLED"
-    ) {
+    if (status === "CANCELLED") {
         return "purchases-badge purchases-badge-danger";
     }
 
@@ -142,17 +102,13 @@ function statusClass(
 }
 
 function paymentClass(
-    status: Purchase["payment_status"]
+    status: Purchase["payment_status"],
 ): string {
-    if (
-        status === "PAID"
-    ) {
+    if (status === "PAID") {
         return "purchases-badge purchases-badge-success";
     }
 
-    if (
-        status === "PARTIALLY_PAID"
-    ) {
+    if (status === "PARTIALLY_PAID") {
         return "purchases-badge purchases-badge-warning";
     }
 
@@ -160,259 +116,90 @@ function paymentClass(
 }
 
 export default function PurchasesPage() {
-    const {
-        hasPermission,
-    } =
-        useAuth();
+    const { hasPermission } = useAuth();
 
-    const canCreate =
-        hasPermission(
-            "purchases.create"
-        );
+    const canCreate = hasPermission("purchases.create");
+    const canManage = hasPermission("purchases.manage");
 
-    const canManage =
-        hasPermission(
-            "purchases.manage"
-        );
+    const [purchases, setPurchases] =
+        useState<Purchase[]>([]);
 
-    const [
-        purchases,
-        setPurchases,
-    ] =
-        useState<Purchase[]>(
-            []
-        );
+    const [pagination, setPagination] =
+        useState(EMPTY_PAGINATION);
 
-    const [
-        pagination,
-        setPagination,
-    ] =
-        useState(
-            EMPTY_PAGINATION
-        );
+    const [page, setPage] = useState(1);
 
-    const [
-        page,
-        setPage,
-    ] =
-        useState(
-            1
-        );
+    const [filterDraft, setFilterDraft] =
+        useState<FilterState>(EMPTY_FILTERS);
 
-    const [
-        filterDraft,
-        setFilterDraft,
-    ] =
-        useState<FilterState>(
-            EMPTY_FILTERS
-        );
+    const [filters, setFilters] =
+        useState<FilterState>(EMPTY_FILTERS);
 
-    const [
-        filters,
-        setFilters,
-    ] =
-        useState<FilterState>(
-            EMPTY_FILTERS
-        );
+    const [supplierFilters, setSupplierFilters] =
+        useState<Supplier[]>([]);
 
-    const [
-        supplierFilters,
-        setSupplierFilters,
-    ] =
-        useState<Supplier[]>(
-            []
-        );
+    const [editorSuppliers, setEditorSuppliers] =
+        useState<Supplier[]>([]);
 
-    const [
-        editorSuppliers,
-        setEditorSuppliers,
-    ] =
-        useState<Supplier[]>(
-            []
-        );
+    const [editorIngredients, setEditorIngredients] =
+        useState<PurchaseIngredientOption[]>([]);
 
-    const [
-        editorIngredients,
-        setEditorIngredients,
-    ] =
-        useState<
-            PurchaseIngredientOption[]
-        >(
-            []
-        );
+    const [editorUnits, setEditorUnits] =
+        useState<PurchaseUnitOption[]>([]);
 
-    const [
-        editorUnits,
-        setEditorUnits,
-    ] =
-        useState<
-            PurchaseUnitOption[]
-        >(
-            []
-        );
+    const [editorLookupsReady, setEditorLookupsReady] =
+        useState(false);
 
-    const [
-        editorLookupsReady,
-        setEditorLookupsReady,
-    ] =
-        useState(
-            false
-        );
+    const [lookupLoading, setLookupLoading] = useState(false);
 
-    const [
-        lookupLoading,
-        setLookupLoading,
-    ] =
-        useState(
-            false
-        );
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const [
-        loading,
-        setLoading,
-    ] =
-        useState(
-            true
-        );
+    const [busyPurchaseId, setBusyPurchaseId] =
+        useState<number | null>(null);
 
-    const [
-        refreshing,
-        setRefreshing,
-    ] =
-        useState(
-            false
-        );
+    const [error, setError] = useState("");
+    const [message, setMessage] = useState("");
 
-    const [
-        busyPurchaseId,
-        setBusyPurchaseId,
-    ] =
-        useState<number | null>(
-            null
-        );
+    const [editingPurchase, setEditingPurchase] =
+        useState<Purchase | null | undefined>(undefined);
 
-    const [
-        error,
-        setError,
-    ] =
-        useState(
-            ""
-        );
+    const [selectedPurchase, setSelectedPurchase] =
+        useState<Purchase | undefined>(undefined);
 
-    const [
-        message,
-        setMessage,
-    ] =
-        useState(
-            ""
-        );
+    const loadPurchases = useCallback(
+        async () => {
+            try {
+                const result = await getPurchases({
+                    page,
+                    search: filters.search,
+                    supplierId: filters.supplierId
+                        ? Number(filters.supplierId)
+                        : null,
+                    status: filters.status || null,
+                    dateFrom: filters.dateFrom,
+                    dateTo: filters.dateTo,
+                    perPage: 30,
+                });
 
-    /*
-     * undefined = closed
-     * null      = new purchase
-     * Purchase  = edit draft
-     */
-    const [
-        editingPurchase,
-        setEditingPurchase,
-    ] =
-        useState<
-            Purchase
-            | null
-            | undefined
-        >(
-            undefined
-        );
-
-    const [
-        selectedPurchase,
-        setSelectedPurchase,
-    ] =
-        useState<
-            Purchase
-            | undefined
-        >(
-            undefined
-        );
-
-    const loadPurchases =
-        useCallback(
-            async () => {
-                try {
-                    const result =
-                        await getPurchases({
-                            page,
-
-                            search:
-                                filters.search,
-
-                            supplierId:
-                                filters.supplierId
-                                    ? Number(
-                                        filters.supplierId
-                                    )
-                                    : null,
-
-                            status:
-                                filters.status
-                                || null,
-
-                            dateFrom:
-                                filters.dateFrom,
-
-                            dateTo:
-                                filters.dateTo,
-
-                            perPage:
-                                30,
-                        });
-
-                    setPurchases(
-                        result.purchases
-                    );
-
-                    setPagination(
-                        result.pagination
-                    );
-                } catch (
-                caught
-                ) {
-                    setError(
-                        errorMessage(
-                            caught
-                        )
-                    );
-                } finally {
-                    setLoading(
-                        false
-                    );
-                }
-            },
-            [
-                page,
-                filters,
-            ]
-        );
-
-    useEffect(
-        () => {
-            const timeoutId =
-                window.setTimeout(
-                    () => {
-                        void loadPurchases();
-                    },
-                    0
-                );
-
-            return () =>
-                window.clearTimeout(
-                    timeoutId
-                );
+                setPurchases(result.purchases);
+                setPagination(result.pagination);
+            } catch (caught) {
+                setError(errorMessage(caught));
+            } finally {
+                setLoading(false);
+            }
         },
-        [
-            loadPurchases,
-        ]
+        [page, filters],
     );
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            void loadPurchases();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [loadPurchases]);
 
     /*
     |--------------------------------------------------------------------------
@@ -420,108 +207,68 @@ export default function PurchasesPage() {
     |--------------------------------------------------------------------------
     */
 
-    const loadSupplierFilters =
-        useCallback(
-            async (): Promise<void> => {
-                try {
-                    const suppliers =
-                        await getPurchaseSupplierOptions(
-                            false
-                        );
+    const loadSupplierFilters = useCallback(
+        async (): Promise<void> => {
+            try {
+                const suppliers =
+                    await getPurchaseSupplierOptions(false);
 
-                    setSupplierFilters(
-                        suppliers
-                    );
-                } catch {
-                    /*
-                     * Purchase listing remains usable
-                     * even when supplier lookup access
-                     * is unavailable.
-                     */
-                }
-            },
-            []
-        );
-
-    useEffect(
-        () => {
-            const timeoutId =
-                window.setTimeout(
-                    () => {
-                        void loadSupplierFilters();
-                    },
-                    0
-                );
-
-            return () =>
-                window.clearTimeout(
-                    timeoutId
-                );
+                setSupplierFilters(suppliers);
+            } catch {
+                /*
+                 * Purchase listing remains usable
+                 * even when supplier lookup access
+                 * is unavailable.
+                 */
+            }
         },
-        [
-            loadSupplierFilters,
-        ]
+        [],
     );
 
-    const draftCount =
-        useMemo(
-            () =>
-                purchases.filter(
-                    (purchase) =>
-                        purchase.status
-                        === "DRAFT"
-                ).length,
-            [
-                purchases,
-            ]
-        );
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            void loadSupplierFilters();
+        }, 0);
 
-    const completedCount =
-        useMemo(
-            () =>
-                purchases.filter(
-                    (purchase) =>
-                        purchase.status
-                        === "COMPLETED"
-                ).length,
-            [
-                purchases,
-            ]
-        );
+        return () => window.clearTimeout(timeoutId);
+    }, [loadSupplierFilters]);
 
-    const visibleTotal =
-        useMemo(
-            () =>
-                purchases.reduce(
-                    (
-                        total,
-                        purchase
-                    ) =>
-                        total
-                        + purchase.grand_total,
-                    0
-                ),
-            [
-                purchases,
-            ]
-        );
+    const draftCount = useMemo(
+        () =>
+            purchases.filter(
+                (purchase) => purchase.status === "DRAFT",
+            ).length,
+        [purchases],
+    );
 
-    const visibleBalance =
-        useMemo(
-            () =>
-                purchases.reduce(
-                    (
-                        total,
-                        purchase
-                    ) =>
-                        total
-                        + purchase.balance_due,
-                    0
-                ),
-            [
-                purchases,
-            ]
-        );
+    const completedCount = useMemo(
+        () =>
+            purchases.filter(
+                (purchase) =>
+                    purchase.status === "COMPLETED",
+            ).length,
+        [purchases],
+    );
+
+    const visibleTotal = useMemo(
+        () =>
+            purchases.reduce(
+                (total, purchase) =>
+                    total + purchase.grand_total,
+                0,
+            ),
+        [purchases],
+    );
+
+    const visibleBalance = useMemo(
+        () =>
+            purchases.reduce(
+                (total, purchase) =>
+                    total + purchase.balance_due,
+                0,
+            ),
+        [purchases],
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -529,626 +276,344 @@ export default function PurchasesPage() {
     |--------------------------------------------------------------------------
     */
 
-    const loadEditorLookups =
-        useCallback(
-            async (): Promise<void> => {
-                const [
-                    suppliers,
-                    ingredients,
-                    units,
-                ] =
-                    await Promise.all([
-                        getPurchaseSupplierOptions(
-                            true
-                        ),
+    const loadEditorLookups = useCallback(
+        async (): Promise<void> => {
+            const [suppliers, ingredients, units] =
+                await Promise.all([
+                    getPurchaseSupplierOptions(true),
+                    getPurchaseIngredientOptions(),
+                    getPurchaseUnitOptions(),
+                ]);
 
-                        getPurchaseIngredientOptions(),
+            setEditorSuppliers(suppliers);
+            setEditorIngredients(ingredients);
+            setEditorUnits(units);
+            setEditorLookupsReady(true);
+        },
+        [],
+    );
 
-                        getPurchaseUnitOptions(),
-                    ]);
+    const ensureEditorLookups = async (): Promise<void> => {
+        if (editorLookupsReady) {
+            return;
+        }
 
-                setEditorSuppliers(
-                    suppliers
-                );
+        if (lookupLoading) {
+            return;
+        }
 
-                setEditorIngredients(
-                    ingredients
-                );
+        setLookupLoading(true);
 
-                setEditorUnits(
-                    units
-                );
+        try {
+            await loadEditorLookups();
+        } finally {
+            setLookupLoading(false);
+        }
+    };
 
-                setEditorLookupsReady(
-                    true
-                );
-            },
-            []
+    const openCreate = async () => {
+        setError("");
+        setMessage("");
+
+        try {
+            await ensureEditorLookups();
+            setEditingPurchase(null);
+        } catch (caught) {
+            setError(errorMessage(caught));
+        }
+    };
+
+    const openEdit = async (purchase: Purchase) => {
+        if (purchase.status !== "DRAFT") {
+            return;
+        }
+
+        setError("");
+        setSelectedPurchase(undefined);
+
+        try {
+            await ensureEditorLookups();
+            setEditingPurchase(purchase);
+        } catch (caught) {
+            setError(errorMessage(caught));
+        }
+    };
+
+    const savePurchase = async (payload: PurchasePayload) => {
+        if (editingPurchase === undefined) {
+            throw new Error("No purchase editor is open.");
+        }
+
+        setError("");
+        setMessage("");
+
+        if (editingPurchase === null) {
+            const created = await createPurchase(payload);
+
+            setEditingPurchase(undefined);
+            setMessage(
+                `${created.purchase_number} created as draft.`,
+            );
+
+            if (page !== 1) {
+                setLoading(true);
+                setPage(1);
+            } else {
+                await loadPurchases();
+            }
+
+            return;
+        }
+
+        const updated = await updatePurchase(
+            editingPurchase.id,
+            payload,
         );
 
-    const ensureEditorLookups =
-        async (): Promise<void> => {
-            if (
-                editorLookupsReady
-            ) {
-                return;
-            }
+        setEditingPurchase(undefined);
+        setMessage(
+            `${updated.purchase_number} updated successfully.`,
+        );
 
-            if (
-                lookupLoading
-            ) {
-                return;
-            }
+        await loadPurchases();
+    };
 
-            setLookupLoading(
-                true
-            );
+    const viewPurchase = async (purchase: Purchase) => {
+        setBusyPurchaseId(purchase.id);
+        setError("");
 
-            try {
-                await loadEditorLookups();
-            } finally {
-                setLookupLoading(
-                    false
-                );
-            }
-        };
+        try {
+            const current = await getPurchase(purchase.id);
+            setSelectedPurchase(current);
+        } catch (caught) {
+            setError(errorMessage(caught));
+        } finally {
+            setBusyPurchaseId(null);
+        }
+    };
 
-    const openCreate =
-        async () => {
-            setError(
-                ""
-            );
+    const completePurchaseAction = async (
+        purchase: Purchase,
+    ) => {
+        if (!canManage || purchase.status !== "DRAFT") {
+            return;
+        }
 
-            setMessage(
-                ""
-            );
+        const confirmed = window.confirm(
+            `Complete ${purchase.purchase_number}?\n\n` +
+            "This will receive the purchase into inventory, " +
+            "update weighted-average ingredient costs and " +
+            "increase the supplier outstanding balance.",
+        );
 
-            try {
-                await ensureEditorLookups();
+        if (!confirmed) {
+            return;
+        }
 
-                setEditingPurchase(
-                    null
-                );
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            }
-        };
+        setBusyPurchaseId(purchase.id);
+        setError("");
+        setMessage("");
 
-    const openEdit =
-        async (
-            purchase: Purchase
-        ) => {
-            if (
-                purchase.status
-                !== "DRAFT"
-            ) {
-                return;
-            }
-
-            setError(
-                ""
-            );
-
-            setSelectedPurchase(
-                undefined
-            );
-
-            try {
-                await ensureEditorLookups();
-
-                setEditingPurchase(
-                    purchase
-                );
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            }
-        };
-
-    const savePurchase =
-        async (
-            payload: PurchasePayload
-        ) => {
-            if (
-                editingPurchase
-                === undefined
-            ) {
-                throw new Error(
-                    "No purchase editor is open."
-                );
-            }
-
-            setError(
-                ""
+        try {
+            const completed = await completePurchase(
+                purchase.id,
             );
 
             setMessage(
-                ""
+                `${completed.purchase_number} completed and inventory received successfully.`,
             );
 
-            if (
-                editingPurchase
-                === null
-            ) {
-                const created =
-                    await createPurchase(
-                        payload
-                    );
-
-                setEditingPurchase(
-                    undefined
-                );
-
-                setMessage(
-                    `${created.purchase_number} created as draft.`
-                );
-
-                if (
-                    page !== 1
-                ) {
-                    setLoading(
-                        true
-                    );
-
-                    setPage(
-                        1
-                    );
-                } else {
-                    await loadPurchases();
-                }
-
-                return;
+            if (selectedPurchase?.id === completed.id) {
+                setSelectedPurchase(completed);
             }
-
-            const updated =
-                await updatePurchase(
-                    editingPurchase.id,
-                    payload
-                );
-
-            setEditingPurchase(
-                undefined
-            );
-
-            setMessage(
-                `${updated.purchase_number} updated successfully.`
-            );
 
             await loadPurchases();
-        };
+        } catch (caught) {
+            setError(errorMessage(caught));
+        } finally {
+            setBusyPurchaseId(null);
+        }
+    };
 
-    const viewPurchase =
-        async (
-            purchase: Purchase
-        ) => {
-            setBusyPurchaseId(
-                purchase.id
-            );
+    const cancelPurchaseAction = async (
+        purchase: Purchase,
+    ) => {
+        if (!canManage || purchase.status !== "DRAFT") {
+            return;
+        }
 
-            setError(
-                ""
-            );
+        const confirmed = window.confirm(
+            `Cancel draft purchase ${purchase.purchase_number}?\n\n` +
+            "A cancelled draft cannot be completed.",
+        );
 
-            try {
-                const current =
-                    await getPurchase(
-                        purchase.id
-                    );
+        if (!confirmed) {
+            return;
+        }
 
-                setSelectedPurchase(
-                    current
-                );
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            } finally {
-                setBusyPurchaseId(
-                    null
-                );
-            }
-        };
+        setBusyPurchaseId(purchase.id);
+        setError("");
+        setMessage("");
 
-    const completePurchaseAction =
-        async (
-            purchase: Purchase
-        ) => {
-            if (
-                !canManage
-                || purchase.status
-                !== "DRAFT"
-            ) {
-                return;
-            }
-
-            const confirmed =
-                window.confirm(
-                    `Complete ${purchase.purchase_number}?\n\n`
-                    + "This will receive the purchase into inventory, "
-                    + "update weighted-average ingredient costs and "
-                    + "increase the supplier outstanding balance."
-                );
-
-            if (!confirmed) {
-                return;
-            }
-
-            setBusyPurchaseId(
-                purchase.id
-            );
-
-            setError(
-                ""
+        try {
+            const cancelled = await cancelPurchase(
+                purchase.id,
             );
 
             setMessage(
-                ""
+                `${cancelled.purchase_number} cancelled successfully.`,
             );
 
-            try {
-                const completed =
-                    await completePurchase(
-                        purchase.id
-                    );
-
-                setMessage(
-                    `${completed.purchase_number} completed and inventory received successfully.`
-                );
-
-                if (
-                    selectedPurchase?.id
-                    === completed.id
-                ) {
-                    setSelectedPurchase(
-                        completed
-                    );
-                }
-
-                await loadPurchases();
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            } finally {
-                setBusyPurchaseId(
-                    null
-                );
-            }
-        };
-
-    const cancelPurchaseAction =
-        async (
-            purchase: Purchase
-        ) => {
-            if (
-                !canManage
-                || purchase.status
-                !== "DRAFT"
-            ) {
-                return;
+            if (selectedPurchase?.id === cancelled.id) {
+                setSelectedPurchase(cancelled);
             }
 
-            const confirmed =
-                window.confirm(
-                    `Cancel draft purchase ${purchase.purchase_number}?\n\n`
-                    + "A cancelled draft cannot be completed."
-                );
+            await loadPurchases();
+        } catch (caught) {
+            setError(errorMessage(caught));
+        } finally {
+            setBusyPurchaseId(null);
+        }
+    };
 
-            if (!confirmed) {
-                return;
-            }
+    const submitFilters = (event: FormEvent) => {
+        event.preventDefault();
 
-            setBusyPurchaseId(
-                purchase.id
-            );
-
+        if (
+            filterDraft.dateFrom &&
+            filterDraft.dateTo &&
+            filterDraft.dateTo < filterDraft.dateFrom
+        ) {
             setError(
-                ""
+                "Date To cannot be earlier than Date From.",
             );
 
-            setMessage(
-                ""
-            );
+            return;
+        }
 
-            try {
-                const cancelled =
-                    await cancelPurchase(
-                        purchase.id
-                    );
+        setError("");
+        setMessage("");
+        setLoading(true);
+        setPage(1);
 
-                setMessage(
-                    `${cancelled.purchase_number} cancelled successfully.`
-                );
+        setFilters({
+            ...filterDraft,
+            search: filterDraft.search.trim(),
+        });
+    };
 
-                if (
-                    selectedPurchase?.id
-                    === cancelled.id
-                ) {
-                    setSelectedPurchase(
-                        cancelled
-                    );
-                }
+    const clearFilters = () => {
+        setFilterDraft(EMPTY_FILTERS);
+        setFilters(EMPTY_FILTERS);
+        setError("");
+        setMessage("");
+        setLoading(true);
+        setPage(1);
+    };
 
-                await loadPurchases();
-            } catch (
-            caught
-            ) {
-                setError(
-                    errorMessage(
-                        caught
-                    )
-                );
-            } finally {
-                setBusyPurchaseId(
-                    null
-                );
-            }
-        };
+    const refresh = async () => {
+        if (refreshing) {
+            return;
+        }
 
-    const submitFilters =
-        (
-            event: FormEvent
-        ) => {
-            event.preventDefault();
+        setRefreshing(true);
+        setError("");
 
-            if (
-                filterDraft.dateFrom
-                && filterDraft.dateTo
-                && filterDraft.dateTo
-                < filterDraft.dateFrom
-            ) {
-                setError(
-                    "Date To cannot be earlier than Date From."
-                );
-
-                return;
-            }
-
-            setError(
-                ""
-            );
-
-            setMessage(
-                ""
-            );
-
-            setLoading(
-                true
-            );
-
-            setPage(
-                1
-            );
-
-            setFilters({
-                ...filterDraft,
-
-                search:
-                    filterDraft.search.trim(),
-            });
-        };
-
-    const clearFilters =
-        () => {
-            setFilterDraft(
-                EMPTY_FILTERS
-            );
-
-            setFilters(
-                EMPTY_FILTERS
-            );
-
-            setError(
-                ""
-            );
-
-            setMessage(
-                ""
-            );
-
-            setLoading(
-                true
-            );
-
-            setPage(
-                1
-            );
-        };
-
-    const refresh =
-        async () => {
-            if (
-                refreshing
-            ) {
-                return;
-            }
-
-            setRefreshing(
-                true
-            );
-
-            setError(
-                ""
-            );
-
-            try {
-                await loadPurchases();
-            } finally {
-                setRefreshing(
-                    false
-                );
-            }
-        };
+        try {
+            await loadPurchases();
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     /*
     |--------------------------------------------------------------------------
     | Realtime Reconciliation Helpers
     |--------------------------------------------------------------------------
-    |
-    | Reverb is used only as an invalidation signal.
-    | Laravel REST remains authoritative.
-    |
-    | Realtime refreshes are intentionally silent:
-    | - no page reload
-    | - no manual Refresh click
-    | - no full loading-state flash
-    |--------------------------------------------------------------------------
     */
 
-    const refreshSelectedPurchase =
-        useCallback(
-            async (): Promise<void> => {
-                if (
-                    !selectedPurchase
-                ) {
-                    return;
-                }
+    const refreshSelectedPurchase = useCallback(
+        async (): Promise<void> => {
+            if (!selectedPurchase) {
+                return;
+            }
 
-                const purchaseId =
-                    selectedPurchase.id;
+            const purchaseId = selectedPurchase.id;
 
-                try {
-                    const current =
-                        await getPurchase(
-                            purchaseId
-                        );
+            try {
+                const current = await getPurchase(purchaseId);
 
-                    setSelectedPurchase(
-                        (
-                            existing
-                        ) => {
-                            if (
-                                !existing
-                                || existing.id
-                                !== purchaseId
-                            ) {
-                                return existing;
-                            }
+                setSelectedPurchase((existing) => {
+                    if (
+                        !existing ||
+                        existing.id !== purchaseId
+                    ) {
+                        return existing;
+                    }
 
-                            return current;
-                        }
-                    );
-                } catch (
-                caught
-                ) {
-                    console.error(
-                        "Unable to reconcile realtime purchase details.",
-                        caught
-                    );
-                }
-            },
-            [
-                selectedPurchase,
-            ]
-        );
-
-    const refreshEditorLookupsFromRealtime =
-        useCallback(
-            async (): Promise<void> => {
-                /*
-                 * Always mark cached editor catalogs as stale.
-                 *
-                 * If no editor is open, the next New/Edit action
-                 * reloads them before allowing the user to work.
-                 */
-                setEditorLookupsReady(
-                    false
+                    return current;
+                });
+            } catch (caught) {
+                console.error(
+                    "Unable to reconcile realtime purchase details.",
+                    caught,
                 );
+            }
+        },
+        [selectedPurchase],
+    );
 
-                if (
-                    editingPurchase
-                    === undefined
-                    || lookupLoading
-                ) {
-                    return;
-                }
+    const refreshEditorLookupsFromRealtime = useCallback(
+        async (): Promise<void> => {
+            setEditorLookupsReady(false);
 
-                setLookupLoading(
-                    true
+            if (
+                editingPurchase === undefined ||
+                lookupLoading
+            ) {
+                return;
+            }
+
+            setLookupLoading(true);
+
+            try {
+                await loadEditorLookups();
+            } catch (caught) {
+                console.error(
+                    "Unable to reconcile realtime purchase editor lookups.",
+                    caught,
                 );
-
-                try {
-                    await loadEditorLookups();
-                } catch (
-                caught
-                ) {
-                    console.error(
-                        "Unable to reconcile realtime purchase editor lookups.",
-                        caught
-                    );
-                } finally {
-                    setLookupLoading(
-                        false
-                    );
-                }
-            },
-            [
-                editingPurchase,
-                loadEditorLookups,
-                lookupLoading,
-            ]
-        );
+            } finally {
+                setLookupLoading(false);
+            }
+        },
+        [editingPurchase, loadEditorLookups, lookupLoading],
+    );
 
     /*
     |--------------------------------------------------------------------------
     | Purchases + Supplier Payments
     |--------------------------------------------------------------------------
-    |
-    | Purchase writes and supplier-payment writes can change:
-    | - purchase status
-    | - payment status
-    | - balance due
-    | - visible totals
-    | - selected purchase details
-    |--------------------------------------------------------------------------
     */
 
     useStaffRealtimeRefresh(
-        [
-            "purchases",
-            "supplier_payments",
-        ],
+        ["purchases", "supplier_payments"],
         async () => {
             await Promise.all([
                 loadPurchases(),
                 refreshSelectedPurchase(),
             ]);
-        }
+        },
     );
 
     /*
     |--------------------------------------------------------------------------
     | Suppliers
     |--------------------------------------------------------------------------
-    |
-    | Supplier edits can change supplier names/codes shown in the
-    | purchase list, filters, details and purchase editor.
-    |--------------------------------------------------------------------------
     */
 
     useStaffRealtimeRefresh(
-        [
-            "suppliers",
-        ],
+        ["suppliers"],
         async () => {
             await Promise.all([
                 loadPurchases(),
@@ -1156,27 +621,18 @@ export default function PurchasesPage() {
                 refreshSelectedPurchase(),
                 refreshEditorLookupsFromRealtime(),
             ]);
-        }
+        },
     );
 
     /*
     |--------------------------------------------------------------------------
     | Inventory / Ingredient / Unit Changes
     |--------------------------------------------------------------------------
-    |
-    | The purchase editor depends on ingredient and unit catalogs.
-    | Inventory-domain changes invalidate those cached lookups.
-    |
-    | We do NOT reload the purchase list for every stock movement.
-    |--------------------------------------------------------------------------
     */
 
     useStaffRealtimeRefresh(
-        [
-            "inventory",
-        ],
-        () =>
-            refreshEditorLookupsFromRealtime()
+        ["inventory"],
+        () => refreshEditorLookupsFromRealtime(),
     );
 
     return (
@@ -1187,13 +643,12 @@ export default function PurchasesPage() {
                         Purchasing & Inventory
                     </div>
 
-                    <h1>
-                        Purchases
-                    </h1>
+                    <h1>Purchases</h1>
 
                     <p>
-                        Create supplier purchase drafts, review costs and receive
-                        completed purchases into inventory.
+                        Create supplier purchase drafts, review
+                        costs and receive completed purchases
+                        into inventory.
                     </p>
                 </div>
 
@@ -1202,138 +657,78 @@ export default function PurchasesPage() {
                         type="button"
                         className="purchases-button purchases-button-secondary"
                         disabled={refreshing}
-                        onClick={
-                            () =>
-                                void refresh()
-                        }
+                        onClick={() => {
+                            void refresh();
+                        }}
                     >
-                        {
-                            refreshing
-                                ? "Refreshing..."
-                                : "Refresh"
-                        }
+                        {refreshing
+                            ? "Refreshing..."
+                            : "Refresh"}
                     </button>
 
-                    {
-                        canCreate
-                        && (
-                            <button
-                                type="button"
-                                className="purchases-button purchases-button-primary"
-                                disabled={lookupLoading}
-                                onClick={
-                                    () =>
-                                        void openCreate()
-                                }
-                            >
-                                {
-                                    lookupLoading
-                                        ? "Loading..."
-                                        : "+ New Purchase"
-                                }
-                            </button>
-                        )
-                    }
+                    {canCreate && (
+                        <button
+                            type="button"
+                            className="purchases-button purchases-button-primary"
+                            disabled={lookupLoading}
+                            onClick={() => {
+                                void openCreate();
+                            }}
+                        >
+                            {lookupLoading
+                                ? "Loading..."
+                                : "+ New Purchase"}
+                        </button>
+                    )}
                 </div>
             </header>
 
-            {
-                error
-                && (
-                    <div className="purchases-alert purchases-alert-error">
-                        {error}
-                    </div>
-                )
-            }
+            {error && (
+                <div
+                    className="purchases-alert purchases-alert-error"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
 
-            {
-                message
-                && (
-                    <div className="purchases-alert purchases-alert-success">
-                        {message}
-                    </div>
-                )
-            }
+            {message && (
+                <div
+                    className="purchases-alert purchases-alert-success"
+                    role="status"
+                >
+                    {message}
+                </div>
+            )}
 
             <section className="purchases-summary-grid">
                 <article>
-                    <span>
-                        Purchases
-                    </span>
-
-                    <strong>
-                        {
-                            pagination.total
-                        }
-                    </strong>
-
-                    <small>
-                        Matching current filters
-                    </small>
+                    <span>Purchases</span>
+                    <strong>{pagination.total}</strong>
                 </article>
 
                 <article>
-                    <span>
-                        Drafts on Page
-                    </span>
-
-                    <strong>
-                        {draftCount}
-                    </strong>
-
-                    <small>
-                        Not yet received into stock
-                    </small>
+                    <span>Drafts on Page</span>
+                    <strong>{draftCount}</strong>
                 </article>
 
                 <article>
-                    <span>
-                        Completed on Page
-                    </span>
-
-                    <strong>
-                        {completedCount}
-                    </strong>
-
-                    <small>
-                        Inventory already received
-                    </small>
+                    <span>Completed on Page</span>
+                    <strong>{completedCount}</strong>
                 </article>
 
                 <article>
-                    <span>
-                        Visible Purchase Total
-                    </span>
-
+                    <span>Visible Purchase Total</span>
                     <strong className="purchases-summary-money">
-                        {
-                            money.format(
-                                visibleTotal
-                            )
-                        }
+                        {money.format(visibleTotal)}
                     </strong>
-
-                    <small>
-                        Current page only
-                    </small>
                 </article>
 
                 <article>
-                    <span>
-                        Visible Balance Due
-                    </span>
-
+                    <span>Visible Balance Due</span>
                     <strong className="purchases-summary-money">
-                        {
-                            money.format(
-                                visibleBalance
-                            )
-                        }
+                        {money.format(visibleBalance)}
                     </strong>
-
-                    <small>
-                        Payment handling is in Supplier Payments
-                    </small>
                 </article>
             </section>
 
@@ -1343,118 +738,72 @@ export default function PurchasesPage() {
                     onSubmit={submitFilters}
                 >
                     <div className="purchases-filter-field purchases-filter-search">
-                        <span>
-                            Search
-                        </span>
+                        <span>Search</span>
 
                         <input
                             type="search"
                             maxLength={150}
                             placeholder="Purchase no, invoice or supplier..."
                             value={filterDraft.search}
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setFilterDraft(
-                                        (
-                                            current
-                                        ) => ({
-                                            ...current,
-
-                                            search:
-                                                event.target.value,
-                                        })
-                                    )
+                            onChange={(event) =>
+                                setFilterDraft((current) => ({
+                                    ...current,
+                                    search: event.target.value,
+                                }))
                             }
                         />
                     </div>
 
                     <label className="purchases-filter-field">
-                        <span>
-                            Supplier
-                        </span>
+                        <span>Supplier</span>
 
                         <select
                             value={filterDraft.supplierId}
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setFilterDraft(
-                                        (
-                                            current
-                                        ) => ({
-                                            ...current,
-
-                                            supplierId:
-                                                event.target.value,
-                                        })
-                                    )
+                            onChange={(event) =>
+                                setFilterDraft((current) => ({
+                                    ...current,
+                                    supplierId:
+                                        event.target.value,
+                                }))
                             }
                         >
                             <option value="">
                                 All Suppliers
                             </option>
 
-                            {
-                                supplierFilters.map(
-                                    (
-                                        supplier
-                                    ) => (
-                                        <option
-                                            key={supplier.id}
-                                            value={supplier.id}
-                                        >
-                                            {
-                                                supplier.supplier_code
-                                            }
-                                            {" — "}
-                                            {
-                                                supplier.name
-                                            }
-                                        </option>
-                                    )
-                                )
-                            }
+                            {supplierFilters.map((supplier) => (
+                                <option
+                                    key={supplier.id}
+                                    value={supplier.id}
+                                >
+                                    {supplier.supplier_code} —{" "}
+                                    {supplier.name}
+                                </option>
+                            ))}
                         </select>
                     </label>
 
                     <label className="purchases-filter-field">
-                        <span>
-                            Status
-                        </span>
+                        <span>Status</span>
 
                         <select
                             value={filterDraft.status}
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setFilterDraft(
-                                        (
-                                            current
-                                        ) => ({
-                                            ...current,
-
-                                            status:
-                                                event.target.value as FilterState["status"],
-                                        })
-                                    )
+                            onChange={(event) =>
+                                setFilterDraft((current) => ({
+                                    ...current,
+                                    status:
+                                        event.target
+                                            .value as FilterState["status"],
+                                }))
                             }
                         >
                             <option value="">
                                 All Statuses
                             </option>
-
-                            <option value="DRAFT">
-                                Draft
-                            </option>
-
+                            <option value="DRAFT">Draft</option>
                             <option value="COMPLETED">
                                 Completed
                             </option>
-
                             <option value="CANCELLED">
                                 Cancelled
                             </option>
@@ -1462,53 +811,32 @@ export default function PurchasesPage() {
                     </label>
 
                     <label className="purchases-filter-field">
-                        <span>
-                            Date From
-                        </span>
+                        <span>Date From</span>
 
                         <input
                             type="date"
                             value={filterDraft.dateFrom}
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setFilterDraft(
-                                        (
-                                            current
-                                        ) => ({
-                                            ...current,
-
-                                            dateFrom:
-                                                event.target.value,
-                                        })
-                                    )
+                            onChange={(event) =>
+                                setFilterDraft((current) => ({
+                                    ...current,
+                                    dateFrom:
+                                        event.target.value,
+                                }))
                             }
                         />
                     </label>
 
                     <label className="purchases-filter-field">
-                        <span>
-                            Date To
-                        </span>
+                        <span>Date To</span>
 
                         <input
                             type="date"
                             value={filterDraft.dateTo}
-                            onChange={
-                                (
-                                    event
-                                ) =>
-                                    setFilterDraft(
-                                        (
-                                            current
-                                        ) => ({
-                                            ...current,
-
-                                            dateTo:
-                                                event.target.value,
-                                        })
-                                    )
+                            onChange={(event) =>
+                                setFilterDraft((current) => ({
+                                    ...current,
+                                    dateTo: event.target.value,
+                                }))
                             }
                         />
                     </label>
@@ -1531,407 +859,279 @@ export default function PurchasesPage() {
                     </div>
                 </form>
 
-                {
-                    loading
-                        ? (
-                            <div className="purchases-loading">
-                                Loading purchases...
-                            </div>
-                        )
-                        : purchases.length === 0
-                            ? (
-                                <div className="purchases-empty">
-                                    <strong>
-                                        No purchases found
-                                    </strong>
+                {loading ? (
+                    <div className="purchases-loading">
+                        Loading purchases...
+                    </div>
+                ) : purchases.length === 0 ? (
+                    <div className="purchases-empty">
+                        <strong>No purchases found</strong>
+                        <p>
+                            Change the filters or create a new
+                            purchase draft.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="purchases-table-wrap">
+                        <table className="purchases-table">
+                            <thead>
+                                <tr>
+                                    <th>Purchase</th>
+                                    <th>Supplier</th>
+                                    <th>Date</th>
+                                    <th>Invoice</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Balance</th>
+                                    <th>Purchase Status</th>
+                                    <th>Payment</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
 
-                                    <p>
-                                        Change the filters or create a new purchase draft.
-                                    </p>
-                                </div>
-                            )
-                            : (
-                                <div className="purchases-table-wrap">
-                                    <table className="purchases-table">
-                                        <thead>
-                                            <tr>
-                                                <th>
-                                                    Purchase
-                                                </th>
+                            <tbody>
+                                {purchases.map((purchase) => (
+                                    <tr key={purchase.id}>
+                                        <td>
+                                            <strong>
+                                                {
+                                                    purchase.purchase_number
+                                                }
+                                            </strong>
+                                        </td>
 
-                                                <th>
-                                                    Supplier
-                                                </th>
+                                        <td>
+                                            <div className="purchases-supplier-cell">
+                                                <strong>
+                                                    {purchase.supplier
+                                                        ?.name ??
+                                                        "—"}
+                                                </strong>
 
-                                                <th>
-                                                    Date
-                                                </th>
+                                                <span>
+                                                    {purchase.supplier
+                                                        ?.supplier_code ??
+                                                        ""}
+                                                </span>
+                                            </div>
+                                        </td>
 
-                                                <th>
-                                                    Invoice
-                                                </th>
+                                        <td>
+                                            {purchase.purchase_date ??
+                                                "—"}
+                                        </td>
 
-                                                <th>
-                                                    Items
-                                                </th>
+                                        <td>
+                                            {purchase.supplier_invoice_number ??
+                                                "—"}
+                                        </td>
 
-                                                <th>
-                                                    Total
-                                                </th>
+                                        <td>
+                                            {purchase.items.length}
+                                        </td>
 
-                                                <th>
-                                                    Balance
-                                                </th>
+                                        <td>
+                                            <strong>
+                                                {money.format(
+                                                    purchase.grand_total,
+                                                )}
+                                            </strong>
+                                        </td>
 
-                                                <th>
-                                                    Purchase Status
-                                                </th>
+                                        <td>
+                                            <strong
+                                                className={
+                                                    purchase.balance_due >
+                                                        0
+                                                        ? "purchases-due"
+                                                        : ""
+                                                }
+                                            >
+                                                {money.format(
+                                                    purchase.balance_due,
+                                                )}
+                                            </strong>
+                                        </td>
 
-                                                <th>
-                                                    Payment
-                                                </th>
+                                        <td>
+                                            <span
+                                                className={statusClass(
+                                                    purchase.status,
+                                                )}
+                                            >
+                                                {purchase.status}
+                                            </span>
+                                        </td>
 
-                                                <th>
-                                                    Actions
-                                                </th>
-                                            </tr>
-                                        </thead>
+                                        <td>
+                                            <span
+                                                className={paymentClass(
+                                                    purchase.payment_status,
+                                                )}
+                                            >
+                                                {
+                                                    purchase.payment_status
+                                                }
+                                            </span>
+                                        </td>
 
-                                        <tbody>
-                                            {
-                                                purchases.map(
-                                                    (
-                                                        purchase
-                                                    ) => (
-                                                        <tr
-                                                            key={purchase.id}
-                                                        >
-                                                            <td>
-                                                                <strong>
-                                                                    {
-                                                                        purchase.purchase_number
-                                                                    }
-                                                                </strong>
-                                                            </td>
+                                        <td>
+                                            <div className="purchases-row-actions">
+                                                <button
+                                                    type="button"
+                                                    className="purchases-small-button"
+                                                    disabled={
+                                                        busyPurchaseId !==
+                                                        null
+                                                    }
+                                                    onClick={() => {
+                                                        void viewPurchase(
+                                                            purchase,
+                                                        );
+                                                    }}
+                                                >
+                                                    {busyPurchaseId ===
+                                                        purchase.id
+                                                        ? "Loading..."
+                                                        : "View"}
+                                                </button>
 
-                                                            <td>
-                                                                <div className="purchases-supplier-cell">
-                                                                    <strong>
-                                                                        {
-                                                                            purchase.supplier?.name
-                                                                            ?? "—"
-                                                                        }
-                                                                    </strong>
-
-                                                                    <span>
-                                                                        {
-                                                                            purchase.supplier
-                                                                                ?.supplier_code
-                                                                            ?? ""
-                                                                        }
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-
-                                                            <td>
-                                                                {
-                                                                    purchase.purchase_date
-                                                                    ?? "—"
+                                                {canManage &&
+                                                    purchase.status ===
+                                                    "DRAFT" && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="purchases-small-button"
+                                                                disabled={
+                                                                    busyPurchaseId !==
+                                                                    null
                                                                 }
-                                                            </td>
+                                                                onClick={() => {
+                                                                    void openEdit(
+                                                                        purchase,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                Edit
+                                                            </button>
 
-                                                            <td>
-                                                                {
-                                                                    purchase
-                                                                        .supplier_invoice_number
-                                                                    ?? "—"
+                                                            <button
+                                                                type="button"
+                                                                className="purchases-small-button purchases-small-button-success"
+                                                                disabled={
+                                                                    busyPurchaseId !==
+                                                                    null
                                                                 }
-                                                            </td>
+                                                                onClick={() => {
+                                                                    void completePurchaseAction(
+                                                                        purchase,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                Complete
+                                                            </button>
+                                                        </>
+                                                    )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
-                                                            <td>
-                                                                {
-                                                                    purchase.items.length
-                                                                }
-                                                            </td>
+                {pagination.last_page > 1 && (
+                    <div className="purchases-pagination">
+                        <span>
+                            {pagination.total} purchases
+                        </span>
 
-                                                            <td>
-                                                                <strong>
-                                                                    {
-                                                                        money.format(
-                                                                            purchase.grand_total
-                                                                        )
-                                                                    }
-                                                                </strong>
-                                                            </td>
-
-                                                            <td>
-                                                                <strong
-                                                                    className={
-                                                                        purchase.balance_due > 0
-                                                                            ? "purchases-due"
-                                                                            : ""
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        money.format(
-                                                                            purchase.balance_due
-                                                                        )
-                                                                    }
-                                                                </strong>
-                                                            </td>
-
-                                                            <td>
-                                                                <span
-                                                                    className={
-                                                                        statusClass(
-                                                                            purchase.status
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        purchase.status
-                                                                    }
-                                                                </span>
-                                                            </td>
-
-                                                            <td>
-                                                                <span
-                                                                    className={
-                                                                        paymentClass(
-                                                                            purchase.payment_status
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        purchase.payment_status
-                                                                    }
-                                                                </span>
-                                                            </td>
-
-                                                            <td>
-                                                                <div className="purchases-row-actions">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="purchases-small-button"
-                                                                        disabled={
-                                                                            busyPurchaseId
-                                                                            !== null
-                                                                        }
-                                                                        onClick={
-                                                                            () =>
-                                                                                void viewPurchase(
-                                                                                    purchase
-                                                                                )
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            busyPurchaseId
-                                                                                === purchase.id
-                                                                                ? "Loading..."
-                                                                                : "View"
-                                                                        }
-                                                                    </button>
-
-                                                                    {
-                                                                        canManage
-                                                                        && purchase.status
-                                                                        === "DRAFT"
-                                                                        && (
-                                                                            <>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="purchases-small-button"
-                                                                                    disabled={
-                                                                                        busyPurchaseId
-                                                                                        !== null
-                                                                                    }
-                                                                                    onClick={
-                                                                                        () =>
-                                                                                            void openEdit(
-                                                                                                purchase
-                                                                                            )
-                                                                                    }
-                                                                                >
-                                                                                    Edit
-                                                                                </button>
-
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="purchases-small-button purchases-small-button-success"
-                                                                                    disabled={
-                                                                                        busyPurchaseId
-                                                                                        !== null
-                                                                                    }
-                                                                                    onClick={
-                                                                                        () =>
-                                                                                            void completePurchaseAction(
-                                                                                                purchase
-                                                                                            )
-                                                                                    }
-                                                                                >
-                                                                                    Complete
-                                                                                </button>
-                                                                            </>
-                                                                        )
-                                                                    }
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                )
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )
-                }
-
-                {
-                    pagination.last_page > 1
-                    && (
-                        <div className="purchases-pagination">
-                            <span>
-                                {
-                                    pagination.total
+                        <div>
+                            <button
+                                type="button"
+                                className="purchases-button purchases-button-secondary"
+                                disabled={
+                                    loading ||
+                                    pagination.current_page <= 1
                                 }
-                                {" purchases"}
+                                onClick={() => {
+                                    setLoading(true);
+                                    setPage((current) =>
+                                        Math.max(
+                                            1,
+                                            current - 1,
+                                        ),
+                                    );
+                                }}
+                            >
+                                ← Previous
+                            </button>
+
+                            <span>
+                                Page{" "}
+                                {pagination.current_page} of{" "}
+                                {pagination.last_page}
                             </span>
 
-                            <div>
-                                <button
-                                    type="button"
-                                    className="purchases-button purchases-button-secondary"
-                                    disabled={
-                                        loading
-                                        || pagination.current_page <= 1
-                                    }
-                                    onClick={
-                                        () => {
-                                            setLoading(
-                                                true
-                                            );
-
-                                            setPage(
-                                                (
-                                                    current
-                                                ) =>
-                                                    Math.max(
-                                                        1,
-                                                        current - 1
-                                                    )
-                                            );
-                                        }
-                                    }
-                                >
-                                    Previous
-                                </button>
-
-                                <span>
-                                    Page
-                                    {" "}
-                                    {
-                                        pagination.current_page
-                                    }
-                                    {" of "}
-                                    {
-                                        pagination.last_page
-                                    }
-                                </span>
-
-                                <button
-                                    type="button"
-                                    className="purchases-button purchases-button-secondary"
-                                    disabled={
-                                        loading
-                                        || pagination.current_page
-                                        >= pagination.last_page
-                                    }
-                                    onClick={
-                                        () => {
-                                            setLoading(
-                                                true
-                                            );
-
-                                            setPage(
-                                                (
-                                                    current
-                                                ) =>
-                                                    current + 1
-                                            );
-                                        }
-                                    }
-                                >
-                                    Next
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                className="purchases-button purchases-button-secondary"
+                                disabled={
+                                    loading ||
+                                    pagination.current_page >=
+                                    pagination.last_page
+                                }
+                                onClick={() => {
+                                    setLoading(true);
+                                    setPage(
+                                        (current) => current + 1,
+                                    );
+                                }}
+                            >
+                                Next →
+                            </button>
                         </div>
-                    )
-                }
+                    </div>
+                )}
             </section>
 
-            {
-                editingPurchase
-                !== undefined
-                && (
-                    <PurchaseFormModal
-                        purchase={editingPurchase}
-                        suppliers={editorSuppliers}
-                        ingredients={editorIngredients}
-                        units={editorUnits}
-                        onClose={
-                            () =>
-                                setEditingPurchase(
-                                    undefined
-                                )
-                        }
-                        onSubmit={savePurchase}
-                    />
-                )
-            }
+            {editingPurchase !== undefined && (
+                <PurchaseFormModal
+                    purchase={editingPurchase}
+                    suppliers={editorSuppliers}
+                    ingredients={editorIngredients}
+                    units={editorUnits}
+                    onClose={() =>
+                        setEditingPurchase(undefined)
+                    }
+                    onSubmit={savePurchase}
+                />
+            )}
 
-            {
-                selectedPurchase
-                && (
-                    <PurchaseDetailsModal
-                        purchase={selectedPurchase}
-                        canManage={canManage}
-                        busy={
-                            busyPurchaseId
-                            === selectedPurchase.id
-                        }
-                        onClose={
-                            () =>
-                                setSelectedPurchase(
-                                    undefined
-                                )
-                        }
-                        onEdit={
-                            (
-                                purchase
-                            ) =>
-                                void openEdit(
-                                    purchase
-                                )
-                        }
-                        onComplete={
-                            (
-                                purchase
-                            ) =>
-                                void completePurchaseAction(
-                                    purchase
-                                )
-                        }
-                        onCancel={
-                            (
-                                purchase
-                            ) =>
-                                void cancelPurchaseAction(
-                                    purchase
-                                )
-                        }
-                    />
-                )
-            }
+            {selectedPurchase && (
+                <PurchaseDetailsModal
+                    purchase={selectedPurchase}
+                    canManage={canManage}
+                    busy={
+                        busyPurchaseId ===
+                        selectedPurchase.id
+                    }
+                    onClose={() =>
+                        setSelectedPurchase(undefined)
+                    }
+                    onEdit={(purchase) => {
+                        void openEdit(purchase);
+                    }}
+                    onComplete={(purchase) => {
+                        void completePurchaseAction(purchase);
+                    }}
+                    onCancel={(purchase) => {
+                        void cancelPurchaseAction(purchase);
+                    }}
+                />
+            )}
         </div>
     );
 }
