@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 
 import path from "node:path";
 
+import { createConnection } from "node:net";
+
 import { sendRawToLocalPrinter, testLocalRawPrinter } from "./localRawPrinter";
 
 import type {
@@ -12,6 +14,7 @@ import type {
   ReceiptPrinterConnectionResult,
   ReceiptPrinterResult,
   ReceiptPrinterSettings,
+  ActiveReceiptPrinterTransport,
 } from "./receiptPrinterTypes";
 
 /*
@@ -26,11 +29,22 @@ const LOCAL_PRINTER_HOST = "LOCAL_USB";
 
 const LOCAL_PRINTER_PORT = 0;
 
+const DEFAULT_NETWORK_HOST = "192.168.1.101";
+
+const DEFAULT_NETWORK_PORT = 9100;
+
 const DEFAULT_CONNECT_TIMEOUT_MS = 4000;
 
 const DEFAULT_DRAWER_PULSE_ON_MS = 50;
 
-const DEFAULT_DRAWER_PULSE_OFF_MS = 500;
+/*
+ * XP-Q80B + HER-405 was verified repeatedly over TCP using:
+ *
+ * ESC p 0 25 25
+ *
+ * 25 x 2 ms = approximately 50 ms.
+ */
+const DEFAULT_DRAWER_PULSE_OFF_MS = 50;
 
 const PAPER_CHARACTERS = 48;
 
@@ -80,11 +94,26 @@ const settingsPath = (): string =>
 */
 
 export const defaultReceiptPrinterSettings = (): ReceiptPrinterSettings => ({
+  /*
+   * AUTO:
+   *
+   * Windows:
+   *   USB first -> LAN fallback on a detectable USB error.
+   *
+   * macOS / Linux:
+   *   LAN first -> USB fallback.
+   *
+   * We intentionally prefer LAN on macOS because some CUPS / USB
+   * thermal-printer queues can accept a job without reliably completing
+   * repeated raw ESC/POS jobs.
+   */
+  transport: "AUTO",
+
   printerName: "",
 
-  host: LOCAL_PRINTER_HOST,
+  host: DEFAULT_NETWORK_HOST,
 
-  port: LOCAL_PRINTER_PORT,
+  port: DEFAULT_NETWORK_PORT,
 
   paperWidthMm: 80,
 
@@ -116,21 +145,46 @@ const normaliseSettings = (
 
   const pulseOff = Number(value.drawerPulseOffMs ?? defaults.drawerPulseOffMs);
 
+  const port = Number(value.port ?? defaults.port);
+
+  const requestedTransport = String(value.transport ?? defaults.transport)
+    .trim()
+    .toUpperCase();
+
+  const transport =
+    requestedTransport === "USB" || requestedTransport === "LAN"
+      ? requestedTransport
+      : "AUTO";
+
+  const savedHost = String(value.host ?? "").trim();
+
+  /*
+   * Backward compatibility:
+   *
+   * Older versions stored:
+   *
+   * host = LOCAL_USB
+   * port = 0
+   *
+   * Convert those old settings to the new LAN fallback defaults.
+   */
+  const host =
+    !savedHost || savedHost === LOCAL_PRINTER_HOST ? defaults.host : savedHost;
+
   return {
+    transport,
+
     printerName: String(value.printerName ?? defaults.printerName).trim(),
 
-    /*
-     * Cashier receipt printer is always local / USB.
-     */
-    host: LOCAL_PRINTER_HOST,
+    host,
 
-    port: LOCAL_PRINTER_PORT,
+    port:
+      Number.isInteger(port) && port >= 1 && port <= 65535
+        ? port
+        : defaults.port,
 
     paperWidthMm: 80,
 
-    /*
-     * Retained for compatibility with the existing settings type/UI.
-     */
     connectTimeoutMs:
       Number.isFinite(timeout) && timeout >= 1000 && timeout <= 30000
         ? Math.round(timeout)
@@ -202,32 +256,303 @@ export const saveReceiptPrinterSettings = async (
 
 /*
 |--------------------------------------------------------------------------
-| Validation
+| Transport Validation
 |--------------------------------------------------------------------------
 */
 
-const assertPrinterConfigured = (settings: ReceiptPrinterSettings): void => {
+const assertUsbConfigured = (settings: ReceiptPrinterSettings): void => {
   if (!settings.printerName.trim()) {
     throw new Error(
-      "Cashier receipt printer name is not configured. Enter the exact local printer name, for example Printer_POS_80."
+      "USB receipt printer name is not configured. Enter the exact local operating-system printer queue name."
     );
+  }
+};
+
+const assertLanConfigured = (settings: ReceiptPrinterSettings): void => {
+  if (!settings.host.trim()) {
+    throw new Error("LAN receipt printer IP address / host is not configured.");
+  }
+
+  if (
+    !Number.isInteger(settings.port) ||
+    settings.port < 1 ||
+    settings.port > 65535
+  ) {
+    throw new Error("LAN receipt printer TCP port is invalid.");
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Local RAW Send
+| AUTO Transport Order
+|--------------------------------------------------------------------------
+|
+| Windows:
+|   USB -> LAN fallback
+|
+| macOS / Linux:
+|   LAN -> USB fallback
+|
+| Why:
+| - Windows USB RAW printing is retained for deployments where it works.
+| - The XP-Q80B used during development was verified as reliable over
+|   direct TCP 9100 on macOS.
+|--------------------------------------------------------------------------
+*/
+
+const transportOrder = (
+  settings: ReceiptPrinterSettings
+): ActiveReceiptPrinterTransport[] => {
+  if (settings.transport === "USB") {
+    return ["USB"];
+  }
+
+  if (settings.transport === "LAN") {
+    return ["LAN"];
+  }
+
+  return process.platform === "win32" ? ["USB", "LAN"] : ["LAN", "USB"];
+};
+
+/*
+|--------------------------------------------------------------------------
+| LAN / TCP RAW Send
+|--------------------------------------------------------------------------
+*/
+
+const sendRawToNetworkPrinter = async (
+  settings: ReceiptPrinterSettings,
+  data: Buffer
+): Promise<number> => {
+  assertLanConfigured(settings);
+
+  return new Promise<number>((resolve, reject) => {
+    let settled = false;
+
+    const socket = createConnection({
+      host: settings.host,
+      port: settings.port,
+    });
+
+    socket.setNoDelay(true);
+
+    const finishWithError = (error: Error): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      clearTimeout(timer);
+
+      socket.destroy();
+
+      reject(error);
+    };
+
+    const timer = setTimeout(() => {
+      finishWithError(
+        new Error(
+          `LAN receipt printer connection timed out after ${settings.connectTimeoutMs}ms (${settings.host}:${settings.port}).`
+        )
+      );
+    }, settings.connectTimeoutMs);
+
+    socket.once("error", (error) => {
+      finishWithError(error);
+    });
+
+    socket.once("connect", () => {
+      socket.write(data, (error) => {
+        if (error) {
+          finishWithError(error);
+
+          return;
+        }
+
+        socket.end(() => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+
+          clearTimeout(timer);
+
+          resolve(data.length);
+        });
+      });
+    });
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| LAN Connection Test
+|--------------------------------------------------------------------------
+*/
+
+const testNetworkPrinterConnection = async (
+  settings: ReceiptPrinterSettings
+): Promise<void> => {
+  assertLanConfigured(settings);
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const socket = createConnection({
+      host: settings.host,
+      port: settings.port,
+    });
+
+    socket.setNoDelay(true);
+
+    const finishWithError = (error: Error): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      clearTimeout(timer);
+
+      socket.destroy();
+
+      reject(error);
+    };
+
+    const timer = setTimeout(() => {
+      finishWithError(
+        new Error(
+          `LAN receipt printer connection timed out after ${settings.connectTimeoutMs}ms (${settings.host}:${settings.port}).`
+        )
+      );
+    }, settings.connectTimeoutMs);
+
+    socket.once("error", (error) => {
+      finishWithError(error);
+    });
+
+    socket.once("connect", () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      clearTimeout(timer);
+
+      socket.destroy();
+
+      resolve();
+    });
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| Per-Transport Send
+|--------------------------------------------------------------------------
+*/
+
+interface RawSendResult {
+  bytesWritten: number;
+
+  transportUsed: ActiveReceiptPrinterTransport;
+}
+
+const sendRawUsingTransport = async (
+  transport: ActiveReceiptPrinterTransport,
+  settings: ReceiptPrinterSettings,
+  data: Buffer
+): Promise<RawSendResult> => {
+  if (transport === "USB") {
+    assertUsbConfigured(settings);
+
+    const bytesWritten = await sendRawToLocalPrinter(
+      settings.printerName,
+      data
+    );
+
+    return {
+      bytesWritten,
+      transportUsed: "USB",
+    };
+  }
+
+  const bytesWritten = await sendRawToNetworkPrinter(settings, data);
+
+  return {
+    bytesWritten,
+    transportUsed: "LAN",
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Send RAW With AUTO Fallback
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| An operating-system spooler can sometimes accept a USB job even when the
+| physical printer does not complete it. That kind of silent hardware/driver
+| failure cannot be detected reliably after lp/spool acceptance.
+|
+| Therefore:
+|
+| - AUTO on Windows prefers USB because that deployment is expected to use
+|   the working Windows USB driver.
+| - AUTO on macOS/Linux prefers LAN because direct TCP 9100 was verified.
+| - The UI also exposes explicit USB and LAN modes for manual override.
 |--------------------------------------------------------------------------
 */
 
 const sendRaw = async (
   settings: ReceiptPrinterSettings,
-
   data: Buffer
-): Promise<number> => {
-  assertPrinterConfigured(settings);
+): Promise<RawSendResult> => {
+  const transports = transportOrder(settings);
 
-  return sendRawToLocalPrinter(settings.printerName, data);
+  const errors: string[] = [];
+
+  for (const transport of transports) {
+    try {
+      return await sendRawUsingTransport(transport, settings, data);
+    } catch (exception) {
+      const message =
+        exception instanceof Error ? exception.message : String(exception);
+
+      errors.push(`${transport}: ${message}`);
+    }
+  }
+
+  throw new Error(
+    `Cashier receipt printer failed using ${transports.join(
+      " -> "
+    )}. ${errors.join(" | ")}`
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Per-Transport Connection Test
+|--------------------------------------------------------------------------
+*/
+
+const testTransport = async (
+  transport: ActiveReceiptPrinterTransport,
+  settings: ReceiptPrinterSettings
+): Promise<void> => {
+  if (transport === "USB") {
+    assertUsbConfigured(settings);
+
+    await testLocalRawPrinter(settings.printerName);
+
+    return;
+  }
+
+  await testNetworkPrinterConnection(settings);
 };
 
 /*
@@ -239,21 +564,43 @@ const sendRaw = async (
 export const testReceiptPrinterConnection = async (
   settings: ReceiptPrinterSettings
 ): Promise<ReceiptPrinterConnectionResult> => {
-  assertPrinterConfigured(settings);
+  const transports = transportOrder(settings);
 
-  await testLocalRawPrinter(settings.printerName);
+  const errors: string[] = [];
 
-  return {
-    success: true,
+  for (const transport of transports) {
+    try {
+      await testTransport(transport, settings);
 
-    printerName: settings.printerName,
+      return {
+        success: true,
 
-    host: LOCAL_PRINTER_HOST,
+        printerName: settings.printerName,
 
-    port: LOCAL_PRINTER_PORT,
+        host: transport === "USB" ? LOCAL_PRINTER_HOST : settings.host,
 
-    message: "Local / USB cashier receipt printer is installed and available.",
-  };
+        port: transport === "USB" ? LOCAL_PRINTER_PORT : settings.port,
+
+        transportUsed: transport,
+
+        message:
+          transport === "USB"
+            ? "Cashier receipt printer is available through the local / USB printer queue."
+            : `Cashier receipt printer is reachable through LAN at ${settings.host}:${settings.port}.`,
+      };
+    } catch (exception) {
+      const message =
+        exception instanceof Error ? exception.message : String(exception);
+
+      errors.push(`${transport}: ${message}`);
+    }
+  }
+
+  throw new Error(
+    `Cashier receipt printer connection test failed using ${transports.join(
+      " -> "
+    )}. ${errors.join(" | ")}`
+  );
 };
 
 /*
@@ -310,21 +657,31 @@ export const pulseCashDrawer = async (
 ): Promise<CashDrawerResult> => {
   const data = buildCashDrawerPulseBuffer(settings);
 
-  const bytesWritten = await sendRaw(settings, data);
+  const result = await sendRaw(settings, data);
+
+  const host =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_HOST : settings.host;
+
+  const port =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_PORT : settings.port;
 
   return {
     success: true,
 
     printerName: settings.printerName,
 
-    host: LOCAL_PRINTER_HOST,
+    host,
 
-    port: LOCAL_PRINTER_PORT,
+    port,
 
-    bytesWritten,
+    transportUsed: result.transportUsed,
+
+    bytesWritten: result.bytesWritten,
 
     message:
-      "Cash drawer pulse sent through the local receipt printer DK port successfully.",
+      result.transportUsed === "USB"
+        ? "Cash drawer pulse sent through the local / USB receipt printer DK port successfully."
+        : `Cash drawer pulse sent through LAN ${settings.host}:${settings.port} to the receipt printer DK port successfully.`,
   };
 };
 
@@ -900,21 +1257,31 @@ export const printCustomerReceipt = async (
 ): Promise<ReceiptPrinterResult> => {
   const data = buildCustomerReceiptBuffer(payload);
 
-  const bytesWritten = await sendRaw(settings, data);
+  const result = await sendRaw(settings, data);
+
+  const host =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_HOST : settings.host;
+
+  const port =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_PORT : settings.port;
 
   return {
     success: true,
 
     printerName: settings.printerName,
 
-    host: LOCAL_PRINTER_HOST,
+    host,
 
-    port: LOCAL_PRINTER_PORT,
+    port,
 
-    bytesWritten,
+    transportUsed: result.transportUsed,
+
+    bytesWritten: result.bytesWritten,
 
     message:
-      "Customer receipt sent to local / USB cashier printer successfully.",
+      result.transportUsed === "USB"
+        ? "Customer receipt sent through the local / USB cashier printer successfully."
+        : `Customer receipt sent through LAN ${settings.host}:${settings.port} successfully.`,
   };
 };
 
@@ -932,16 +1299,15 @@ export const printReceiptTestPage = async (
     "RESTAURANT POS",
     "CASHIER RECEIPT PRINTER TEST",
     "--------------------------------",
-    `Printer: ${settings.printerName}`,
-    "Connection: LOCAL / USB",
+    `Mode: ${settings.transport}`,
+    `USB Queue: ${settings.printerName || "Not configured"}`,
+    `LAN: ${settings.host}:${settings.port}`,
     "Paper Width: 80mm",
     "--------------------------------",
     "Receipt printer is configured.",
     "",
     "Cash Drawer:",
     "Printer DK / RJ11-RJ12 port",
-    "",
-    "No printer IP is required.",
     "",
     "",
     "",
@@ -963,20 +1329,30 @@ export const printReceiptTestPage = async (
     FULL_CUT,
   ]);
 
-  const bytesWritten = await sendRaw(settings, data);
+  const result = await sendRaw(settings, data);
+
+  const host =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_HOST : settings.host;
+
+  const port =
+    result.transportUsed === "USB" ? LOCAL_PRINTER_PORT : settings.port;
 
   return {
     success: true,
 
     printerName: settings.printerName,
 
-    host: LOCAL_PRINTER_HOST,
+    host,
 
-    port: LOCAL_PRINTER_PORT,
+    port,
 
-    bytesWritten,
+    transportUsed: result.transportUsed,
+
+    bytesWritten: result.bytesWritten,
 
     message:
-      "Receipt printer test page sent to local / USB cashier printer successfully.",
+      result.transportUsed === "USB"
+        ? "Receipt printer test page sent through local / USB successfully."
+        : `Receipt printer test page sent through LAN ${settings.host}:${settings.port} successfully.`,
   };
 };

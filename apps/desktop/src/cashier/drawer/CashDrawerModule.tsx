@@ -29,24 +29,34 @@ interface CashDrawerModuleProps {
 
 /*
 |--------------------------------------------------------------------------
-| Local / USB Receipt Printer Defaults
+| Receipt Printer Defaults - USB + LAN
 |--------------------------------------------------------------------------
 */
 
 const DEFAULT_SETTINGS: ReceiptPrinterSettings = {
+    /*
+     * AUTO:
+     *
+     * Windows:
+     * USB first -> LAN fallback.
+     *
+     * macOS / Linux:
+     * LAN first -> USB fallback.
+     */
+    transport:
+        "AUTO",
+
     printerName:
         "Cashier Receipt Printer",
 
     /*
-     * Compatibility fields.
-     *
-     * Cashier printer hardware no longer uses TCP/IP.
+     * XP-Q80B cashier printer LAN address.
      */
     host:
-        "LOCAL_USB",
+        "192.168.1.101",
 
     port:
-        0,
+        9100,
 
     paperWidthMm:
         80,
@@ -60,8 +70,11 @@ const DEFAULT_SETTINGS: ReceiptPrinterSettings = {
     drawerPulseOnMs:
         50,
 
+    /*
+     * Verified working with XP-Q80B + HER-405 over TCP.
+     */
     drawerPulseOffMs:
-        500,
+        50,
 };
 
 const makeUuid = (): string => {
@@ -445,7 +458,7 @@ export default function CashDrawerModule(
                     );
 
                     setMessage(
-                        "Local receipt printer and cash drawer settings saved successfully.",
+                        "Receipt printer USB/LAN and cash drawer settings saved successfully.",
                     );
                 },
             );
@@ -453,12 +466,11 @@ export default function CashDrawerModule(
 
     /*
     |--------------------------------------------------------------------------
-    | Test Local Printer Queue
+    | Test Receipt Printer Connection
     |--------------------------------------------------------------------------
     |
-    | This does NOT test an IP address.
-    |
-    | Windows checks that the configured printer queue exists.
+    | AUTO selects the platform-preferred transport and falls back if the
+    | preferred transport throws a detectable connection/printing error.
     |--------------------------------------------------------------------------
     */
 
@@ -533,9 +545,7 @@ export default function CashDrawerModule(
     |
     | Electron
     |   ↓
-    | Windows local printer queue
-    |   ↓
-    | USB
+    | USB printer queue OR LAN TCP 9100
     |   ↓
     | Receipt Printer
     |   ↓
@@ -591,7 +601,7 @@ export default function CashDrawerModule(
     |   ↓
     | Electron
     |   ↓
-    | USB Receipt Printer
+    | USB or LAN Receipt Printer
     |   ↓
     | DK drawer pulse
     |--------------------------------------------------------------------------
@@ -749,9 +759,9 @@ export default function CashDrawerModule(
                     </h1>
 
                     <p>
-                        Configure the local USB cashier receipt
-                        printer, test the physical drawer and
-                        perform audited manual openings.
+                        Configure the cashier receipt printer using
+                        USB, LAN or automatic fallback, test the
+                        physical drawer and perform audited openings.
                     </p>
                 </div>
 
@@ -851,7 +861,13 @@ export default function CashDrawerModule(
                     </span>
 
                     <strong>
-                        Local / USB
+                        {
+                            settings.transport === "AUTO"
+                                ? "Auto USB / LAN"
+                                : settings.transport === "USB"
+                                    ? "Local / USB"
+                                    : `LAN ${settings.host}:${settings.port}`
+                        }
                     </strong>
                 </div>
             </section>
@@ -859,7 +875,7 @@ export default function CashDrawerModule(
             <div className="drawer-main-grid">
                 {/*
                 |--------------------------------------------------------------------------
-                | Local Receipt Printer + Drawer
+                | Receipt Printer + Drawer
                 |--------------------------------------------------------------------------
                 */}
 
@@ -881,9 +897,63 @@ export default function CashDrawerModule(
                     </div>
 
                     <div className="drawer-form-grid">
+                        {/*
+                        |--------------------------------------------------------------------------
+                        | Transport
+                        |--------------------------------------------------------------------------
+                        */}
+
                         <label className="drawer-field drawer-wide-field">
                             <span>
-                                Windows Printer Name
+                                Connection Mode
+                            </span>
+
+                            <select
+                                value={
+                                    settings
+                                        .transport
+                                }
+                                disabled={
+                                    busy
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) => {
+                                        const value =
+                                            event
+                                                .target
+                                                .value;
+
+                                        setSettings({
+                                            ...settings,
+
+                                            transport:
+                                                value === "USB"
+                                                    || value === "LAN"
+                                                    ? value
+                                                    : "AUTO",
+                                        });
+                                    }
+                                }
+                            >
+                                <option value="AUTO">
+                                    Auto — Windows USB first / macOS LAN first
+                                </option>
+
+                                <option value="USB">
+                                    USB Only — Local Printer Queue
+                                </option>
+
+                                <option value="LAN">
+                                    LAN Only — TCP 9100
+                                </option>
+                            </select>
+                        </label>
+
+                        <label className="drawer-field drawer-wide-field">
+                            <span>
+                                USB Printer Name
                             </span>
 
                             <input
@@ -891,9 +961,11 @@ export default function CashDrawerModule(
                                     settings
                                         .printerName
                                 }
-                                placeholder="Example: XP-80C"
+                                placeholder="Example: Printer_POS_80_2"
                                 disabled={
                                     busy
+                                    ||
+                                    settings.transport === "LAN"
                                 }
                                 onChange={
                                     (
@@ -912,22 +984,116 @@ export default function CashDrawerModule(
                             />
                         </label>
 
-                        {/*
-                        |--------------------------------------------------------------------------
-                        | Connection
-                        |--------------------------------------------------------------------------
-                        */}
-
                         <label className="drawer-field">
                             <span>
-                                Connection Type
+                                LAN Printer IP
                             </span>
 
                             <input
-                                value="Local / USB"
-                                disabled
-                                readOnly
+                                value={
+                                    settings
+                                        .host
+                                }
+                                placeholder="192.168.1.101"
+                                disabled={
+                                    busy
+                                    ||
+                                    settings.transport === "USB"
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) => {
+                                        setSettings({
+                                            ...settings,
+
+                                            host:
+                                                event
+                                                    .target
+                                                    .value,
+                                        });
+                                    }
+                                }
                             />
+                        </label>
+
+                        <label className="drawer-field">
+                            <span>
+                                LAN Port
+                            </span>
+
+                            <input
+                                type="number"
+                                min="1"
+                                max="65535"
+                                value={
+                                    settings
+                                        .port
+                                }
+                                disabled={
+                                    busy
+                                    ||
+                                    settings.transport === "USB"
+                                }
+                                onChange={
+                                    (
+                                        event,
+                                    ) => {
+                                        setSettings({
+                                            ...settings,
+
+                                            port:
+                                                Number(
+                                                    event
+                                                        .target
+                                                        .value,
+                                                ),
+                                        });
+                                    }
+                                }
+                            />
+                        </label>
+
+                        <label className="drawer-field">
+                            <span>
+                                Connection Timeout
+                            </span>
+
+                            <div className="drawer-input-suffix">
+                                <input
+                                    type="number"
+                                    min="1000"
+                                    max="30000"
+                                    step="500"
+                                    value={
+                                        settings
+                                            .connectTimeoutMs
+                                    }
+                                    disabled={
+                                        busy
+                                    }
+                                    onChange={
+                                        (
+                                            event,
+                                        ) => {
+                                            setSettings({
+                                                ...settings,
+
+                                                connectTimeoutMs:
+                                                    Number(
+                                                        event
+                                                            .target
+                                                            .value,
+                                                    ),
+                                            });
+                                        }
+                                    }
+                                />
+
+                                <span>
+                                    ms
+                                </span>
+                            </div>
                         </label>
 
                         <label className="drawer-field">
@@ -1103,20 +1269,23 @@ export default function CashDrawerModule(
                         </strong>
 
                         <span>
-                            Cashier PC → USB → Receipt Printer →
-                            DK / RJ11-RJ12 → Cash Drawer
+                            Cashier PC → USB printer queue or LAN TCP 9100 →
+                            Receipt Printer → DK / RJ11-RJ12 → Cash Drawer
                         </span>
                     </div>
 
                     <div className="drawer-local-note">
                         <strong>
-                            Windows printer queue
+                            Automatic fallback
                         </strong>
 
                         <span>
-                            Enter the exact printer name installed
-                            in Windows. No cashier printer IP address
-                            or TCP port is required.
+                            AUTO keeps both methods. Windows tries the USB
+                            printer queue first and falls back to LAN when
+                            a detectable USB error occurs. macOS/Linux
+                            prefer LAN first because repeated raw USB/CUPS
+                            jobs may be unreliable. Use USB Only or LAN Only
+                            when you need to force one transport.
                         </span>
                     </div>
 

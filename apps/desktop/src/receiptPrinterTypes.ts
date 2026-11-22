@@ -1,10 +1,48 @@
 export type CashDrawerPin = 0 | 1;
 
+export type ReceiptPrinterTransport = "AUTO" | "USB" | "LAN";
+
+export type ActiveReceiptPrinterTransport = "USB" | "LAN";
+
 export interface ReceiptPrinterSettings {
+  /*
+   * AUTO:
+   *   Windows       -> USB first, LAN fallback
+   *   macOS/Linux   -> LAN first, USB fallback
+   *
+   * USB:
+   *   Force local operating-system printer queue.
+   *
+   * LAN:
+   *   Force direct TCP ESC/POS printing.
+   */
+  transport: ReceiptPrinterTransport;
+
+  /*
+   * Exact local operating-system printer queue name.
+   *
+   * Example:
+   * Printer_POS_80_2
+   *
+   * Required for USB mode.
+   */
   printerName: string;
 
+  /*
+   * Network printer IP / hostname.
+   *
+   * Example:
+   * 192.168.1.101
+   *
+   * Required for LAN mode.
+   */
   host: string;
 
+  /*
+   * ESC/POS RAW TCP port.
+   *
+   * Normally 9100.
+   */
   port: number;
 
   paperWidthMm: 80;
@@ -27,6 +65,11 @@ export interface ReceiptPrinterConnectionResult {
 
   port: number;
 
+  /*
+   * The transport that was actually used after AUTO resolution.
+   */
+  transportUsed?: ActiveReceiptPrinterTransport;
+
   message: string;
 }
 
@@ -38,6 +81,8 @@ export interface ReceiptPrinterResult {
   host: string;
 
   port: number;
+
+  transportUsed?: ActiveReceiptPrinterTransport;
 
   bytesWritten: number;
 
@@ -52,6 +97,8 @@ export interface CashDrawerResult {
   host: string;
 
   port: number;
+
+  transportUsed?: ActiveReceiptPrinterTransport;
 
   bytesWritten: number;
 
