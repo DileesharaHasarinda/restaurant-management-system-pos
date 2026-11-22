@@ -110,14 +110,6 @@ export default function DineInDialog({
         );
 
     const [
-        guestCount,
-        setGuestCount,
-    ] =
-        useState(
-            1,
-        );
-
-    const [
         customerName,
         setCustomerName,
     ] =
@@ -164,15 +156,6 @@ export default function DineInDialog({
             '',
         );
 
-    const selectedTable =
-        selectableTables.find(
-            (table) =>
-                table.id
-                ===
-                tableId,
-        )
-        ?? null;
-
     const submit =
         async (): Promise<void> => {
             if (
@@ -180,30 +163,6 @@ export default function DineInDialog({
                 ||
                 submitting
             ) {
-                return;
-            }
-
-            if (
-                guestCount < 1
-            ) {
-                setLocalError(
-                    'Guest count must be at least 1.',
-                );
-
-                return;
-            }
-
-            if (
-                selectedTable
-                &&
-                guestCount
-                >
-                selectedTable.capacity
-            ) {
-                setLocalError(
-                    `Guest count cannot exceed table capacity (${selectedTable.capacity}).`,
-                );
-
                 return;
             }
 
@@ -222,7 +181,15 @@ export default function DineInDialog({
 
                         tableId,
 
-                        guestCount,
+                        /*
+                         * Guest count is intentionally fixed to 1.
+                         *
+                         * The cashier dine-in flow no longer asks for guest count.
+                         * This preserves the existing backend API contract without
+                         * allowing guest count to affect ordered item quantities.
+                         */
+                        guestCount:
+                            1,
 
                         customerName:
                             customerName.trim()
@@ -280,7 +247,7 @@ export default function DineInDialog({
                         </h2>
 
                         <p>
-                            Choose the table and guest count for this order.
+                            Choose the table for this dine-in order.
                         </p>
                     </div>
 
@@ -366,20 +333,6 @@ export default function DineInDialog({
                                                                     table.id,
                                                                 );
 
-                                                                setGuestCount(
-                                                                    (
-                                                                        current,
-                                                                    ) =>
-                                                                        Math.min(
-                                                                            Math.max(
-                                                                                1,
-                                                                                current,
-                                                                            ),
-
-                                                                            table.capacity,
-                                                                        ),
-                                                                );
-
                                                                 setLocalError(
                                                                     '',
                                                                 );
@@ -441,50 +394,6 @@ export default function DineInDialog({
                     <div
                         className="pos-feature-dine-in-fields"
                     >
-                        <label>
-                            <span>
-                                Guest Count
-                            </span>
-
-                            <input
-                                type="number"
-                                min={
-                                    1
-                                }
-                                max={
-                                    selectedTable
-                                        ?.capacity
-                                    ??
-                                    100
-                                }
-                                value={
-                                    guestCount
-                                }
-                                disabled={
-                                    submitting
-                                }
-                                onChange={
-                                    (
-                                        event,
-                                    ) => {
-                                        setGuestCount(
-                                            Math.max(
-                                                1,
-
-                                                Number(
-                                                    event
-                                                        .target
-                                                        .value,
-                                                )
-                                                ||
-                                                1,
-                                            ),
-                                        );
-                                    }
-                                }
-                            />
-                        </label>
-
                         <label>
                             <span>
                                 Customer Name
