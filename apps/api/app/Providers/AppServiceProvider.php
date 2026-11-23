@@ -18,6 +18,31 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         /*
+         * Fail fast on unsafe production configuration.
+         */
+        if ($this->app->isProduction()) {
+            $problems = [];
+
+            if (config('app.debug')) {
+                $problems[] = 'APP_DEBUG must be false';
+            }
+
+            if (! config('session.encrypt')) {
+                $problems[] = 'SESSION_ENCRYPT must be true';
+            }
+
+            if (! str_starts_with((string) config('app.url'), 'https://')) {
+                $problems[] = 'APP_URL must be https://';
+            }
+
+            if ($problems !== [] && ! $this->app->runningInConsole()) {
+                throw new \RuntimeException(
+                    'Unsafe production configuration: ' . implode('; ', $problems) . '.'
+                );
+            }
+        }
+
+        /*
          * Main authenticated/public API.
          */
         RateLimiter::for(

@@ -1,6 +1,11 @@
 function apiBaseUrl(): string {
-  const value =
-    process.env.RESTAURANT_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
+  const configured = process.env.RESTAURANT_API_BASE_URL;
+
+  if (!configured && process.env.NODE_ENV === "production") {
+    throw new Error("RESTAURANT_API_BASE_URL is not configured.");
+  }
+
+  const value = configured ?? "http://127.0.0.1:8000/api/v1";
 
   return value.replace(/\/+$/, "");
 }
