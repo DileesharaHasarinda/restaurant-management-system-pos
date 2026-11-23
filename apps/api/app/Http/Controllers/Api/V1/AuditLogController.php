@@ -41,8 +41,10 @@ class AuditLogController extends Controller
                 (string)
                 $data['search'];
 
+            // Escape LIKE wildcards so "%" / "_" in user input match literally
+            // (otherwise "%" forces a full scan of the JSON audit columns).
             $like =
-                "%{$search}%";
+                '%' . addcslashes($search, '%_\\') . '%';
 
             $query->where(
                 function (
