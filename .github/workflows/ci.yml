@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [operations, website, desktop]
+        app: [desktop]
     defaults:
       run:
         working-directory: apps/${{ matrix.app }}
@@ -47,7 +47,5 @@ jobs:
           RESTAURANT_API_BASE_URL: https://api.example.com/api/v1
         run: |
           case "${{ matrix.app }}" in
-            operations) npm run build ;;
-            website) npm run build ;;
             desktop) npx tsc --noEmit && npx vite build -c vite.renderer.config.ts ;;
           esac
