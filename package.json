@@ -2,14 +2,12 @@
   "name": "restaurant-management-system",
   "version": "0.1.0",
   "private": true,
-  "description": "Restaurant POS API and cashier desktop app. Web frontends live in restaurant-pos-website and restaurant-pos-operations.",
+  "description": "Restaurant POS Laravel API. Frontends live in restaurant-pos-website, -operations and -desktop.",
   "scripts": {
-    "dev": "concurrently -k -n API,QUEUE,REVERB,POS \"npm run dev:api\" \"npm run dev:queue\" \"npm run dev:reverb\" \"npm run dev:desktop\"",
+    "dev": "concurrently -k -n API,QUEUE,REVERB \"npm run dev:api\" \"npm run dev:queue\" \"npm run dev:reverb\"",
     "dev:api": "cd apps/api && php artisan serve --host=127.0.0.1 --port=8000",
     "dev:queue": "cd apps/api && php artisan queue:work redis --queue=default --sleep=1 --tries=3 --timeout=60",
-    "dev:reverb": "cd apps/api && php artisan reverb:start --host=127.0.0.1 --port=8080",
-    "dev:desktop": "npm --prefix apps/desktop start",
-    "make:desktop": "npm --prefix apps/desktop run make"
+    "dev:reverb": "cd apps/api && php artisan reverb:start --host=127.0.0.1 --port=8080"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
